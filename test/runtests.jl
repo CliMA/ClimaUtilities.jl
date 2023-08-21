@@ -4,3 +4,8 @@ using SafeTestsets
 @safetestset "Aqua tests" begin
     include("aqua.jl")
 end
+
+# Unit tests
+@safetestset "TimeManager tests" begin
+    include("timemanager.jl")
+end
