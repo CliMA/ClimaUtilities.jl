@@ -1,0 +1,4 @@
+name = "ClimaUtilities"
+uuid = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
+authors = ["Julia Sloan <jsloan@caltech.edu>"]
+version = "0.1.0"
