@@ -1,4 +1,5 @@
 using Documenter, Example, Literate
+using ClimaUtilities
 
 # TODO fill in once we have doc pages
 pages = Any[]
@@ -21,7 +22,7 @@ makedocs(
     sitename = "ClimaUtilities.jl",
     authors = "CliMA Utilities Developers",
     format = format,
-    # pages = pages,
+    pages = pages,
     checkdocs = :exports,
     doctest = true,
     strict = false,

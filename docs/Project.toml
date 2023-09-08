@@ -1,4 +1,5 @@
 [deps]
+ClimaUtilities = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Example = "7876af07-990d-54b4-ab0e-23690620f79a"
 Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
