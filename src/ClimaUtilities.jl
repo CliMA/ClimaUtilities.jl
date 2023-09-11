@@ -1,5 +1,6 @@
 module ClimaUtilities
 
-greet() = print("Hello World!")
+include("Regridder.jl")
+include("TestHelper.jl")
 
 end # module ClimaUtilities
