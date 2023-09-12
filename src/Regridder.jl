@@ -25,6 +25,8 @@ end
 Converts `NaN`s in a vector to zeros of the same type.
 """
 function nans_to_zero!(x::Vector{FT}) where {FT}
+    @show isnan.(x)
+    @show x[isnan.(x)]
     x[isnan.(x)] .= FT(0)
 end
 
@@ -34,6 +36,7 @@ Cleans a vector of data by converting `missing`s and `NaN`s to zeros.
 """
 function clean_data!(x::Vector{Union{Missing, FT}}) where {FT}
     missings_to_zero!(x)
+    @show x
     nans_to_zero!(x)
 end
 
