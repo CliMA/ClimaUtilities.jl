@@ -10,27 +10,27 @@ const comms_ctx = ClimaComms.SingletonCommsContext()
 const pid, nprocs = ClimaComms.init(comms_ctx)
 
 for FT in (Float32, Float64)
-    @testset "test missings_to_zero!" begin
+    @testset "test missings_to_zero! for FT=$FT" begin
         vec = [FT(1.0), FT(-2.0), missing, FT(4.0), missing]
         Regridder.missings_to_zero!(vec)
         @test vec == FT.([1.0, -2.0, 0.0, 4.0, 0.0])
     end
 
-    @testset "test nans_to_zero!" begin
+    @testset "test nans_to_zero! for FT=$FT" begin
         vec = FT.([1.0, -2.0, NaN, 4.0, NaN])
         Regridder.nans_to_zero!(vec)
         @test vec == FT.([1.0, -2.0, 0.0, 4.0, 0.0])
     end
 
     # TODO debug clean_data!
-    @testset "test clean_data!" begin
+    @testset "test clean_data! for FT=$FT" begin
         vec = [missing, FT(1.0), FT(-2.0), missing, FT(4.0), FT(NaN), FT(NaN)]
         Regridder.clean_data!(vec)
         @test vec == FT.([0.0, 1.0, -2.0, 0.0, 4.0, 0.0, 0.0])
     end
 
     # TODO finish test for sparse_array_to_field!
-    @testset "test sparse_array_to_field!" begin
+    @testset "test sparse_array_to_field! for FT=$FT" begin
         # create spectral element space
         space = TestHelper.create_space(FT)
         field = Fields.ones(space)
@@ -48,7 +48,7 @@ for FT in (Float32, Float64)
     # Add tests which use TempestRemap here -
     # TempestRemap is not built on Windows because of NetCDF support limitations
     if !Sys.iswindows()
-        @testset "test write_to_hdf5 and read_from_hdf5" begin
+        @testset "test write_to_hdf5 and read_from_hdf5 for FT=$FT" begin
             # Set up testing directory
             ispath(REGRID_DIR) ?
             rm(REGRID_DIR; recursive = true, force = true) : nothing
