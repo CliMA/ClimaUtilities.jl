@@ -12,8 +12,12 @@ import ClimaCoreTempestRemap as CCTR
 import ClimaComms
 import Dates
 
+export missings_to_zero!,
+    nans_to_zero!, clean_data!, read_from_hdf5, write_to_hdf5
+
 """
     missings_to_zero!(x::Vector{FT}) where {FT}
+
 Converts `missing`s in a vector to zeros of the vector's float type.
 """
 function missings_to_zero!(x::Vector{Union{Missing, FT}}) where {FT}
@@ -22,6 +26,7 @@ end
 
 """
     nans_to_zero!(x::Vector{FT}) where {FT}
+
 Converts `NaN`s in a vector to zeros of the same type.
 """
 function nans_to_zero!(x::Vector{FT}) where {FT}
@@ -32,6 +37,7 @@ end
 
 """
     clean_data!(x::Vector{Union{Missing, FT}}) where {FT}
+
 Cleans a vector of data by converting `missing`s and `NaN`s to zeros.
 """
 function clean_data!(x::Vector{Union{Missing, FT}}) where {FT}
@@ -42,11 +48,14 @@ end
 
 """
     sparse_array_to_field!(field::Fields.Field, TR_in_array::Array, TR_inds::NamedTuple)
+
 Reshapes a sparse vector array `TR_in_array` (CGLL, raw output of the TempestRemap),
 and uses its data to populate the input Field object `field`.
 The third argument, `TR_inds`, is a NamedTuple containing the indices of the
 sparse vector `TR_in_array` using TempestRemap's convention.
 Redundant nodes are populated using `dss` operations.
+
+This function is used internally by `hdwrite_regridfile_rll_to_cgll`.
 
 # Arguments
 - `field`: [Fields.Field] object populated with the input array.
@@ -87,6 +96,7 @@ end
 """
     read_from_hdf5(REGIRD_DIR, hd_outfile_root, time, varname,
         comms_ctx = ClimaComms.SingletonCommsContext())
+
 Read in a variable `varname` from an HDF5 file.
 If a CommsContext other than SingletonCommsContext is used for `comms_ctx`,
 the input HDF5 file must be readable by multiple MPI processes.
@@ -120,6 +130,7 @@ end
 """
     write_to_hdf5(REGRID_DIR, hd_outfile_root, time, field, varname,
         comms_ctx = ClimaComms.SingletonCommsContext())
+
 Function to save individual HDF5 files after remapping.
 If a CommsContext other than SingletonCommsContext is used for `comms_ctx`,
 the HDF5 output is readable by multiple MPI processes.
@@ -150,9 +161,5 @@ function write_to_hdf5(
     ClimaCore.InputOutput.write!(hdfwriter, field, string(varname))
     Base.close(hdfwriter)
 end
-
-
-
-
 
 end # module Regridder
