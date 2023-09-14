@@ -13,38 +13,52 @@ import ClimaComms
 import Dates
 import NCDatasets as NCD
 
-export missings_to_zero!,
-    nans_to_zero!, clean_data!, read_from_hdf5, write_to_hdf5
+export missings_to_zero,
+    nans_to_zero,
+    clean_data,
+    binary_mask,
+    dummy_remap!,
+    read_from_hdf5,
+    write_to_hdf5,
+    write_field_to_ncdataset,
+    remap_field_cgll_to_rll
 
 """
-    missings_to_zero!(x::Vector{FT}) where {FT}
+    missings_to_zero(x::Vector{FT}) where {FT}
 
 Converts `missing`s in a vector to zeros of the vector's float type.
+
+Note: This function will not work if the input array consists of
+entirely `Missing` types.
 """
-function missings_to_zero!(x::Vector{Union{Missing, FT}}) where {FT}
+function missings_to_zero(x::Vector{<:Union{Missing, FT}}) where {FT}
     x[ismissing.(x)] .= FT(0)
+    x = Vector{FT}(x)
+    return x
 end
 
 """
-    nans_to_zero!(x::Vector{FT}) where {FT}
+    nans_to_zero(x::Vector{FT}) where {FT}
 
 Converts `NaN`s in a vector to zeros of the same type.
 """
-function nans_to_zero!(x::Vector{FT}) where {FT}
-    @show isnan.(x)
-    @show x[isnan.(x)]
+function nans_to_zero(x::Vector{FT}) where {FT}
     x[isnan.(x)] .= FT(0)
+    return x
 end
 
 """
-    clean_data!(x::Vector{Union{Missing, FT}}) where {FT}
+    clean_data(x::Vector{Union{Missing, FT}}) where {FT}
 
 Cleans a vector of data by converting `missing`s and `NaN`s to zeros.
+
+Note: This function will not work if the input array consists of
+entirely `Missing` types.
 """
-function clean_data!(x::Vector{Union{Missing, FT}}) where {FT}
-    missings_to_zero!(x)
-    @show x
-    nans_to_zero!(x)
+function clean_data(x::Vector{<:Union{Missing, FT}}) where {FT}
+    x = missings_to_zero(x)
+    x = nans_to_zero(x)
+    return x
 end
 
 """
