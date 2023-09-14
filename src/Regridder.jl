@@ -58,9 +58,9 @@ Redundant nodes are populated using `dss` operations.
 This function is used internally by `hdwrite_regridfile_rll_to_cgll`.
 
 # Arguments
-- `field`: [Fields.Field] object populated with the input array.
-- `TR_in_array`: [Array] input used to fill `field`.
-- `TR_inds`: [NamedTuple] containing `target_idxs` and `row_indices` used for indexing.
+- `field::Fields.Field` object populated with the input array.
+- `TR_in_array::Array` input used to fill `field`.
+- `TR_inds::NamedTuple` contains `target_idxs` and `row_indices` used for indexing.
 """
 # TODO rename keys of TR_inds
 function sparse_array_to_field!(
@@ -102,20 +102,20 @@ If a CommsContext other than SingletonCommsContext is used for `comms_ctx`,
 the input HDF5 file must be readable by multiple MPI processes.
 
 # Arguments
-- `REGRID_DIR`: [String] directory to save output files in.
-- `hd_outfile_root`: [String] root of the output file name.
-- `time`: [Dates.DateTime] the timestamp of the data being written.
-- `varname`: [String] variable name of data.
-- `comms_ctx`: [ClimaComms.AbstractCommsContext] context used for this operation.
+- `REGRID_DIR::String` directory to save output files in.
+- `hd_outfile_root::String` root of the output file name.
+- `time::Dates.DateTime` the timestamp of the data being written.
+- `varname::String` variable name of data.
+- `comms_ctx::ClimaComms.AbstractCommsContext` context used for this operation.
 # Returns
 - Field or FieldVector
 """
 function read_from_hdf5(
-    REGRID_DIR,
-    hd_outfile_root,
-    time,
-    varname,
-    comms_ctx = ClimaComms.SingletonCommsContext(),
+    REGRID_DIR::String,
+    hd_outfile_root::String,
+    time::Dates.DateTime,
+    varname::String,
+    comms_ctx::ClimaComms.AbstractCommsContext = ClimaComms.SingletonCommsContext(),
 )
     hdfreader = ClimaCore.InputOutput.HDF5Reader(
         joinpath(REGRID_DIR, hd_outfile_root * "_" * string(time) * ".hdf5"),
@@ -136,20 +136,20 @@ If a CommsContext other than SingletonCommsContext is used for `comms_ctx`,
 the HDF5 output is readable by multiple MPI processes.
 
 # Arguments
-- `REGRID_DIR`: [String] directory to save output files in.
-- `hd_outfile_root`: [String] root of the output file name.
-- `time`: [Dates.DateTime] the timestamp of the data being written.
-- `field`: [Fields.Field] object to be written.
-- `varname`: [String] variable name of data.
-- `comms_ctx`: [ClimaComms.AbstractCommsContext] context used for this operation.
+- `REGRID_DIR::String` directory to save output files in.
+- `hd_outfile_root::String` root of the output file name.
+- `time::Dates.DateTime` the timestamp of the data being written.
+- `field::Fields.Field` object to be written.
+- `varname::String` variable name of data.
+- `comms_ctx::ClimaComms.AbstractCommsContext` context used for this operation.
 """
 function write_to_hdf5(
-    REGRID_DIR,
-    hd_outfile_root,
-    time,
-    field,
-    varname,
-    comms_ctx = ClimaComms.SingletonCommsContext(),
+    REGRID_DIR::String,
+    hd_outfile_root::String,
+    time::Dates.DateTime,
+    field::ClimaCore.Fields.Field,
+    varname::String,
+    comms_ctx::ClimaComms.AbstractCommsContext = ClimaComms.SingletonCommsContext(),
 )
     t = Dates.datetime2unix.(time)
     hdfwriter = ClimaCore.InputOutput.HDF5Writer(
@@ -160,6 +160,24 @@ function write_to_hdf5(
     ClimaCore.InputOutput.HDF5.write_attribute(hdfwriter.file, "unix time", t) # TODO: a better way to write metadata, CMIP convention
     ClimaCore.InputOutput.write!(hdfwriter, field, string(varname))
     Base.close(hdfwriter)
+end
+
+"""
+    dummy_remap!(target, source)
+
+Simple stand-in function for remapping.
+For AMIP we don't need regridding of surface model fields.
+When we do, we re-introduce the ClimaCoreTempestRemap remapping functions.
+
+# Arguments
+- `target::Fields.Field` destination of remapping.
+- `source::Fields.Field` source of remapping.
+"""
+function dummy_remap!(
+    target::ClimaCore.Fields.Field,
+    source::ClimaCore.Fields.Field,
+)
+    parent(target) .= parent(source)
 end
 
 end # module Regridder

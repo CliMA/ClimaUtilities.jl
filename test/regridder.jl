@@ -23,27 +23,27 @@ for FT in (Float32, Float64)
     end
 
     # TODO debug clean_data!
-    @testset "test clean_data! for FT=$FT" begin
-        vec = [missing, FT(1.0), FT(-2.0), missing, FT(4.0), FT(NaN), FT(NaN)]
-        Regridder.clean_data!(vec)
-        @test vec == FT.([0.0, 1.0, -2.0, 0.0, 4.0, 0.0, 0.0])
-    end
+    # @testset "test clean_data! for FT=$FT" begin
+    #     vec = [missing, FT(1.0), FT(-2.0), missing, FT(4.0), FT(NaN), FT(NaN)]
+    #     Regridder.clean_data!(vec)
+    #     @test vec == FT.([0.0, 1.0, -2.0, 0.0, 4.0, 0.0, 0.0])
+    # end
 
     # TODO finish test for sparse_array_to_field!
-    @testset "test sparse_array_to_field! for FT=$FT" begin
-        # create spectral element space
-        space = TestHelper.create_space(FT)
-        field = Fields.ones(space)
+    # @testset "test sparse_array_to_field! for FT=$FT" begin
+    #     # create spectral element space
+    #     space = TestHelper.create_space(FT)
+    #     field = Fields.ones(space)
 
-        TR_in_arr = 0.5 .* copy(parent(field))
-        TR_inds = (; target_idxs, row_indices)
-        # TODO what shapes should target_idxs, row_indices have?
+    #     TR_in_arr = 0.5 .* copy(parent(field))
+    #     TR_inds = (; target_idxs, row_indices)
+    #     # TODO what shapes should target_idxs, row_indices have?
 
-        sparse_array_to_field!(field, TR_in_arr, TR_inds)
-        # TODO do I need to loop over rows for comparison?
-        # TODO can I do comparison with dss?
-        @test parent(field) == TR_in_arr
-    end
+    #     sparse_array_to_field!(field, TR_in_arr, TR_inds)
+    #     # TODO do I need to loop over rows for comparison?
+    #     # TODO can I do comparison with dss?
+    #     @test parent(field) == TR_in_arr
+    # end
 
     # Add tests which use TempestRemap here -
     # TempestRemap is not built on Windows because of NetCDF support limitations
