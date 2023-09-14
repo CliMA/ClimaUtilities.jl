@@ -2,6 +2,7 @@ import ClimaCore: Fields
 import ClimaComms
 import ClimaUtilities: Regridder, TestHelper
 import Dates
+import NCDatasets as NCD
 using Test
 
 REGRID_DIR = @isdefined(REGRID_DIR) ? REGRID_DIR : joinpath("", "regrid_tmp/")
@@ -86,6 +87,41 @@ for FT in (Float32, Float64)
                 comms_ctx,
             )
             @test parent(input_field) == parent(output_field)
+
+            # Delete testing directory and files
+            rm(REGRID_DIR; recursive = true, force = true)
+        end
+
+        # TODO is this tests comprehensive enough? What else could we test?
+        @testset "test remap_field_cgll_to_rll for FT=$FT" begin
+            # Set up testing directory
+            remap_tmpdir = joinpath(REGRID_DIR, "cgll_to_rll")
+            ispath(remap_tmpdir) ?
+            rm(remap_tmpdir; recursive = true, force = true) : nothing
+            mkpath(remap_tmpdir)
+            name = :testdata
+            datafile_rll = remap_tmpdir * "/" * string(name) * "_rll.nc"
+
+            test_space = TestHelper.create_space(FT)
+            field = Fields.ones(test_space)
+
+            Regridder.remap_field_cgll_to_rll(
+                name,
+                field,
+                remap_tmpdir,
+                datafile_rll,
+            )
+
+            # Test no new extrema are introduced in monotone remapping
+            nt = NCD.NCDataset(datafile_rll) do ds
+                max_remapped = maximum(ds[name])
+                min_remapped = minimum(ds[name])
+                (; max_remapped, min_remapped)
+            end
+            (; max_remapped, min_remapped) = nt
+
+            @test max_remapped <= maximum(field)
+            @test min_remapped >= minimum(field)
 
             # Delete testing directory and files
             rm(REGRID_DIR; recursive = true, force = true)

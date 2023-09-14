@@ -11,6 +11,7 @@ import ClimaCore: Spaces, Fields, InputOutput
 import ClimaCoreTempestRemap as CCTR
 import ClimaComms
 import Dates
+import NCDatasets as NCD
 
 export missings_to_zero!,
     nans_to_zero!, clean_data!, read_from_hdf5, write_to_hdf5
@@ -194,13 +195,77 @@ function write_field_to_ncdataset(
 )
     space = axes(field)
     # write data
-    NCDataset(datafile_out, "c") do nc
-        def_space_coord(nc, space; type = "cgll")
-        nc_field = defVar(nc, name, Float64, space)
+    NCD.NCDataset(datafile_out, "c") do nc
+        CCTR.def_space_coord(nc, space; type = "cgll")
+        nc_field = CCTR.defVar(nc, name, Float64, space)
         nc_field[:, 1] = field
 
         nothing
     end
+end
+
+"""
+    remap_field_cgll_to_rll(
+        name::Symbol,
+        field::Fields.Field,
+        remap_tmpdir::String,
+        datafile_rll::String;
+        nlat::Int = 90,
+        nlon::Int = 180,
+    )
+
+Remap an individual FT-valued Field from model (CGLL) nodes to a lat-lon (RLL)
+grid using TempestRemap.
+
+# Arguments
+- `name::Symbol`: variable name.
+- `field::Fields.Field` data to be remapped.
+- `remap_tmpdir::String` directory used for remapping.
+- `datafile_rll::String`filename of remapped data output.
+- `nlat::Int` number of latitudes in RLL grid.
+- `nlon::Int` number of longitudes in RLL grid.
+"""
+function remap_field_cgll_to_rll(
+    name::Symbol,
+    field::Fields.Field,
+    remap_tmpdir::String,
+    datafile_rll::String;
+    nlat::Int = 90,
+    nlon::Int = 180,
+)
+    space = axes(field)
+    hspace = :topology in propertynames(space) ? space : space.horizontal_space
+    Nq = Spaces.Quadratures.polynomial_degree(hspace.quadrature_style) + 1
+
+    # write out our cubed sphere mesh
+    meshfile_cc = remap_tmpdir * "/mesh_cubedsphere.g"
+    CCTR.write_exodus(meshfile_cc, hspace.topology)
+
+    meshfile_rll = remap_tmpdir * "/mesh_rll.g"
+    CCTR.rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
+
+    meshfile_overlap = remap_tmpdir * "/mesh_overlap.g"
+    CCTR.overlap_mesh(meshfile_overlap, meshfile_cc, meshfile_rll)
+
+    weightfile = remap_tmpdir * "/remap_weights.nc"
+    CCTR.remap_weights(
+        weightfile,
+        meshfile_cc,
+        meshfile_rll,
+        meshfile_overlap;
+        in_type = "cgll",
+        in_np = Nq,
+    )
+
+    datafile_cc = remap_tmpdir * "/datafile_cc.nc"
+    write_field_to_ncdataset(datafile_cc, field, name)
+
+    CCTR.apply_remap( # TODO: this can be done online
+        datafile_rll,
+        datafile_cc,
+        weightfile,
+        [string(name)],
+    )
 end
 
 end # module Regridder
