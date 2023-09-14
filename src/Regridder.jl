@@ -7,7 +7,7 @@ via ClimaCoreTempestRemap wrappers.
 """
 module Regridder
 
-import ClimaCore
+import ClimaCore: Spaces, Fields, InputOutput
 import ClimaCoreTempestRemap as CCTR
 import ClimaComms
 import Dates
@@ -64,7 +64,7 @@ This function is used internally by `hdwrite_regridfile_rll_to_cgll`.
 """
 # TODO rename keys of TR_inds
 function sparse_array_to_field!(
-    field::ClimaCore.Fields.Field,
+    field::Fields.Field,
     TR_in_array::Array,
     TR_inds::NamedTuple,
 )
@@ -86,11 +86,11 @@ function sparse_array_to_field!(
 
     # broadcast to the redundant nodes using unweighted dss
     space = axes(field)
-    topology = ClimaCore.Spaces.topology(space)
-    hspace = ClimaCore.Spaces.horizontal_space(space)
-    target = ClimaCore.Fields.field_values(field)
+    topology = Spaces.topology(space)
+    hspace = Spaces.horizontal_space(space)
+    target = Fields.field_values(field)
 
-    ClimaCore.Spaces.dss!(target, topology, hspace.quadrature_style)
+    Spaces.dss!(target, topology, hspace.quadrature_style)
 end
 
 """
@@ -117,12 +117,12 @@ function read_from_hdf5(
     varname::String,
     comms_ctx::ClimaComms.AbstractCommsContext = ClimaComms.SingletonCommsContext(),
 )
-    hdfreader = ClimaCore.InputOutput.HDF5Reader(
+    hdfreader = InputOutput.HDF5Reader(
         joinpath(REGRID_DIR, hd_outfile_root * "_" * string(time) * ".hdf5"),
         comms_ctx,
     )
 
-    field = ClimaCore.InputOutput.read_field(hdfreader, varname)
+    field = InputOutput.read_field(hdfreader, varname)
     Base.close(hdfreader)
     return field
 end
@@ -147,18 +147,18 @@ function write_to_hdf5(
     REGRID_DIR::String,
     hd_outfile_root::String,
     time::Dates.DateTime,
-    field::ClimaCore.Fields.Field,
+    field::Fields.Field,
     varname::String,
     comms_ctx::ClimaComms.AbstractCommsContext = ClimaComms.SingletonCommsContext(),
 )
     t = Dates.datetime2unix.(time)
-    hdfwriter = ClimaCore.InputOutput.HDF5Writer(
+    hdfwriter = InputOutput.HDF5Writer(
         joinpath(REGRID_DIR, hd_outfile_root * "_" * string(time) * ".hdf5"),
         comms_ctx,
     )
 
-    ClimaCore.InputOutput.HDF5.write_attribute(hdfwriter.file, "unix time", t) # TODO: a better way to write metadata, CMIP convention
-    ClimaCore.InputOutput.write!(hdfwriter, field, string(varname))
+    InputOutput.HDF5.write_attribute(hdfwriter.file, "unix time", t) # TODO: a better way to write metadata, CMIP convention
+    InputOutput.write!(hdfwriter, field, string(varname))
     Base.close(hdfwriter)
 end
 
@@ -174,8 +174,8 @@ When we do, we re-introduce the ClimaCoreTempestRemap remapping functions.
 - `source::Fields.Field` source of remapping.
 """
 function dummy_remap!(
-    target::ClimaCore.Fields.Field,
-    source::ClimaCore.Fields.Field,
+    target::Fields.Field,
+    source::Fields.Field,
 )
     parent(target) .= parent(source)
 end

@@ -45,6 +45,15 @@ for FT in (Float32, Float64)
     #     @test parent(field) == TR_in_arr
     # end
 
+    @testset "test dummy_remap! for FT=$FT" begin
+        test_space = TestHelper.create_space(FT)
+        test_field_ones = Fields.ones(test_space)
+        target_field = Fields.zeros(test_space)
+
+        Regridder.dummy_remap!(target_field, test_field_ones)
+        @test parent(target_field) == parent(test_field_ones)
+    end
+
     # Add tests which use TempestRemap here -
     # TempestRemap is not built on Windows because of NetCDF support limitations
     if !Sys.iswindows()
