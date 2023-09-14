@@ -173,11 +173,34 @@ When we do, we re-introduce the ClimaCoreTempestRemap remapping functions.
 - `target::Fields.Field` destination of remapping.
 - `source::Fields.Field` source of remapping.
 """
-function dummy_remap!(
-    target::Fields.Field,
-    source::Fields.Field,
-)
+function dummy_remap!(target::Fields.Field, source::Fields.Field)
     parent(target) .= parent(source)
+end
+
+"""
+    write_field_to_ncdataset(datafile_out, field, name)
+
+Write the data stored in `field` to an NCDataset file `datafile_out`.
+
+# Arguments
+- `datafile_out::String` filename of output file.
+- `field::Fields.Field` to be written to file.
+- `name::Symbol` variable name.
+"""
+function write_field_to_ncdataset(
+    datafile_out::String,
+    field::Fields.Field,
+    name::Symbol,
+)
+    space = axes(field)
+    # write data
+    NCDataset(datafile_out, "c") do nc
+        def_space_coord(nc, space; type = "cgll")
+        nc_field = defVar(nc, name, Float64, space)
+        nc_field[:, 1] = field
+
+        nothing
+    end
 end
 
 end # module Regridder
