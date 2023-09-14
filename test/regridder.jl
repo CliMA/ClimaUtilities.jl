@@ -46,6 +46,11 @@ for FT in (Float32, Float64)
     #     @test parent(field) == TR_in_arr
     # end
 
+    @testset "test binary_mask for FT=$FT" begin
+        arr = FT.([0.6, -1, 0.4, 0.5, 0, 100000])
+        @test Regridder.binary_mask.(arr) == FT.([1, 0, 0, 1, 0, 1])
+    end
+
     @testset "test dummy_remap! for FT=$FT" begin
         test_space = TestHelper.create_space(FT)
         test_field_ones = Fields.ones(test_space)

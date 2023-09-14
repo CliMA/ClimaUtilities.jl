@@ -48,6 +48,34 @@ function clean_data!(x::Vector{Union{Missing, FT}}) where {FT}
 end
 
 """
+    binary_mask(var::FT; threshold = 0.5)
+
+Returns 1 if `var` is greater or equal than a given
+`threshold` value, or 0 otherwise, keeping the same type.
+
+# Arguments
+- `var::FT` value to be converted.
+- `threshold::FT` cutoff value for conversions.
+"""
+binary_mask(var::FT; threshold::FT = FT(0.5)) where {FT} =
+    var < FT(threshold) ? FT(0) : FT(1)
+
+"""
+    dummy_remap!(target, source)
+
+Simple stand-in function for remapping.
+For AMIP we don't need regridding of surface model fields.
+When we do, we re-introduce the ClimaCoreTempestRemap remapping functions.
+
+# Arguments
+- `target::Fields.Field` destination of remapping.
+- `source::Fields.Field` source of remapping.
+"""
+function dummy_remap!(target::Fields.Field, source::Fields.Field)
+    parent(target) .= parent(source)
+end
+
+"""
     sparse_array_to_field!(field::Fields.Field, TR_in_array::Array, TR_inds::NamedTuple)
 
 Reshapes a sparse vector array `TR_in_array` (CGLL, raw output of the TempestRemap),
@@ -164,24 +192,11 @@ function write_to_hdf5(
 end
 
 """
-    dummy_remap!(target, source)
-
-Simple stand-in function for remapping.
-For AMIP we don't need regridding of surface model fields.
-When we do, we re-introduce the ClimaCoreTempestRemap remapping functions.
-
-# Arguments
-- `target::Fields.Field` destination of remapping.
-- `source::Fields.Field` source of remapping.
-"""
-function dummy_remap!(target::Fields.Field, source::Fields.Field)
-    parent(target) .= parent(source)
-end
-
-"""
     write_field_to_ncdataset(datafile_out, field, name)
 
 Write the data stored in `field` to an NCDataset file `datafile_out`.
+
+This function is used internally by `remap_field_cgll_to_rll`.
 
 # Arguments
 - `datafile_out::String` filename of output file.
