@@ -226,10 +226,8 @@ function write_field_to_ncdataset(
     # write data
     NCD.NCDataset(datafile_out, "c") do nc
         CCTR.def_space_coord(nc, space; type = "cgll")
-        nc_field = CCTR.defVar(nc, name, Float64, space)
-        nc_field[:, 1] = field
-
-        nothing
+        nc_field = NCD.defVar(nc, name, eltype(field), CCTR.space_dims(space))
+        nc_field[:] = field
     end
 end
 

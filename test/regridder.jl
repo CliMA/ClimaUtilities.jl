@@ -5,7 +5,7 @@ import Dates
 import NCDatasets as NCD
 using Test
 
-REGRID_DIR = @isdefined(REGRID_DIR) ? REGRID_DIR : joinpath("", "regrid_tmp/")
+TEST_DIR = @isdefined(TEST_DIR) ? TEST_DIR : joinpath("", "regrid_test_tmp/")
 
 const comms_ctx = ClimaComms.SingletonCommsContext()
 const pid, nprocs = ClimaComms.init(comms_ctx)
@@ -56,92 +56,119 @@ for FT in (Float32, Float64)
     #     @test parent(field) == TR_in_arr
     # end
 
-    # @testset "test binary_mask for FT=$FT" begin
-    #     arr = FT.([0.6, -1, 0.4, 0.5, 0, 100000])
-    #     @test Regridder.binary_mask.(arr) == FT.([1, 0, 0, 1, 0, 1])
-    # end
+    @testset "test binary_mask for FT=$FT" begin
+        arr = FT.([0.6, -1, 0.4, 0.5, 0, 100000])
+        @test Regridder.binary_mask.(arr) == FT.([1, 0, 0, 1, 0, 1])
+    end
 
-    # @testset "test dummy_remap! for FT=$FT" begin
-    #     test_space = TestHelper.create_space(FT)
-    #     test_field_ones = Fields.ones(test_space)
-    #     target_field = Fields.zeros(test_space)
+    @testset "test dummy_remap! for FT=$FT" begin
+        test_space = TestHelper.create_space(FT)
+        test_field_ones = Fields.ones(test_space)
+        target_field = Fields.zeros(test_space)
 
-    #     Regridder.dummy_remap!(target_field, test_field_ones)
-    #     @test parent(target_field) == parent(test_field_ones)
-    # end
+        Regridder.dummy_remap!(target_field, test_field_ones)
+        @test parent(target_field) == parent(test_field_ones)
+    end
 
-    # # Add tests which use TempestRemap here -
-    # # TempestRemap is not built on Windows because of NetCDF support limitations
-    # if !Sys.iswindows()
-    #     @testset "test write_to_hdf5 and read_from_hdf5 for FT=$FT" begin
-    #         # Set up testing directory
-    #         ispath(REGRID_DIR) ?
-    #         rm(REGRID_DIR; recursive = true, force = true) : nothing
-    #         mkpath(REGRID_DIR)
+    @testset "test write_field_to_ncdataset for FT=$FT" begin
+        # Set up testing directory
+        ispath(TEST_DIR) ? rm(TEST_DIR; recursive = true, force = true) :
+        nothing
+        mkpath(TEST_DIR)
 
-    #         hd_outfile_root = "hdf5_out_test"
-    #         tx = Dates.DateTime(1979, 01, 01, 01, 00, 00)
-    #         test_space = TestHelper.create_space(FT)
-    #         input_field = Fields.ones(test_space)
-    #         varname = "testdata"
+        # Create field of all ones
+        test_space = TestHelper.create_space(FT)
+        field = Fields.ones(test_space)
+        var = :test_var
+        ncd_filename = TEST_DIR * "regrid_test_ncd.nc"
 
-    #         Regridder.write_to_hdf5(
-    #             REGRID_DIR,
-    #             hd_outfile_root,
-    #             tx,
-    #             input_field,
-    #             varname,
-    #             comms_ctx,
-    #         )
+        # Write field to NCDataset
+        Regridder.write_field_to_ncdataset(ncd_filename, field, var)
 
-    #         output_field = Regridder.read_from_hdf5(
-    #             REGRID_DIR,
-    #             hd_outfile_root,
-    #             tx,
-    #             varname,
-    #             comms_ctx,
-    #         )
-    #         @test parent(input_field) == parent(output_field)
+        # Test that NCDataset was created and contains the correct data
+        data = NCD.NCDataset(ncd_filename) do ds
+            ds[var][:]
+        end
 
-    #         # Delete testing directory and files
-    #         rm(REGRID_DIR; recursive = true, force = true)
-    #     end
+        @test typeof(data[1]) == eltype(field)
+        # TODO these two tests fail because of unequal vector sizes
+        # @test size(data) == size(vec(parent(field)))
+        # @test data == vec(parent(field))
 
-    #     # TODO is this tests comprehensive enough? What else could we test?
-    #     @testset "test remap_field_cgll_to_rll for FT=$FT" begin
-    #         # Set up testing directory
-    #         remap_tmpdir = joinpath(REGRID_DIR, "cgll_to_rll")
-    #         ispath(remap_tmpdir) ?
-    #         rm(remap_tmpdir; recursive = true, force = true) : nothing
-    #         mkpath(remap_tmpdir)
-    #         name = :testdata
-    #         datafile_rll = remap_tmpdir * "/" * string(name) * "_rll.nc"
+        # Delete testing directory and files
+        rm(TEST_DIR; recursive = true, force = true)
+    end
 
-    #         test_space = TestHelper.create_space(FT)
-    #         field = Fields.ones(test_space)
+    # Add tests which use TempestRemap here -
+    # TempestRemap is not built on Windows because of NetCDF support limitations
+    if !Sys.iswindows()
+        @testset "test write_to_hdf5 and read_from_hdf5 for FT=$FT" begin
+            # Set up testing directory
+            ispath(TEST_DIR) ? rm(TEST_DIR; recursive = true, force = true) :
+            nothing
+            mkpath(TEST_DIR)
 
-    #         Regridder.remap_field_cgll_to_rll(
-    #             name,
-    #             field,
-    #             remap_tmpdir,
-    #             datafile_rll,
-    #         )
+            hd_outfile_root = "hdf5_out_test"
+            tx = Dates.DateTime(1979, 01, 01, 01, 00, 00)
+            test_space = TestHelper.create_space(FT)
+            input_field = Fields.ones(test_space)
+            varname = "testdata"
 
-    #         # Test no new extrema are introduced in monotone remapping
-    #         nt = NCD.NCDataset(datafile_rll) do ds
-    #             max_remapped = maximum(ds[name])
-    #             min_remapped = minimum(ds[name])
-    #             (; max_remapped, min_remapped)
-    #         end
-    #         (; max_remapped, min_remapped) = nt
+            Regridder.write_to_hdf5(
+                TEST_DIR,
+                hd_outfile_root,
+                tx,
+                input_field,
+                varname,
+                comms_ctx,
+            )
 
-    #         @test max_remapped <= maximum(field)
-    #         @test min_remapped >= minimum(field)
+            output_field = Regridder.read_from_hdf5(
+                TEST_DIR,
+                hd_outfile_root,
+                tx,
+                varname,
+                comms_ctx,
+            )
+            @test parent(input_field) == parent(output_field)
 
-    #         # Delete testing directory and files
-    #         rm(REGRID_DIR; recursive = true, force = true)
-    #     end
-    # end
+            # Delete testing directory and files
+            rm(TEST_DIR; recursive = true, force = true)
+        end
 
+        @testset "test remap_field_cgll_to_rll for FT=$FT" begin
+            # Set up testing directory
+            remap_tmpdir = joinpath(TEST_DIR, "cgll_to_rll")
+            ispath(remap_tmpdir) ?
+            rm(remap_tmpdir; recursive = true, force = true) : nothing
+            mkpath(remap_tmpdir)
+            name = :testdata
+            datafile_rll = remap_tmpdir * "/" * string(name) * "_rll.nc"
+
+            test_space = TestHelper.create_space(FT)
+            field = Fields.ones(test_space)
+
+            Regridder.remap_field_cgll_to_rll(
+                name,
+                field,
+                remap_tmpdir,
+                datafile_rll,
+            )
+
+            # Test no new extrema are introduced in monotone remapping
+            nt = NCD.NCDataset(datafile_rll) do ds
+                max_remapped = maximum(ds[name])
+                min_remapped = minimum(ds[name])
+                (; max_remapped, min_remapped)
+            end
+            (; max_remapped, min_remapped) = nt
+
+            @test max_remapped <= maximum(field)
+            @test min_remapped >= minimum(field)
+
+            # Delete testing directory and files
+            rm(TEST_DIR; recursive = true, force = true)
+        end
+    end
 
 end
