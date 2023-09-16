@@ -8,3 +8,6 @@ packages including ClimaAtmos, ClimaLSM, and ClimaCoupler.
 [WIP] Each of these modules is currently duplicated in multiple of the packages
 listed above. The goal of this repo is to consolidate this code in one place,
 and extend it to meet the needs of each of these users.
+
+Portions of this package were developed as part of the
+[ClimaCoupler.jl](https://github.com/CliMA/ClimaCoupler.jl) package.
