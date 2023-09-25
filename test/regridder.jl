@@ -90,10 +90,14 @@ for FT in (Float32, Float64)
             ds[var][:]
         end
 
+        # Note: we can't directly compare the vectors for equality because
+        #  redundant vs unique nodes changes their lengths
         @test typeof(data[1]) == eltype(field)
-        # TODO these two tests fail because of unequal vector sizes
-        # @test size(data) == size(vec(parent(field)))
-        # @test data == vec(parent(field))
+        @test extrema(data) == extrema(parent(field))
+        # Compare lengths, accounting for redundant vs unique node counts
+        @test size(data)[1] == size(vec(parent(field)))[1] * (9 / 16) + 2
+        @test any(isnan.(data)) == any(isnan.(parent(field))) == false
+        @test any(ismissing.(data)) == any(ismissing.(parent(field))) == false
 
         # Delete testing directory and files
         rm(TEST_DIR; recursive = true, force = true)
