@@ -1,8 +1,7 @@
 using Documenter, Example, Literate
 using ClimaUtilities
 
-# TODO fill in once we have doc pages
-pages = Any[]
+pages = ["timemanager.md"]
 
 mathengine = MathJax(
     Dict(

@@ -1,5 +1,5 @@
 module ClimaUtilities
 
-greet() = print("Hello World!")
+include("TimeManager.jl")
 
 end # module ClimaUtilities
