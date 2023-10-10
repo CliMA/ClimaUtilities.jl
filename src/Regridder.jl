@@ -21,7 +21,9 @@ export missings_to_zero,
     read_from_hdf5,
     write_to_hdf5,
     write_field_to_ncdataset,
-    remap_field_cgll_to_rll
+    remap_field_cgll_to_rll,
+    fill_field!,
+    swap_space
 
 """
     missings_to_zero(x::Vector{FT}) where {FT}
@@ -295,4 +297,32 @@ function remap_field_cgll_to_rll(
     )
 end
 
+"""
+    fill_field!(field_out::Fields.Field, field_in::Fields.Field)
+
+Fill the values of a `field_out` with those of `field_in`.
+
+# Arguments
+- `field_out::Fields.Field` object to be filled with values.
+- `field_in::Fields.Field` contains values to fill other field with.
+"""
+function fill_field!(field_out::Fields.Field, field_in::Fields.Field)
+    parent(field_out) .= parent(field_in)
+    return field_out
+end
+
+"""
+    swap_space(field_in::Fields.Field, new_space::Spaces.AbstractSpace)
+
+Remap the values of a field onto a new space, and return a new field.
+
+# Arguments
+- `field::Fields.Field` object containing values used to populate new field.
+- `new_space::Spaces.AbstractSpace` space to remap `field_in` onto.
+"""
+function swap_space(field::Fields.Field, new_space::Spaces.AbstractSpace)
+    field_out = zeros(new_space)
+    parent(field_out) .= parent(field)
+    return field_out
+end
 end # module Regridder

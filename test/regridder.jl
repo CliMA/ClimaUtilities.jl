@@ -1,4 +1,4 @@
-import ClimaCore: Fields
+import ClimaCore: Fields, Spaces
 import ClimaComms
 import ClimaUtilities: Regridder, TestHelper
 import Dates
@@ -46,14 +46,23 @@ for FT in (Float32, Float64)
     #     space = TestHelper.create_space(FT)
     #     field = Fields.ones(space)
 
-    #     TR_in_arr = 0.5 .* copy(parent(field))
+    #     TR_in_arr = vec(0.5 .* copy(parent(field)))
     #     TR_inds = (; target_idxs, row_indices)
     #     # TODO what shapes should target_idxs, row_indices have?
 
     #     sparse_array_to_field!(field, TR_in_arr, TR_inds)
+
+    #     # apply dss! to input array to compare with converted field
+    #     # TODO does it make sense to dss 1d array?
+    #     # TODO field will have redundant node indexing
+    #     space = axes(field)
+    #     topology = Spaces.topology(space)
+    #     hspace = Spaces.horizontal_space(space)
+    #     Spaces.dss!(TR_in_arr, topology, hspace.quadrature_style)
+
     #     # TODO do I need to loop over rows for comparison?
     #     # TODO can I do comparison with dss?
-    #     @test parent(field) == TR_in_arr
+    #     @test vec(parent(field)) == TR_in_arr
     # end
 
     @testset "test binary_mask for FT=$FT" begin
@@ -101,6 +110,33 @@ for FT in (Float32, Float64)
 
         # Delete testing directory and files
         rm(TEST_DIR; recursive = true, force = true)
+    end
+
+    @testset "test fill_field!" begin
+        space1 = TestHelper.create_space(FT)
+        space2 = TestHelper.create_space(FT)
+
+        field1 = ones(space1)
+        field2 = zeros(space2)
+
+        Regridder.fill_field!(field2, field1)
+
+        @test parent(field1) == parent(field2)
+        @test axes(field2) === space2
+    end
+
+    @testset "test swap_space" begin
+        space1 = TestHelper.create_space(FT)
+        space2 = TestHelper.create_space(FT)
+
+        field1 = ones(space1)
+
+        @test axes(field1) === space1
+        field2 = Regridder.swap_space(field1, space2)
+
+        @test parent(field1) == parent(field2)
+        @test axes(field2) !== space1
+        @test axes(field2) === space2
     end
 
     # Add tests which use TempestRemap here -
