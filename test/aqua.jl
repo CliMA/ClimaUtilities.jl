@@ -27,8 +27,7 @@ end
     Aqua.test_stale_deps(ClimaUtilities)
     Aqua.test_deps_compat(ClimaUtilities)
     Aqua.test_project_extras(ClimaUtilities)
-    Aqua.test_project_toml_formatting(ClimaUtilities)
-    Aqua.test_piracy(ClimaUtilities)
+    Aqua.test_piracies(ClimaUtilities)
 end
 
 nothing
