@@ -1,0 +1,13 @@
+[era5_example]
+git-tree-sha1 = "c08d3035085c3c2969d1d9fb6f299686bad8d253"
+
+    [[era5_example.download]]
+    sha256 = "01a5730b1d352f3cbcc713f5be925a33cff15b4df7bb6414c8728fb5a4709984"
+    url = "https://caltech.box.com/shared/static/6iddzlsp9kcgg493jms8n5m4zzqf12ie.gz"
+
+[era5_static_example]
+git-tree-sha1 = "9e0fa7970c5ade600867f5afe737bc3ab6930204"
+
+    [[era5_static_example.download]]
+    sha256 = "6c2c3312ff49776ab4d3db7e84ba348dc8e3ffad2d3cb5e77e35039bdeec1610"
+    url = "https://caltech.box.com/shared/static/pdsre5tumpc04qbomzjduw07ryd3emwj.gz"

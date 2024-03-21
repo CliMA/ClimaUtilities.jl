@@ -9,3 +9,7 @@ end
 @safetestset "TimeManager tests" begin
     include("timemanager.jl")
 end
+
+@safetestset "FileReaders tests" begin
+    include("file_readers.jl")
+end
