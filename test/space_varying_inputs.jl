@@ -35,7 +35,7 @@ AT = ClimaComms.array_type(ClimaComms.device())
     end
 
     # 1D cases
-    data_z = collect(range(FT(0.), FT(1.0), 11))
+    data_z = collect(range(FT(0.0), FT(1.0), 11))
     data_value = data_z .* 2
     field = SpaceVaryingInput(data_z, data_value, column)
     @test parent(field)[:] ≈ AT(collect(range(FT(0.1), FT(1.9), 10)))
