@@ -6,6 +6,10 @@ using SafeTestsets
 end
 
 # Unit tests
+@safetestset "Utils tests" begin
+    include("utils.jl")
+end
+
 @safetestset "TimeManager tests" begin
     include("timemanager.jl")
 end
