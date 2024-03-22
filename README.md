@@ -1,4 +1,8 @@
-# ClimaUtilities.jl
+<h1 align="center">
+  <img src="logo.svg" width="180px"> <br>
+ClimaUtilities.jl
+</h1>
+
 Shared utilities for packages within the CliMA project.
 
 These will include modules for regridding spatial data, temporal interpolation,
