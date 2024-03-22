@@ -5,6 +5,8 @@ import ClimaUtilities.FileReaders
 import Dates
 import NCDatasets
 
+include("nc_common.jl")
+
 # We allow multiple NCFileReader to share the same underlying NCDataset. For this, we put
 # all the NCDataset into a dictionary where we keep track of them. OPEN_NCFILES is
 # dictionary that maps file paths to a Tuple with the first element being the NCDataset and
@@ -149,24 +151,6 @@ function Base.close(file_reader::NCFileReader)
     return nothing
 end
 
-
-"""
-    read_available_dates(ds::NCDatasets.NCDataset)
-
-Return all the dates in the given NCDataset. The dates are read from the "time"
-or "date" datasets. If none is available, return an empty vector.
-"""
-function read_available_dates(ds::NCDatasets.NCDataset)
-    if "time" in keys(ds.dim)
-        return Dates.DateTime.(
-            reinterpret.(Ref(NCDatasets.DateTimeStandard), ds["time"][:])
-        )
-    elseif "date" in keys(ds.dim)
-        return strdate_to_datetime.(string.(ds["date"][:]))
-    else
-        return Dates.DateTime[]
-    end
-end
 
 """
     read(file_reader::NCFileReader, date::Dates.DateTime)

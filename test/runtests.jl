@@ -13,3 +13,11 @@ end
 @safetestset "FileReaders tests" begin
     include("file_readers.jl")
 end
+
+@safetestset "Regridders tests" begin
+    include("regridders.jl")
+end
+
+@safetestset "DataHandling tests" begin
+    include("data_handling.jl")
+end
