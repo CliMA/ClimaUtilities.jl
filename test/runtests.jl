@@ -25,3 +25,11 @@ end
 @safetestset "DataHandling tests" begin
     include("data_handling.jl")
 end
+
+@safetestset "SpaceVaryingInputs tests" begin
+    include("space_varying_inputs.jl")
+end
+
+@safetestset "TimeVaryingInputs tests" begin
+    include("time_varying_inputs.jl")
+end

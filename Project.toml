@@ -5,10 +5,7 @@ version = "0.1.1"
 
 [deps]
 CFTime = "179af706-886a-5703-950a-314cd64e0468"
-ClimaCoreTempestRemap = "d934ef94-cdd4-4710-83d6-720549644b70"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
-Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
-NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 
 [weakdeps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -23,6 +20,11 @@ DataHandlingExt = ["ClimaCore", "NCDatasets"]
 InterpolationsRegridderExt = ["Interpolations", "ClimaCore"]
 NCFileReaderExt = "NCDatasets"
 TempestRegridderExt = "ClimaCoreTempestRemap"
+SpaceVaryingInputsAnalyticExt = "ClimaCore"
+SpaceVaryingInputsExt = ["ClimaCore", "NCDatasets"]
+TimeVaryingInputsAnalyticExt = ["ClimaCore", "NCDatasets"]
+TimeVaryingInputs0DExt = "ClimaCore"
+TimeVaryingInputsExt = ["ClimaCore", "NCDatasets"]
 
 [compat]
 Adapt = "3, 4"
