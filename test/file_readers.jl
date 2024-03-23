@@ -22,6 +22,9 @@ using NCDatasets
         @test length(ncreader_u.available_dates) == 24
         @test length(ncreader_sp.available_dates) == 24
 
+        @test FileReaders.available_dates(ncreader_u) ==
+              ncreader_u.available_dates
+
         available_dates = ncreader_sp.available_dates
         @test available_dates[2] == DateTime(2021, 01, 01, 01)
 
@@ -70,6 +73,8 @@ end
         @test ncreader.dimensions[2] == nc["lat"][:]
 
         @test FileReaders.read(ncreader) == nc["u10n"][:, :]
+
+        @test isempty(FileReaders.available_dates(ncreader))
 
         close(ncreader)
     end

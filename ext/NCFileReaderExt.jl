@@ -185,6 +185,15 @@ function FileReaders.read(file_reader::NCFileReader, date::Dates.DateTime)
 end
 
 """
+    available_dates(file_reader::NCFileReader)
+
+Returns the dates in the given file.
+"""
+function FileReaders.available_dates(file_reader::NCFileReader)
+    return file_reader.available_dates
+end
+
+"""
     read(file_reader::NCFileReader)
 
 Read and preprocess data (for static datasets).
