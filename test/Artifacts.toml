@@ -11,3 +11,18 @@ git-tree-sha1 = "9e0fa7970c5ade600867f5afe737bc3ab6930204"
     [[era5_static_example.download]]
     sha256 = "6c2c3312ff49776ab4d3db7e84ba348dc8e3ffad2d3cb5e77e35039bdeec1610"
     url = "https://caltech.box.com/shared/static/pdsre5tumpc04qbomzjduw07ryd3emwj.gz"
+
+[socrates]
+git-tree-sha1 = "43563e7631a7eafae1f9f8d9d332e3de44ad7239"
+lazy = true
+
+    [[socrates.download]]
+    url = "https://github.com/staticfloat/small_bin/raw/master/socrates.tar.gz"
+    sha256 = "e65d2f13f2085f2c279830e863292312a72930fee5ba3c792b14c33ce5c5cc58"
+
+[laskar2004]
+git-tree-sha1 = "e4044f4093e731021a3e62428f594ee7b5ea56e2"
+
+    [[laskar2004.download]]
+    sha256 = "8b3a9510ade307e1834c51968421ab803d0d570f1c27529cb417d7a185fbcc3e"
+    url = "https://data.caltech.edu/records/v9dp1-jb227/files/laskar2004.tar.gz"

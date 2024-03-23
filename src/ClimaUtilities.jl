@@ -9,4 +9,6 @@ include("DataHandling.jl")
 include("SpaceVaryingInputs.jl")
 include("TimeVaryingInputs.jl")
 
+include("ClimaArtifacts.jl")
+
 end # module ClimaUtilities

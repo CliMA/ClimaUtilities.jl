@@ -33,3 +33,7 @@ end
 @safetestset "TimeVaryingInputs tests" begin
     include("time_varying_inputs.jl")
 end
+
+@safetestset "ClimaArtifacts tests" begin
+    include("clima_artifacts.jl")
+end
