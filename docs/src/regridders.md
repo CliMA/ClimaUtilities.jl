@@ -21,6 +21,33 @@ Currently, `Regridders` comes with two implementations:
 > everything that is needed to read a file to the model grid (internally using
 > the `Regridders`).
 
+## `TempestRegridder`
+
+> This extension is loaded when loading `ClimaCoreTempestRemap`
+
+`TempestRegridder` performs conservative interpolation of lat-lon grids onto
+computational domains. `TempestRegridder` performs all the interpolation ahead
+of time and saves the regridded fields to HDF5 files that can be read during the
+simulation.
+
+### Example
+
+Assuming `target_space` is a `ClimaCore` 2D spherical field, the input data is
+the variable `u` in the file `era5_example.nc`, and we want to read the data
+associated with date `target_date`.
+
+```julia
+import ClimaUtilities.Regridders
+import ClimaCoreTempestRemap
+# Loading ClimaCoreTempest automatically loads TempestRegridder
+
+reg = Regridders.TempestRegridder(target_space, "regrid_output", "u", "era5_example.nc")
+# When reg is created, the variable `u` is regridded and the output files
+# are saved to the `regrid_output` folder
+
+regridded_u = Regridders.regrid(reg, target_date)
+```
+
 ## `InterpolationsRegridder`
 
 > This extension is loaded when loading `ClimaCore` and `Interpolations`
@@ -61,3 +88,12 @@ data = rand((length(lon), length(lat)))
 interpolated_data = Regridders.InterpolationsRegridder(reg, data, dimensions)
 interpolated_2data = Regridders.InterpolationsRegridder(reg, 2.*data, dimensions)
 ```
+
+## API
+
+```@docs
+ClimaUtilities.Regridders.TempestRegridder
+ClimaUtilities.Regridders.InterpolationsRegridder
+ClimaUtilities.Regridders.regrid
+```
+
