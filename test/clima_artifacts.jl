@@ -42,3 +42,7 @@ Base.Filesystem.rm(expected_path, recursive = true)
 
     @test_throws ErrorException ClimaArtifacts.@clima_artifact(artifact_name)
 end
+
+@testset "Accessed artifacts" begin
+    @test ClimaArtifacts.accessed_artifacts() == Set(["socrates", "laskar2004"])
+end

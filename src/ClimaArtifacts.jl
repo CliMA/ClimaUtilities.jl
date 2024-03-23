@@ -7,6 +7,15 @@ export @clima_artifact
 
 const ACCESSED_ARTIFACTS::Set{String} = Set(String[])
 
+"""
+    accessed_artifacts()
+
+Return a set with the names of the artifacts accessed using the @clima_artifact macro.
+"""
+function accessed_artifacts()
+    return ACCESSED_ARTIFACTS
+end
+
 root_or_singleton(::Nothing) = true
 maybe_wait(::Nothing) = nothing
 
@@ -116,7 +125,7 @@ macro clima_artifact(name, context = nothing)
                     $(platform),
                     $(lazyartifacts),
                 )::String
-                push!(ACCESSED_ARTIFACTS, artifact_path)
+                push!(ACCESSED_ARTIFACTS, artifact_name)
             end
             Base.invokelatest(
                 JuliaArtifacts._artifact_str,
@@ -169,7 +178,7 @@ macro clima_artifact(name, context = nothing)
                     platform,
                     $(lazyartifacts),
                 )::String
-                push!(ACCESSED_ARTIFACTS, artifact_path)
+                push!(ACCESSED_ARTIFACTS, artifact_name)
             end
             Base.invokelatest(maybe_wait, $(esc(context)))
             Base.invokelatest(
