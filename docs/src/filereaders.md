@@ -1,0 +1,77 @@
+# `FileReaders`
+
+Reading files is a common need for most scientific projects. This can come with
+a series of problems that have to be solved, from performance (accessing can be
+a very computationally expensive operation), to dealing with multiple files that
+are logically connected. The `FileReaders` provides an abstraction layer to
+decouple the scientific needs with the technical implementation so that file
+processing can be optimized and extended independently of the rest of the model.
+
+At this point, the implemented `FileReaders` are always linked to a specific
+variable and they come with a caching system to avoid unnecessary reads.
+
+Future extensions might include:
+- dealing with multiple files containing the same variables (e.g. time series when the dates are split in different files);
+- doing chunked reads;
+- async reads.
+
+## `NCFileReaders`
+
+> This extension is loaded when loading `NCDatasets`
+
+The only file reader currently implemented is the `NCFileReader`, used to read
+NetCDF files. Each `NCFileReader` is associated to one particular file and
+variable (but multiple `NCFileReader`s can share the same file).
+
+Once created, `NCFileReader` is accessed with the `read(file_reader, date)`
+function, which returns the `Array` associated to given `date` (if available).
+The `date` can be omitted if the data is static.
+
+`NCFileReader`s implement two additional features: (1) optional preprocessing,
+and (2) cache reads. `NCFileReader`s can be created with a `preprocessing_func`
+keyword argument, function is applied to the read datasets when `read`ing.
+`preprocessing_func` should be a lightweight function, such as removing `NaN`s or changing units.
+Every time `read(file_reader, date)` is called, the `NCFileReader` checks if the
+`date` was read in the past. If yes, it just returns the value (without
+accessing the disk). If not, it reads and process the data and adds it to the
+cache.
+
+
+### Example
+
+Assume you have a file `era5_2000.nc`, which contains two variables `u` and `v`,
+defined for the year 2000.
+
+```julia
+import ClimaUtilities.FileReaders
+import NCDatasets
+# Loading NCDatasets automatically loads `NCFileReaders`
+
+u_var = FileReaders.NCFileReader("era5_2000.nc", "u")
+# Change units for v
+v_var = FileReaders.NCFileReader("era5_2000.nc", "u", preprocess_func = x -> 1000x)
+
+dates = FileReaders.available_dates(u_var)
+# dates is a vector of Dates.DateTime
+
+first_date = dates[begin]
+
+# The first time we call read, the file is accessed and read
+u_array = FileReaders.read(u_var, first_date)
+# As the name suggests, u_array is an Array
+
+# All the other times, we access the cache, so no IO operation is involved
+u_array_again = FileReaders.read(u_var, first_date)
+
+close(u_var)
+close(v_var)
+```
+
+## API
+
+```@docs
+ClimaUtilities.FileReaders.NCFileReader
+ClimaUtilities.FileReaders.read
+ClimaUtilities.FileReaders.available_dates
+Base.close
+```

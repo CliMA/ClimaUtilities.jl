@@ -9,6 +9,7 @@ import ClimaCoreTempestRemap
 pages = [
     "Overview" => "index.md",
     "ClimaArtifacts" => "climaartifacts.md",
+    "FileReaders" => "filereaders.md",
     "TimeManager" => "timemanager.md",
 ]
 
