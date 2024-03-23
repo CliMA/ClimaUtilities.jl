@@ -1,7 +1,7 @@
 """
     DataHandling
 
-The `DataHandling` module is responsible for read data from files and resample the data onto
+The `DataHandling` module is responsible for reading data from files and resampling it onto
 the simulation grid.
 
 This is no trivial task. Among the challenges:

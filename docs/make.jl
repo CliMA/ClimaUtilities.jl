@@ -12,6 +12,7 @@ pages = [
     "Overview" => "index.md",
     "ClimaArtifacts" => "climaartifacts.md",
     "FileReaders" => "filereaders.md",
+    "DataHandling" => "datahandling.md",
     "Regridders" => "regridders.md",
     "TimeManager" => "timemanager.md",
 ]
