@@ -66,8 +66,16 @@ include("TestTools.jl")
         @test maximum(err_lon) < 1e-5
 
         # 3D space
+        extrapolation_bc = (
+            Interpolations.Periodic(),
+            Interpolations.Flat(),
+            Interpolations.Flat(),
+        )
 
-        reg_hv = Regridders.InterpolationsRegridder(hv_center_space)
+        reg_hv = Regridders.InterpolationsRegridder(
+            hv_center_space;
+            extrapolation_bc,
+        )
 
         regridded_lat = Regridders.regrid(reg_hv, data_lat3D, dimensions3D)
         regridded_lon = Regridders.regrid(reg_hv, data_lon3D, dimensions3D)
