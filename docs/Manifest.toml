@@ -2,7 +2,7 @@
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "0094ef9a7e765db4131a40b9f55b5cd5df54aaa3"
+project_hash = "3c3b4fe4920898a07c1e7bee795c2f78ddb367d6"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -200,7 +200,7 @@ version = "0.3.14"
 deps = ["Artifacts", "CFTime", "Dates"]
 path = ".."
 uuid = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
-version = "0.1.1"
+version = "0.1.2"
 weakdeps = ["Adapt", "ClimaComms", "ClimaCore", "ClimaCoreTempestRemap", "Interpolations", "NCDatasets"]
 
     [deps.ClimaUtilities.extensions]

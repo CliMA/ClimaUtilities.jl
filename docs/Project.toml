@@ -1,4 +1,5 @@
 [deps]
+ClimaComms = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
 ClimaCore = "d414da3d-4745-48bb-8d80-42e94e092884"
 ClimaCoreTempestRemap = "d934ef94-cdd4-4710-83d6-720549644b70"
 ClimaUtilities = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"

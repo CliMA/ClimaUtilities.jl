@@ -1,7 +1,9 @@
 using Documenter
 using ClimaUtilities
 
+# Load everything to load extensions
 import Interpolations
+import ClimaComms
 import ClimaCore
 import NCDatasets
 import ClimaCoreTempestRemap
