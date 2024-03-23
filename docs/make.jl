@@ -6,7 +6,11 @@ import ClimaCore
 import NCDatasets
 import ClimaCoreTempestRemap
 
-pages = ["Overview" => "index.md", "TimeManager" => "timemanager.md"]
+pages = [
+    "Overview" => "index.md",
+    "ClimaArtifacts" => "climaartifacts.md",
+    "TimeManager" => "timemanager.md",
+]
 
 mathengine = MathJax(
     Dict(
