@@ -21,11 +21,9 @@ ClimaArtifactsExt = ["ClimaComms"]
 DataHandlingExt = ["ClimaCore", "NCDatasets"]
 InterpolationsRegridderExt = ["Interpolations", "ClimaCore"]
 NCFileReaderExt = "NCDatasets"
-SpaceVaryingInputsAnalyticExt = "ClimaCore"
 SpaceVaryingInputsExt = ["ClimaCore", "NCDatasets"]
 TempestRegridderExt = "ClimaCoreTempestRemap"
 TimeVaryingInputs0DExt = "ClimaCore"
-TimeVaryingInputsAnalyticExt = ["ClimaCore", "NCDatasets"]
 TimeVaryingInputsExt = ["ClimaCore", "NCDatasets"]
 
 [compat]
