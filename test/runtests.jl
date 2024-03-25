@@ -1,4 +1,9 @@
 using SafeTestsets
+using Pkg
+
+Pkg.Artifacts.ensure_all_artifacts_installed(
+    joinpath(@__DIR__, "Artifacts.toml"),
+)
 
 # Performance and code quality tests
 @safetestset "Aqua tests" begin
