@@ -143,6 +143,11 @@ end
 Close `NCFileReader`. If no other `NCFileReader` is using the same file, close the NetCDF file.
 """
 function Base.close(file_reader::NCFileReader)
+    # If we don't have the key, we don't have to do anything (we already closed
+    # the file)
+    file_is_not_open = !haskey(OPEN_NCFILES, file_reader.file_path)
+    file_is_not_open && return nothing
+
     open_variables = OPEN_NCFILES[file_reader.file_path][end]
     pop!(open_variables, file_reader.varname)
     if isempty(open_variables)

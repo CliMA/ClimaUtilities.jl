@@ -181,4 +181,25 @@ function TimeVaryingInputs.evaluate!(
     return nothing
 end
 
+"""
+    close(time_varying_input::TimeVaryingInputs.AbstractTimeVaryingInput)
+
+Close files associated to the `time_varying_input`.
+"""
+function Base.close(
+    time_varying_input::TimeVaryingInputs.AbstractTimeVaryingInput,
+)
+    return nothing
+end
+
+"""
+    close(time_varying_input::InterpolatingTimeVaryingInput23D)
+
+Close files associated to the `time_varying_input`.
+"""
+function Base.close(time_varying_input::InterpolatingTimeVaryingInput23D)
+    Base.close(time_varying_input.data_handler)
+    return nothing
+end
+
 end

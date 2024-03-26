@@ -234,6 +234,9 @@ end
                 (right_value .- left_value)
 
             @test parent(dest) ≈ parent(expected)
+
+            close(input_nearest)
+            close(input_linear)
         end
     end
 end
