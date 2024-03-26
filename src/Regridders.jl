@@ -7,7 +7,7 @@ grids.
 Currently, the schemes implemented are `TempestRegridder`, which uses
 `ClimaCoreTempestRemap`, and `InterpolationsRegridder`, which uses `Interpolations.jl`.
 
-The key function exposed by `Regridder` is the `regrid` method.
+The key function exposed by `Regridders` is the `regrid` method.
 """
 module Regridders
 

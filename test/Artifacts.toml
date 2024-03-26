@@ -26,3 +26,10 @@ git-tree-sha1 = "e4044f4093e731021a3e62428f594ee7b5ea56e2"
     [[laskar2004.download]]
     sha256 = "8b3a9510ade307e1834c51968421ab803d0d570f1c27529cb417d7a185fbcc3e"
     url = "https://data.caltech.edu/records/v9dp1-jb227/files/laskar2004.tar.gz"
+
+[landseamask]
+git-tree-sha1 = "31d4110d008fcfb1ecfd77eb9675c983b650eedf"
+
+    [[landseamask.download]]
+    sha256 = "363c5c85f17458ce80a7e3944fcaf0539889e3e0e14f46df6752c7d9417f8fae"
+    url = "https://caltech.box.com/shared/static/vn1kh5x868mlo17x6ql2gmqj2flfemu3.gz"

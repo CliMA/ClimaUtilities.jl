@@ -46,7 +46,7 @@ include("TestTools.jl")
     @test Array(parent(column_field))[1] == fun2(10.0, 20.0; z = 30.0)
 end
 
-@testset "InteprolatingTimeVaryingInput0D" begin
+@testset "InterpolatingTimeVaryingInput0D" begin
     # Check times not sorted
     xs = [1.0, 0.0]
     ys = [1.0, 2.0]
@@ -119,7 +119,7 @@ end
     end
 end
 
-@testset "InteprolatingTimeVaryingInput23D" begin
+@testset "InterpolatingTimeVaryingInput23D" begin
     PATH = joinpath(artifact"era5_example", "era5_t2m_sp_u10n_20210101.nc")
     regridder_types = (:InterpolationsRegridder, :TempestRegridder)
 
@@ -198,11 +198,13 @@ end
             TimeVaryingInputs.evaluate!(dest, input_nearest, target_time)
 
             @test isequal(
-                parent(dest),
-                parent(
-                    DataHandling.regridded_snapshot(
-                        data_handler,
-                        available_times[11],
+                Array(parent(dest)),
+                Array(
+                    parent(
+                        DataHandling.regridded_snapshot(
+                            data_handler,
+                            available_times[11],
+                        ),
                     ),
                 ),
             )

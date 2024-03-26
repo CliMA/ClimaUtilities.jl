@@ -107,9 +107,11 @@ everything more type stable.)
 - `reference_date`: Calendar date corresponding to the start of the simulation.
 - `t_start`: Simulation time at the beginning of the simulation. Typically this is 0
              (seconds), but if might be different if the simulation was restarted.
-- `regridder_type`: What type of regridding to perform. Currently, the only one implemented
-                    is `:tempest` to use `TempestRemap`. `TempestRemap` regrids everything
-                    ahead of time and saves the result to HDF5 files.
+- `regridder_type`: What type of regridding to perform. Currently, the ones implemented are
+                    `:TempestRegridder` (using `TempestRemap`) and
+                    `:InterpolationsRegridder` (using `Interpolations.jl`). `TempestRemap`
+                    regrids everything ahead of time and saves the result to HDF5 files.
+                    `Interpolations.jl` is online and GPU compatible but not conservative.
 """
 function DataHandling.DataHandler(
     file_path::AbstractString,
@@ -138,6 +140,8 @@ function DataHandling.DataHandler(
     _cached_regridded_fields = Dict{Dates.DateTime, ClimaCore.Fields.Field}()
 
     available_dates = file_reader.available_dates
+    # Second() is required to convert from DateTime to float. Also, Second(1) transforms
+    # from milliseconds to seconds.
     times_s = Second.(available_dates .- reference_date) ./ Second(1)
     available_times = times_s .- t_start
 
@@ -184,6 +188,21 @@ function DataHandling.available_dates(data_handler::DataHandler)
 end
 
 """
+    time_to_date(data_handler::DataHandler, time::AbstractFloat)
+
+Convert the given time to a calendar date.
+
+```
+date = reference_date + t_start + time
+```
+"""
+function time_to_date(data_handler::DataHandler, time::AbstractFloat)
+    return data_handler.reference_date +
+           Second(data_handler.t_start) +
+           Second(time)
+end
+
+"""
     previous_time(data_handler::DataHandler, time::AbstractFloat)
     previous_time(data_handler::DataHandler, date::Dates.DateTime)
 
@@ -194,15 +213,15 @@ function DataHandling.previous_time(
     data_handler::DataHandler,
     time::AbstractFloat,
 )
-    time in data_handler.available_times && return time
-    index = searchsortedfirst(data_handler.available_times, time) - 1
-    return data_handler.available_times[index]
+    date = time_to_date(data_handler, time)
+    return DataHandling.previous_time(data_handler, date)
 end
 
 function DataHandling.previous_time(
     data_handler::DataHandler,
     date::Dates.DateTime,
 )
+    # We have to handle separately what happens when we are on the node
     if date in data_handler.available_dates
         index = searchsortedfirst(data_handler.available_dates, date)
     else
@@ -219,12 +238,12 @@ Return the time in seconds of the snapshot after the given `time`.
 If `time` is one of the snapshots, return the next time.
 """
 function DataHandling.next_time(data_handler::DataHandler, time::AbstractFloat)
-    index = searchsortedfirst(data_handler.available_times, time)
-    time in data_handler.available_times && (index += 1)
-    return data_handler.available_times[index]
+    date = time_to_date(data_handler, time)
+    return DataHandling.next_time(data_handler, date)
 end
 
 function DataHandling.next_time(data_handler::DataHandler, date::Dates.DateTime)
+    # We have to handle separately what happens when we are on the node
     if date in data_handler.available_dates
         index = searchsortedfirst(data_handler.available_dates, date) + 1
     else
@@ -253,7 +272,9 @@ function DataHandling.regridded_snapshot(
 )
     # Dates.DateTime(0) is the cache key for static maps
     if date != Dates.DateTime(0)
-        date in data_handler.available_dates || error("date not available")
+        date in data_handler.available_dates || error(
+            "Date $date not available in file $(data_handler.file_reader.file_path)",
+        )
     end
 
     regridder_type = nameof(typeof(data_handler.regridder))
@@ -276,10 +297,7 @@ function DataHandling.regridded_snapshot(
     data_handler::DataHandler,
     time::AbstractFloat,
 )
-    date =
-        data_handler.reference_date +
-        Second(round(data_handler.t_start)) +
-        Second(round(time))
+    date = time_to_date(data_handler, time)
     return DataHandling.regridded_snapshot(data_handler, date)
 end
 

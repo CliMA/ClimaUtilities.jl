@@ -11,7 +11,7 @@ This is no trivial task. Among the challenges:
 - CPU/GPU communication can be a bottleneck
 
 The `DataHandling` takes the divide and conquer approach: the various core tasks and
-features and split into other independent modules (chiefly `FileReaders`, and `Regridders`).
+features are split into other independent modules (chiefly `FileReaders`, and `Regridders`).
 Such modules can be developed, tested, and extended independently (as long as they maintain
 a consistent interface). For instance, if need arises, the `DataHandler` can be used
 (almost) directly to process files with a different format from NetCDF.
@@ -25,9 +25,9 @@ exposes the following key functions:
 - `available_times` (`available_dates`): to list all the `times` (`dates`) over which the
                     data is defined.
 - `previous_time(time/date)` (`next_time(time/date)`): to obtain the time of the snapshot
-                         before the given `time` or `date`. This can be used to compute the
-                         interpolation weight for linear interpolation, or in combination
-                         with `regridded_snapshot` to read a particular snapshot
+                         before/after the given `time` or `date`. This can be used to
+                         compute the interpolation weight for linear interpolation, or in
+                         combination with `regridded_snapshot` to read a particular snapshot
 Most `DataHandling` functions take either `time` or `date`, with the difference being that
 `time` is intended as "simulation time" and is expected to be in seconds; `date` is a
 calendar date (from `Dates.DateTime`). Conversion between time and date is performed using

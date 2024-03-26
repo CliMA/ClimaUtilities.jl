@@ -45,6 +45,7 @@ end
 """
     TempestRegridder(target_space::ClimaCore.Spaces.AbstractSpace,
                      input_file::AbstractString,
+                     regrid_dir::AbstractString,
                      varname::AbstractString,
                      regrid_dir::AbstractString;
                      mono::Bool)
@@ -57,6 +58,7 @@ Positional arguments
 
 - `target_space`: the ClimaCore Space where the simulation is being performed.
 - `input_file`: the path of the NetCDF file that has to be read and processed.
+- `regrid_dir`: the path where to save the regrid files created by TempestRemap.
 - `varname`: the name of the variable in the NetCDF file.
 - `regrid_dir`: a folder where regridded Fields are saved as HDF5 files.
 

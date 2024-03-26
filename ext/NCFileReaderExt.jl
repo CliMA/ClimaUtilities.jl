@@ -45,7 +45,7 @@ struct NCFileReader{
     """A vector of DateTime collecting all the available dates in the file"""
     available_dates::DATES
 
-    """NetCDF file opened by NCDataset"""
+    """NetCDF file opened by NCDataset. Don't forget to close the reader!"""
     dataset::NC
 
     """Optional function that is applied to the read dataset. Useful to do unit-conversion
@@ -95,8 +95,9 @@ function FileReaders.NCFileReader(
             error("Could not find (unique) time dimension")
         time_index = time_index_vec[]
 
-        issorted(available_dates) ||
-            error("Cannot process files that are not sorted in time")
+        issorted(available_dates) || error(
+            "Cannot process files that are not sorted in time ($file_path)",
+        )
 
         # Remove time from the dim names
         dim_names = filter(!is_time, dim_names)
