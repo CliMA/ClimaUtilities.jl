@@ -107,19 +107,7 @@ function FileReaders.NCFileReader(
         dimensions =
             Tuple(NCDatasets.nomissing(Array(dataset[d])) for d in dim_names)
     else
-        @warn "Dimensions not found in $file_path"
-        # If lat and lon, we can try deducing from the number of points
-        if dim_names == ["lon", "lat"] || dim_names == ["long", "lat"]
-            @warn "Assuming cell-centered lon/lat (-90/90, -180/180)"
-            lon_edges = range(-90, 90, dataset.dim[dim_names[1]])
-            lon = (lon_edges[1:(end - 1)] .+ lon_edges[2:end]) ./ 2.0
-
-            lat_edges = range(-180, 180, dataset.dim[dim_names[2]])
-            lat = (lat_edges[1:(end - 1)] .+ lat_edges[2:end]) ./ 2.0
-            dimensions = (lon, lat)
-        else
-            error("$file_path does not contain information about dimensions")
-        end
+        error("$file_path does not contain information about dimensions")
     end
 
     # NOTE: This is not concretely typed.
