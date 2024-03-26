@@ -36,6 +36,9 @@ Every time `read(file_reader, date)` is called, the `NCFileReader` checks if the
 accessing the disk). If not, it reads and process the data and adds it to the
 cache.
 
+It is good practice to always close the `NCFileReader`s when they are no longer
+needed. The function `close_all_ncfiles` closes all the ones that are currently
+open.
 
 ### Example
 
@@ -65,6 +68,7 @@ u_array_again = FileReaders.read(u_var, first_date)
 
 close(u_var)
 close(v_var)
+# Alternatively: FileReaders.close_all_ncfiles()
 ```
 
 ## API
@@ -73,5 +77,6 @@ close(v_var)
 ClimaUtilities.FileReaders.NCFileReader
 ClimaUtilities.FileReaders.read
 ClimaUtilities.FileReaders.available_dates
+ClimaUtilities.FileReaders.close_all_ncfiles
 Base.close
 ```

@@ -157,6 +157,18 @@ function Base.close(file_reader::NCFileReader)
     return nothing
 end
 
+"""
+    close_all_ncfiles()
+
+Close all the `NCFileReader` currently open.
+"""
+function FileReaders.close_all_ncfiles()
+    foreach(OPEN_NCFILES) do (_, ds_vars)
+        NCDatasets.close(ds_vars[begin])
+    end
+    empty!(OPEN_NCFILES)
+    return nothing
+end
 
 """
     read(file_reader::NCFileReader, date::Dates.DateTime)
@@ -215,6 +227,5 @@ function FileReaders.read(file_reader::NCFileReader)
         )
     end
 end
-
 
 end

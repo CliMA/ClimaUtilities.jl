@@ -76,6 +76,9 @@ end
 
         @test isempty(FileReaders.available_dates(ncreader))
 
-        close(ncreader)
+        FileReaders.close_all_ncfiles()
+        open_ncfiles =
+            Base.get_extension(ClimaUtilities, :NCFileReaderExt).OPEN_NCFILES
+        @test isempty(open_ncfiles)
     end
 end
