@@ -1,10 +1,11 @@
 [deps]
+ClimaComms = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
+ClimaCore = "d414da3d-4745-48bb-8d80-42e94e092884"
+ClimaCoreTempestRemap = "d934ef94-cdd4-4710-83d6-720549644b70"
 ClimaUtilities = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-Example = "7876af07-990d-54b4-ab0e-23690620f79a"
-Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
+Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 
 [compat]
 Documenter = "0.27"
-Example = "0.5"
-Literate = "2"
