@@ -125,7 +125,8 @@ end
 
     # Tempestremap is single threaded and CPU only
     if context isa ClimaComms.MPICommsContext ||
-       ClimaComms.device() isa ClimaComms.CUDADevice
+       ClimaComms.device() isa ClimaComms.CUDADevice ||
+       Sys.iswindows()
         regridder_types = (:InterpolationsRegridder,)
     end
     for FT in (Float32, Float64)
