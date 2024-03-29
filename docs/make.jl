@@ -15,6 +15,7 @@ pages = [
     "FileReaders" => "filereaders.md",
     "DataHandling" => "datahandling.md",
     "Regridders" => "regridders.md",
+    "OutputPathGenerator" => "outputpathgenerator.md",
     "TimeManager" => "timemanager.md",
 ]
 
