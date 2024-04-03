@@ -7,6 +7,10 @@ on:
     tags: '*'
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   codecov:
     runs-on: ubuntu-latest
@@ -33,7 +37,7 @@ jobs:
       if: success()
 
     - name: Submit coverage
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         token: ${{secrets.CODECOV_TOKEN}}
       if: success()

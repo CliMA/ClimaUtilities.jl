@@ -58,6 +58,12 @@ conservative interpolation onto lat-long grids.
 > ⚠️ Note: At the moment, `TempestRegridder` *does not* support MPI/GPUs and can
 > only perform interpolation onto lat-long grids (not on z).
 
+### `OutputPathGenerator`
+
+`OutputPathGenerator` handles the directory structure for the output of a
+simulation. If you are a package developer, use this module to set up the output
+path for your simulation.
+
 ### `DataHandling`
 
 The `DataHandling` module bundles a `Regridder` and a `FileReader` together to

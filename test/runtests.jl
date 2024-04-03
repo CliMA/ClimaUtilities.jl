@@ -15,6 +15,10 @@ end
     include("utils.jl")
 end
 
+@safetestset "OutputPathGenerator tests" begin
+    include("output_path_generator.jl")
+end
+
 @safetestset "TimeManager tests" begin
     include("timemanager.jl")
 end

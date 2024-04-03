@@ -3,6 +3,8 @@ module ClimaArtifacts
 import Base.BinaryPlatforms: HostPlatform
 import Artifacts as JuliaArtifacts
 
+import ..MPIUtils: root_or_singleton, maybe_wait
+
 export @clima_artifact
 
 const ACCESSED_ARTIFACTS::Set{String} = Set(String[])
@@ -15,9 +17,6 @@ Return a set with the names of the artifacts accessed using the @clima_artifact 
 function accessed_artifacts()
     return ACCESSED_ARTIFACTS
 end
-
-root_or_singleton(::Nothing) = true
-maybe_wait(::Nothing) = nothing
 
 # This code is largely a re-implementation of Artifacts.artifact_str extended to
 # add instrumentation and control MPI. Loading ClimaComms to load
