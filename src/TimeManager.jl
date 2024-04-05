@@ -7,7 +7,6 @@ of data.
 module TimeManager
 
 import Dates
-import CFTime
 
 export to_datetime,
     strdate_to_datetime,
@@ -19,8 +18,8 @@ export to_datetime,
 """
     to_datetime(date)
 
-Convert a `DateTime`-like object (e.g. `DateTimeNoLeap`) to a `DateTime`,
-using CFTime.jl. We need this since some data files we use contain
+Convert a `DateTime`-like object (e.g. `DateTimeNoLeap`) to a `DateTime`.
+We need this since some data files we use contain
 `DateTimeNoLeap` objects for dates, which can't be used for math with `DateTime`s.
 The `DateTimeNoLeap` type uses the Gregorian calendar without leap years, while
 the `DateTime` type uses Gregorian calendar with leap years.
@@ -28,10 +27,22 @@ the `DateTime` type uses Gregorian calendar with leap years.
 For consistency, all input data files should have dates converted to `DateTime`
 before being used in a simulation.
 
+This function is similar to `reinterpret` in CFTime.jl.
+
 # Arguments
 - `date`: `DateTime`-like object to be converted to `DateTime`
 """
-to_datetime(date) = CFTime.reinterpret(Dates.DateTime, date)
+function to_datetime(date)
+    return Dates.DateTime(
+        Dates.year(date),
+        Dates.month(date),
+        Dates.day(date),
+        Dates.hour(date),
+        Dates.minute(date),
+        Dates.second(date),
+        Dates.millisecond(date),
+    )
+end
 
 """
     strdate_to_datetime(strdate::String)
