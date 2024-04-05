@@ -63,7 +63,7 @@ import Dates
 
 data_handler = DataHandling.DataHandler("era5_example.nc",
                                         "u",
-                                        target_space
+                                        target_space,
                                         reference_date = Dates.DateTime(2000, 1, 1),
                                         regridder_type = :InterpolationsRegridder)
 
@@ -93,5 +93,3 @@ ClimaUtilities.DataHandling.previous_time
 ClimaUtilities.DataHandling.next_time
 ClimaUtilities.DataHandling.regridded_snapshot
 ```
-
-

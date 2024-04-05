@@ -86,7 +86,7 @@ dimensions = (lon, lat)
 data = rand((length(lon), length(lat)))
 
 interpolated_data = Regridders.InterpolationsRegridder(reg, data, dimensions)
-interpolated_2data = Regridders.InterpolationsRegridder(reg, 2.*data, dimensions)
+interpolated_2data = Regridders.InterpolationsRegridder(reg, 2 .* data, dimensions)
 ```
 
 ## API
@@ -96,4 +96,3 @@ ClimaUtilities.Regridders.TempestRegridder
 ClimaUtilities.Regridders.InterpolationsRegridder
 ClimaUtilities.Regridders.regrid
 ```
-
