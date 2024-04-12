@@ -111,7 +111,7 @@ function TimeVaryingInputs.TimeVaryingInput(
     method = LinearInterpolation(),
     reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
     t_start::AbstractFloat = 0.0,
-    regridder_type = :TempestRegridder,
+    regridder_type = nothing,
 )
     data_handler = DataHandling.DataHandler(
         file_path,

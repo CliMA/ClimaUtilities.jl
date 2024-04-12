@@ -21,6 +21,10 @@ Currently, `Regridders` comes with two implementations:
 > everything that is needed to read a file to the model grid (internally using
 > the `Regridders`).
 
+If a regridder type is not specified by the user, and multiple are available,
+the `InterpolationsRegridder` will be used by default. At least one regridder
+extension must be loaded to be able to use regridding.
+
 ## `TempestRegridder`
 
 > This extension is loaded when loading `ClimaCoreTempestRemap`

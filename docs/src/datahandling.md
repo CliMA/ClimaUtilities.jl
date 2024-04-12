@@ -43,7 +43,7 @@ the `NCFileReader`.
 
 > This extension is loaded when loading `ClimaCore` and `NCDatasets` are loaded.
 > In addition to this, a `Regridder` is needed (which might require importing
-> additional packages).
+> additional packages) - see [`Regridders`](@ref) for more information.
 
 ## Example
 

@@ -82,7 +82,7 @@ end
                 target_space::ClimaCore.Spaces.AbstractSpace;
                 reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
                 t_start::AbstractFloat = 0.0,
-                regridder_type = :TempestRegridder)
+                regridder_type = nothing)
 
 Create a `DataHandler` to read `varname` from `file_path` and remap it to `target_space`.
 
@@ -112,6 +112,8 @@ everything more type stable.)
                     `:InterpolationsRegridder` (using `Interpolations.jl`). `TempestRemap`
                     regrids everything ahead of time and saves the result to HDF5 files.
                     `Interpolations.jl` is online and GPU compatible but not conservative.
+                    If the regridder type is not specified by the user, and multiple are
+                    available, the default `:InterpolationsRegridder` regridder is used.
 """
 function DataHandling.DataHandler(
     file_path::AbstractString,
@@ -119,8 +121,13 @@ function DataHandling.DataHandler(
     target_space::ClimaCore.Spaces.AbstractSpace;
     reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
     t_start::AbstractFloat = 0.0,
-    regridder_type = :TempestRegridder,
+    regridder_type = nothing,
 )
+
+    # Determine which regridder to use if not already specified
+    regridder_type =
+        isnothing(regridder_type) ? Regridders.default_regridder_type() :
+        regridder_type
 
     # File reader, deals with ingesting data, possibly buffered/cached
     file_reader = NCFileReader(file_path, varname)

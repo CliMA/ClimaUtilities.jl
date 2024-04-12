@@ -6,9 +6,25 @@ import ClimaUtilities: Regridders
 import ClimaCore
 import ClimaComms
 
-import Interpolations
-
 include("TestTools.jl")
+
+@testset "default_regridder_type" begin
+    # Case 1: no regridder available
+    @test_throws ErrorException Regridders.default_regridder_type()
+
+    # Case 2: only TempestRegridder available
+    import ClimaCoreTempestRemap
+    @test Regridders.default_regridder_type() == :TempestRegridder
+
+    # Case 3: TempestRegridder and InterpolationsRegridder both available
+    import Interpolations
+    @test Regridders.default_regridder_type() == :InterpolationsRegridder
+
+    # Case 4: only TempestRegridder available
+    # This case is not currently tested because we don't have a way to remove
+    #  previously-loaded extensions.
+end
+
 
 @testset "InterpolationsRegridder" begin
 

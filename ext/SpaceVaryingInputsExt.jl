@@ -145,7 +145,7 @@ function SpaceVaryingInputs.SpaceVaryingInput(
     file_path,
     varname,
     target_space;
-    regridder_type = :TempestRegridder,
+    regridder_type = nothing,
 )
     return SpaceVaryingInputs.SpaceVaryingInput(
         DataHandler(file_path, varname, target_space; regridder_type),
