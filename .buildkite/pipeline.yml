@@ -40,6 +40,6 @@ steps:
   - label: "Run tests with MPI"
     key: "mpi_tests"
     command:
-      - "julia --project=test test/runtests.jl"
+      - "srun julia --project=test test/runtests.jl"
     agents:
-      slurm_cpus_per_task: 2
+      slurm_ntasks: 2

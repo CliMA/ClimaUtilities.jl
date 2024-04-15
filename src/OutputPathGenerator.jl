@@ -94,6 +94,7 @@ function generate_output_path(
         end
         mkpath(output_path)
     end
+    maybe_wait(context)
     return output_path
 end
 

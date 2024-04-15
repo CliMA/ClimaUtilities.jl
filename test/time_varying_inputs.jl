@@ -13,7 +13,10 @@ import Interpolations
 import NCDatasets
 import ClimaCoreTempestRemap
 
-context = ClimaComms.context()
+const context = ClimaComms.context()
+ClimaComms.init(context)
+const singleton_cpu_context =
+    ClimaComms.SingletonCommsContext(ClimaComms.device())
 
 include("TestTools.jl")
 
@@ -30,7 +33,7 @@ include("TestTools.jl")
         boundary_names = (:bottom, :top),
     )
     mesh = Meshes.IntervalMesh(domain; nelems = 10)
-    topology = Topologies.IntervalTopology(context, mesh)
+    topology = Topologies.IntervalTopology(singleton_cpu_context, mesh)
 
     column_space = Spaces.CenterFiniteDifferenceSpace(topology)
     column_field = Fields.zeros(column_space)
@@ -62,7 +65,7 @@ end
             boundary_names = (:bottom, :top),
         )
         mesh = Meshes.IntervalMesh(domain; nelems = 10)
-        topology = Topologies.IntervalTopology(context, mesh)
+        topology = Topologies.IntervalTopology(singleton_cpu_context, mesh)
 
         column_space = Spaces.CenterFiniteDifferenceSpace(topology)
         point_space = Spaces.level(column_space, 1)
@@ -131,7 +134,7 @@ end
     end
     for FT in (Float32, Float64)
         for regridder_type in regridder_types
-            target_space = make_spherical_space(FT).horizontal
+            target_space = make_spherical_space(FT; context).horizontal
 
             data_handler = DataHandling.DataHandler(
                 PATH,

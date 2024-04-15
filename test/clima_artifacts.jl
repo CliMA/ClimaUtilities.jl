@@ -18,6 +18,9 @@ end
 
 import ClimaComms
 
+const context = ClimaComms.context()
+ClimaComms.init(context)
+
 expected_path = artifact"socrates"
 
 # Remove the artifact, so that we test that we are downloading it
@@ -28,8 +31,6 @@ Base.Filesystem.rm(expected_path, recursive = true)
     @test_throws ErrorException @macroexpand ClimaArtifacts.@clima_artifact(
         "socrates"
     )
-
-    context = ClimaComms.context()
 
     @test ClimaArtifacts.@clima_artifact("socrates", context) == expected_path
 
