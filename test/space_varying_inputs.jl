@@ -6,6 +6,9 @@ using ClimaUtilities.SpaceVaryingInputs: SpaceVaryingInput
 using ClimaCore
 using Interpolations
 
+const context = ClimaCore.ClimaComms.context()
+ClimaCore.ClimaComms.init(context)
+
 include("TestTools.jl")
 
 AT = ClimaComms.array_type(ClimaComms.device())
@@ -24,7 +27,7 @@ AT = ClimaComms.array_type(ClimaComms.device())
     n_elements_sphere = (6, 20)
     npoly_sphere = 3
 
-    spaces = make_spherical_space(FT)
+    spaces = make_spherical_space(FT; context)
     column = spaces.vertical
 
     analytic_func = (coords) -> 2.0

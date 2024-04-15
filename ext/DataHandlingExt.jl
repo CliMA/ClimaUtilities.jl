@@ -4,6 +4,7 @@ import Dates
 import Dates: Second
 
 import ClimaCore
+import ClimaCore: ClimaComms
 
 import ClimaUtilities.Regridders
 import ClimaUtilities.FileReaders: AbstractFileReader, NCFileReader, read
@@ -135,7 +136,14 @@ function DataHandling.DataHandler(
     regridder_args = ()
 
     if regridder_type == :TempestRegridder
-        regridder_args = (target_space, mktempdir(), varname, file_path)
+        # If we do not have a regrid_dir, create one and broadcast it to all the MPI
+        # processes
+        context = ClimaComms.context(target_space)
+        regrid_dir = ClimaComms.iamroot(context) ? mktempdir() : ""
+        regrid_dir = ClimaComms.bcast(context, regrid_dir)
+        ClimaComms.barrier(context)
+
+        regridder_args = (target_space, regrid_dir, varname, file_path)
     elseif regridder_type == :InterpolationsRegridder
         regridder_args = (target_space,)
     end

@@ -6,6 +6,9 @@ import ClimaUtilities: Regridders
 import ClimaCore
 import ClimaComms
 
+const context = ClimaComms.context()
+ClimaComms.init(context)
+
 include("TestTools.jl")
 
 @testset "default_regridder_type" begin
@@ -63,7 +66,7 @@ end
     end
 
     for FT in (Float32, Float64)
-        spaces = make_spherical_space(FT)
+        spaces = make_spherical_space(FT; context)
         horzspace = spaces.horizontal
         hv_center_space = spaces.hybrid
 
