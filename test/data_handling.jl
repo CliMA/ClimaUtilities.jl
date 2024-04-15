@@ -12,6 +12,7 @@ import ClimaCoreTempestRemap
 using NCDatasets
 
 const context = ClimaComms.context()
+@info context
 
 @testset "DataHandler, static" begin
     PATH = joinpath(
