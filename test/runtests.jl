@@ -23,6 +23,10 @@ end
     include("timemanager.jl")
 end
 
+@safetestset "DataStructures tests" begin
+    include("data_structures.jl")
+end
+
 @safetestset "FileReaders tests" begin
     include("file_readers.jl")
 end

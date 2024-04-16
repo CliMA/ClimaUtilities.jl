@@ -3,6 +3,7 @@ module ClimaUtilities
 include("Utils.jl")
 include("MPIUtils.jl")
 include("TimeManager.jl")
+include("DataStructures.jl")
 include("FileReaders.jl")
 include("Regridders.jl")
 include("DataHandling.jl")

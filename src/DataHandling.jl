@@ -34,7 +34,8 @@ calendar date (from `Dates.DateTime`). Conversion between time and date is perfo
 the reference date and simulation starting time provided to the `DataHandler`.
 
 The `DataHandler` has a caching mechanism in place: once a field is read and regridded, it
-is stored in the local cache to be used again (if needed).
+is stored in the local LRU cache to be used again (if needed). The least-recently-used data
+in the cache is removed when it reaches its maximum size (128 by default).
 
 While the reading backend could be generic, at the moment, this module uses only the NCFileReader.
 """
