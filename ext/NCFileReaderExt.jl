@@ -1,5 +1,6 @@
 module NCFileReaderExt
 
+import ClimaUtilities.DataStructures
 import ClimaUtilities.FileReaders
 
 import Dates
@@ -29,8 +30,8 @@ struct NCFileReader{
     DIMS <: Tuple,
     NC <: NCDatasets.NCDataset,
     DATES <: AbstractArray{<:Dates.DateTime},
-    CACHE,
     PREP <: Function,
+    CACHE <: DataStructures.LRUCache{<:Dates.DateTime, <:AbstractArray},
 } <: FileReaders.AbstractFileReader
     """Path of the NetCDF file"""
     file_path::STR1
@@ -52,8 +53,9 @@ struct NCFileReader{
     or remove NaNs. Not suitable for anything more complicated than that."""
     preprocess_func::PREP
 
-    """A place where to store values that have been already read. A dictionary mapping dates
-    to arrays. For static data sets, a sentinel data DateTime(0) is used as key."""
+    """A place where to store values that have been already read. Uses an LRU cache,
+    which contains a dictionary mapping dates to arrays, and has a fixed maximum size.
+    For static data sets, a sentinel data `DateTime(0)` is used as key."""
     _cached_reads::CACHE
 
     """Index of the time dimension in the array (typically first). -1 for static datasets"""
@@ -61,7 +63,12 @@ struct NCFileReader{
 end
 
 """
-    NCFileReader(file_path::AbstractString, varname::AbstractString)
+    FileReaders.NCFileReader(
+        file_path::AbstractString,
+        varname::AbstractString;
+        preprocess_func = identity,
+        cache_max_size:Int = 128,
+    )
 
 A struct to efficiently read and process NetCDF files.
 """
@@ -69,6 +76,7 @@ function FileReaders.NCFileReader(
     file_path::AbstractString,
     varname::AbstractString;
     preprocess_func = identity,
+    cache_max_size::Int = 128,
 )
 
     # Get dataset from global dictionary. If not available, open new file and add entry to
@@ -110,8 +118,10 @@ function FileReaders.NCFileReader(
         error("$file_path does not contain information about dimensions")
     end
 
-    # NOTE: This is not concretely typed.
-    _cached_reads = Dict{Dates.DateTime, Array}()
+    # Use an LRU cache to store regridded fields
+    _cached_reads = DataStructures.LRUCache{Dates.DateTime, Array}(
+        max_size = cache_max_size,
+    )
 
     return NCFileReader(
         file_path,
