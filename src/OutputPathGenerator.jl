@@ -13,6 +13,42 @@ import Base: rm
 abstract type OutputPathGeneratorStyle end
 
 """
+    maybe_wait_filesystem(context,
+                          path,
+                          check_func = ispath,
+                          sleep_time = 0.1,
+                          max_attempts = 10)
+
+
+Distributed filesystems might need some time to catch up a file/folder is created/removed.
+
+This function watches the given `path` with `check_func` and returns when `check_func(path)`
+returns true. This is done by trying up to `max_attempt` times and sleeping `sleep_time`
+seconds in between.
+
+Example: when creating a file, we want to check that all the MPI processes see that new
+file. In this case, `check_func` could be `ispath`. Another example is with removing files
+and `check_func` would be `(f) -> !ispath(f)`.
+"""
+function maybe_wait_filesystem(
+    context,
+    path;
+    check_func = ispath,
+    sleep_time = 0.1,
+    max_attempts = 10,
+)
+    maybe_wait(context)
+    attempt = 1
+    while attempt < max_attempts
+        check_func(path) && return nothing
+        sleep(sleep_time)
+        attempt = attempt + 1
+    end
+    error("Path $path not properly synced")
+    return nothing
+end
+
+"""
     RemovePreexistingStyle
 
 With this option, the output directory is directly specified. If the directory already
@@ -94,7 +130,7 @@ function generate_output_path(
         end
         mkpath(output_path)
     end
-    maybe_wait(context)
+    maybe_wait_filesystem(context, output_path)
     return output_path
 end
 
@@ -119,7 +155,7 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
         isdir(output_path) || mkpath(output_path)
     end
     # For MPI runs, we have to make sure we are synced
-    maybe_wait(context)
+    maybe_wait_filesystem(context, output_path)
 
     # Look for a output_active link
     active_link = joinpath(output_path, "output_active")
@@ -154,7 +190,7 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
         next_counter = 0
     end
     # For MPI runs, we have to make sure we are synced
-    maybe_wait(context)
+    maybe_wait_filesystem(context, active_link, check_func = (f) -> !ispath(f))
 
     # Ensure that there are four digits
     next_counter_str = lpad(next_counter, 4, "0")
@@ -168,7 +204,7 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
         # In Windows, symlinks must be explicitly declared as referring to a directory or not
         symlink("output_$next_counter_str", active_link, dir_target = true)
     end
-    maybe_wait(context)
+    maybe_wait_filesystem(context, new_output_folder)
     return active_link
 end
 
