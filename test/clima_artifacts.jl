@@ -21,6 +21,8 @@ import ClimaComms
 const context = ClimaComms.context()
 ClimaComms.init(context)
 
+let_filesystem_catch_up() = context isa ClimaComms.MPICommsContext && sleep(0.2)
+
 expected_path = artifact"socrates"
 
 # Remove the artifact, so that we test that we are downloading it
@@ -36,6 +38,8 @@ Base.Filesystem.rm(expected_path, recursive = true)
 
     # Test with name as a variable
     Base.Filesystem.rm(expected_path, recursive = true)
+    ClimaComms.barrier(context)
+    let_filesystem_catch_up()
     artifact_name = "socrates"
 
     @test ClimaArtifacts.@clima_artifact(artifact_name, context) ==
