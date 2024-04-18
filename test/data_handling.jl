@@ -7,7 +7,7 @@ import ClimaUtilities.DataHandling
 
 import ClimaCore
 import ClimaComms
-import Interpolations
+import Interpolations as Intp
 import ClimaCoreTempestRemap
 using NCDatasets
 
@@ -59,6 +59,32 @@ ClimaComms.init(context)
             close(data_handler)
         end
     end
+    # Test passing arguments down
+    radius = 6731e3
+    helem = 40
+    Nq = 4
+
+    horzdomain = ClimaCore.Domains.SphereDomain(radius)
+    horzmesh = ClimaCore.Meshes.EquiangularCubedSphere(horzdomain, helem)
+    horztopology = ClimaCore.Topologies.Topology2D(context, horzmesh)
+    quad = ClimaCore.Spaces.Quadratures.GLL{Nq}()
+    target_space = ClimaCore.Spaces.SpectralElementSpace2D(horztopology, quad)
+
+    data_handler = DataHandling.DataHandler(
+        PATH,
+        varname,
+        target_space;
+        regridder_type = :InterpolationsRegridder,
+        file_reader_kwargs = (; preprocess_func = (data) -> 0.0 * data),
+        regridder_kwargs = (;
+            extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Flat())
+        ),
+    )
+
+    @test data_handler.regridder.extrapolation_bc ==
+          (Intp.Flat(), Intp.Flat(), Intp.Flat())
+    field = DataHandling.regridded_snapshot(data_handler)
+    @test extrema(field) == (0.0, 0.0)
 end
 
 @testset "DataHandler, TempestRegridder, time data" begin

@@ -31,6 +31,10 @@ regridding onto the computational domains (using [`Regridders`](@ref) and
 - 2/3D NetCDF files;
 - linear interpolation in time (default) and nearest neighbors.
 
+It is possible to pass down keyword arguments to underlying constructors in the
+`Regridder` with the `regridder_kwargs` and `file_reader_kwargs`. These have to
+be a named tuple or a dictionary that maps `Symbol`s to values.
+
 ### Example
 
 Let `target_space` be the computational domain (a `ClimaCore` `Space`) and
@@ -63,7 +67,7 @@ albedo_tv_an = TimeVaryingInput((t) -> 0.5)
 # reference_date is the calendar date at the beginning of our simulation
 reference_date = Dates.DateTime(2000, 1, 1)
 albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_space;
-                                               reference_date)
+                                               reference_date, regridder_kwargs = (; regrid_dir = "/tmp"))
 # When using data from files, the data is automatically interpolated to the correct
 # time
 
@@ -89,6 +93,10 @@ different sources.
 In some ways, a `SpaceVaryingInput` can be thought as an alternative constructor
 for a `ClimaCore` `Field`.
 
+It is possible to pass down keyword arguments to underlying constructors in the
+`Regridder` with the `regridder_kwargs` and `file_reader_kwargs`. These have to
+be a named tuple or a dictionary that maps `Symbol`s to values.
+
 ### Example
 
 Let `target_space` be a `ClimaCore` `Space` where we want the `Field` to be
@@ -108,7 +116,7 @@ albedo_latlon_fun = (coord) -> 0.5 * coord.long * coord.lat
 
 albedo = SpaceVaryingInputs.SpaceVaryingInput(albedo_latlon_fun)
 
-albedo_from_file = SpaceVaryingInputs.SpaceVaryingInput("cesm_albedo.nc", "alb", target_space)
+albedo_from_file = SpaceVaryingInputs.SpaceVaryingInput("cesm_albedo.nc", "alb", target_space, regridder_kwargs = (; regrid_dir = "/tmp"))
 ```
 
 ## API

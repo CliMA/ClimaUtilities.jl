@@ -48,6 +48,10 @@ the `NCFileReader`.
 > In addition to this, a `Regridder` is needed (which might require importing
 > additional packages) - see [`Regridders`](@ref) for more information.
 
+It is possible to pass down keyword arguments to underlying constructors in
+`DataHandler` with the `regridder_kwargs` and `file_reader_kwargs`. These have
+to be a named tuple or a dictionary that maps `Symbol`s to values.
+
 ## Example
 
 As an example, let us implement a simple linear interpolation for a variable `u`
@@ -64,11 +68,14 @@ import Interpolations
 
 import Dates
 
+unit_conversion_func = (data) -> 1000. * data
+
 data_handler = DataHandling.DataHandler("era5_example.nc",
                                         "u",
                                         target_space,
                                         reference_date = Dates.DateTime(2000, 1, 1),
-                                        regridder_type = :InterpolationsRegridder)
+                                        regridder_type = :InterpolationsRegridder,
+                                        file_reader_kwargs = (; preprocess_func = unit_conversion_func))
 
 function linear_interpolation(data_handler, time)
     # Time is assumed to be "simulation time", ie seconds starting from reference_date

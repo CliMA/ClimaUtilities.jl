@@ -129,7 +129,9 @@ end
     SpaceVaryingInput(file_path::AbstractString,
                       varname::AbstractString,
                       target_space::Spaces.AbstractSpace;
-                      regridder_type::Symbol)
+                      regridder_type::Symbol,
+                      regridder_kwargs = (),
+                      file_reader_kwargs = ())
 
 Returns the parameter field to be used in the model; appropriate when
 a parameter is defined on the surface of the Earth.
@@ -146,9 +148,18 @@ function SpaceVaryingInputs.SpaceVaryingInput(
     varname,
     target_space;
     regridder_type = nothing,
+    regridder_kwargs = (),
+    file_reader_kwargs = (),
 )
     return SpaceVaryingInputs.SpaceVaryingInput(
-        DataHandler(file_path, varname, target_space; regridder_type),
+        DataHandler(
+            file_path,
+            varname,
+            target_space;
+            regridder_type,
+            regridder_kwargs,
+            file_reader_kwargs,
+        ),
     )
 end
 

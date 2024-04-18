@@ -63,13 +63,27 @@ along each direction) and returns a `ClimaCore` `Field` defined on the
 Currently, `InterpolationsRegridder` only supports spherical shells and extruded
 spherical shells (but it could be easily extended to other domains).
 
-> Note: it is easy to change the spatial interpolation type and extrapolation
-> conditions, if needed.
+> Note: it is easy to change the spatial interpolation type if needed.
 
 `InterpolationsRegridder` are created once, they are tied to a `target_space`,
 but can be used with any input data. With MPI runs, every process computes the
 interpolating function. This is always done on the CPU and moved to GPU for
 accelerated runs.
+
+By default, `InterpolationsRegridder` assumes you are interpolating on a globe
+and the default extrapolation boundary conditions are: periodic (along
+longitudes), copy (along latitude), and throwing an error (along z). These can
+be changed by passing the `extrapolation_bc` to the constructor of the regridder.
+
+## FAQ: How do I enable linear extrapolation in z?
+
+Create the regridder like this:
+```julia
+import Interpolations as Intp
+
+extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Linear())
+regridder = InterpolationsRegridder(target_space; extrapolation_bc)
+```
 
 ### Example
 
