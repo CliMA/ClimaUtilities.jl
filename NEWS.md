@@ -1,9 +1,14 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
+Main
+-------
+
+- Support passing down regridder and file reader arguments from higher level constructors. PR [#40](https://github.com/CliMA/ClimaUtilities.jl/pull/40)
+
 v0.1.4
 -------
-- Fix and test MPI compatibility. PR [#33](https://github.com/CliMA/ClimaUtilities.jl/pull/33)
+- Fix and test MPI compatibility. PRs [#33](https://github.com/CliMA/ClimaUtilities.jl/pull/33), [#37](https://github.com/CliMA/ClimaUtilities.jl/pull/37)
 - Select default regridder type if multiple are available. PR [#32](https://github.com/CliMA/ClimaUtilities.jl/pull/32)
 
 v0.1.3

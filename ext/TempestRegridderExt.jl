@@ -44,10 +44,9 @@ end
 
 """
     TempestRegridder(target_space::ClimaCore.Spaces.AbstractSpace,
-                     input_file::AbstractString,
-                     regrid_dir::AbstractString,
                      varname::AbstractString,
-                     regrid_dir::AbstractString;
+                     input_file::AbstractString;
+                     regrid_dir::AbstractString,
                      mono::Bool)
 
 Set up a `TempestRegridder` object to regrid the variable in the given `input_file` to the
@@ -69,9 +68,9 @@ Keyword arguments
 """
 function Regridders.TempestRegridder(
     target_space::ClimaCore.Spaces.AbstractSpace,
-    regrid_dir::AbstractString,
     varname::AbstractString,
     input_file::AbstractString;
+    regrid_dir::AbstractString,
     mono::Bool = true,
 )
     space = target_space

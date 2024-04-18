@@ -112,6 +112,8 @@ function TimeVaryingInputs.TimeVaryingInput(
     reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
     t_start::AbstractFloat = 0.0,
     regridder_type = nothing,
+    regridder_kwargs = (),
+    file_reader_kwargs = (),
 )
     data_handler = DataHandling.DataHandler(
         file_path,
@@ -120,6 +122,8 @@ function TimeVaryingInputs.TimeVaryingInput(
         reference_date,
         t_start,
         regridder_type,
+        regridder_kwargs,
+        file_reader_kwargs,
     )
     context = ClimaComms.context(target_space)
     return TimeVaryingInputs.TimeVaryingInput(data_handler; method, context)

@@ -85,7 +85,9 @@ end
                 reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
                 t_start::AbstractFloat = 0.0,
                 regridder_type = nothing,
-                cache_max_size::Int = 128)
+                cache_max_size::Int = 128,
+                regridder_kwargs = (),
+                file_reader_kwargs = ())
 
 Create a `DataHandler` to read `varname` from `file_path` and remap it to `target_space`.
 
@@ -116,6 +118,10 @@ everything more type stable.)
                     available, the default `:InterpolationsRegridder` regridder is used.
 - `cache_max_size`: Maximum number of regridded fields to store in the cache. If the cache
                     is full, the least recently used field is removed.
+- `regridder_kwargs`: Additional keywords to be passed to the constructor of the regridder.
+                      It can be a NamedTuple, or a Dictionary that maps Symbols to values.
+- `file_reader_kwargs`: Additional keywords to be passed to the constructor of the file reader.
+                        It can be a NamedTuple, or a Dictionary that maps Symbols to values.
 """
 function DataHandling.DataHandler(
     file_path::AbstractString,
@@ -125,6 +131,8 @@ function DataHandling.DataHandler(
     t_start::AbstractFloat = 0.0,
     regridder_type = nothing,
     cache_max_size::Int = 128,
+    regridder_kwargs = (),
+    file_reader_kwargs = (),
 )
 
     # Determine which regridder to use if not already specified
@@ -133,25 +141,28 @@ function DataHandling.DataHandler(
         regridder_type
 
     # File reader, deals with ingesting data, possibly buffered/cached
-    file_reader = NCFileReader(file_path, varname)
+    file_reader = NCFileReader(file_path, varname; file_reader_kwargs...)
 
     regridder_args = ()
 
     if regridder_type == :TempestRegridder
-        # If we do not have a regrid_dir, create one and broadcast it to all the MPI
-        # processes
-        context = ClimaComms.context(target_space)
-        regrid_dir = ClimaComms.iamroot(context) ? mktempdir() : ""
-        regrid_dir = ClimaComms.bcast(context, regrid_dir)
-        ClimaComms.barrier(context)
+        if !(:regrid_dir in regridder_kwargs)
+            # If we do not have a regrid_dir, create one and broadcast it to all the MPI
+            # processes
+            context = ClimaComms.context(target_space)
+            regrid_dir = ClimaComms.iamroot(context) ? mktempdir() : ""
+            regrid_dir = ClimaComms.bcast(context, regrid_dir)
+            ClimaComms.barrier(context)
+            regridder_kwargs = merge((; regrid_dir), regridder_kwargs)
+        end
 
-        regridder_args = (target_space, regrid_dir, varname, file_path)
+        regridder_args = (target_space, varname, file_path)
     elseif regridder_type == :InterpolationsRegridder
         regridder_args = (target_space,)
     end
 
     RegridderConstructor = getfield(Regridders, regridder_type)
-    regridder = RegridderConstructor(regridder_args...)
+    regridder = RegridderConstructor(regridder_args...; regridder_kwargs...)
 
     # Use an LRU cache to store regridded fields
     _cached_regridded_fields =
