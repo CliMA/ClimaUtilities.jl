@@ -37,13 +37,16 @@ provided to the `DataHandler`.
 
 The `DataHandler` has a caching mechanism in place: once a field is read and
 regridded, it is stored in the local cache to be used again (if needed).
+This is a least-recently-used (LRU) cache implemented in `DataStructures`,
+which removes the least-recently-used data when its maximum size is reached.
+The default maximum size is 128.
 
 While the reading backend could be generic, at the moment, this module uses only
 the `NCFileReader`.
 
 > This extension is loaded when loading `ClimaCore` and `NCDatasets` are loaded.
 > In addition to this, a `Regridder` is needed (which might require importing
-> additional packages).
+> additional packages) - see [`Regridders`](@ref) for more information.
 
 ## Example
 

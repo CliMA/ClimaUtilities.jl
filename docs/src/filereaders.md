@@ -32,9 +32,11 @@ and (2) cache reads. `NCFileReader`s can be created with a `preprocessing_func`
 keyword argument, function is applied to the read datasets when `read`ing.
 `preprocessing_func` should be a lightweight function, such as removing `NaN`s or changing units.
 Every time `read(file_reader, date)` is called, the `NCFileReader` checks if the
-`date` was read in the past. If yes, it just returns the value (without
+`date` is currently stored in the cache. If yes, it just returns the value (without
 accessing the disk). If not, it reads and process the data and adds it to the
-cache.
+cache. This uses a least-recently-used (LRU) cache implemented in `DataStructures`,
+which removes the least-recently-used data stored in the cache when its maximum
+size is reached (the default max size is 128).
 
 It is good practice to always close the `NCFileReader`s when they are no longer
 needed. The function `close_all_ncfiles` closes all the ones that are currently

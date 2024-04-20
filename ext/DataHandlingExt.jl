@@ -4,7 +4,9 @@ import Dates
 import Dates: Second
 
 import ClimaCore
+import ClimaCore: ClimaComms
 
+import ClimaUtilities.DataStructures
 import ClimaUtilities.Regridders
 import ClimaUtilities.FileReaders: AbstractFileReader, NCFileReader, read
 import ClimaUtilities.Regridders: AbstractRegridder, regrid
@@ -21,7 +23,7 @@ import ClimaUtilities.DataHandling
          DATES <: AbstractArray{<:Dates.DateTime},
          DIMS,
          TIMES <: AbstractArray{<:AbstractFloat},
-         CACHE,
+         CACHE <: DataStructures.LRUCache{<:Dates.DateTime, ClimaCore.Fields.Field},
      }
 
 Currently, the `DataHandler` works with one variable at the time. This might not be the most
@@ -45,7 +47,7 @@ struct DataHandler{
     DATES <: AbstractArray{<:Dates.DateTime},
     DIMS,
     TIMES <: AbstractArray{<:AbstractFloat},
-    CACHE,
+    CACHE <: DataStructures.LRUCache{<:Dates.DateTime, ClimaCore.Fields.Field},
 }
     """Object responsible for getting the data from disk to memory"""
     file_reader::FR
@@ -82,14 +84,12 @@ end
                 target_space::ClimaCore.Spaces.AbstractSpace;
                 reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
                 t_start::AbstractFloat = 0.0,
-                regridder_type = :TempestRegridder)
+                regridder_type = nothing,
+                cache_max_size::Int = 128)
 
 Create a `DataHandler` to read `varname` from `file_path` and remap it to `target_space`.
 
-The DataHandler maintains a cache of Fields that were previously computed.
-
-TODO: Add function to clear cache, and/or CACHE_MAX_SIZE (this will probably require
-developing a LRU cache scheme)
+The DataHandler maintains an LRU cache of Fields that were previously computed.
 
 Positional arguments
 =====================
@@ -112,6 +112,10 @@ everything more type stable.)
                     `:InterpolationsRegridder` (using `Interpolations.jl`). `TempestRemap`
                     regrids everything ahead of time and saves the result to HDF5 files.
                     `Interpolations.jl` is online and GPU compatible but not conservative.
+                    If the regridder type is not specified by the user, and multiple are
+                    available, the default `:InterpolationsRegridder` regridder is used.
+- `cache_max_size`: Maximum number of regridded fields to store in the cache. If the cache
+                    is full, the least recently used field is removed.
 """
 function DataHandling.DataHandler(
     file_path::AbstractString,
@@ -119,8 +123,14 @@ function DataHandling.DataHandler(
     target_space::ClimaCore.Spaces.AbstractSpace;
     reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
     t_start::AbstractFloat = 0.0,
-    regridder_type = :TempestRegridder,
+    regridder_type = nothing,
+    cache_max_size::Int = 128,
 )
+
+    # Determine which regridder to use if not already specified
+    regridder_type =
+        isnothing(regridder_type) ? Regridders.default_regridder_type() :
+        regridder_type
 
     # File reader, deals with ingesting data, possibly buffered/cached
     file_reader = NCFileReader(file_path, varname)
@@ -128,7 +138,14 @@ function DataHandling.DataHandler(
     regridder_args = ()
 
     if regridder_type == :TempestRegridder
-        regridder_args = (target_space, mktempdir(), varname, file_path)
+        # If we do not have a regrid_dir, create one and broadcast it to all the MPI
+        # processes
+        context = ClimaComms.context(target_space)
+        regrid_dir = ClimaComms.iamroot(context) ? mktempdir() : ""
+        regrid_dir = ClimaComms.bcast(context, regrid_dir)
+        ClimaComms.barrier(context)
+
+        regridder_args = (target_space, regrid_dir, varname, file_path)
     elseif regridder_type == :InterpolationsRegridder
         regridder_args = (target_space,)
     end
@@ -136,8 +153,11 @@ function DataHandling.DataHandler(
     RegridderConstructor = getfield(Regridders, regridder_type)
     regridder = RegridderConstructor(regridder_args...)
 
-    # NOTE: this is not concretely typed
-    _cached_regridded_fields = Dict{Dates.DateTime, ClimaCore.Fields.Field}()
+    # Use an LRU cache to store regridded fields
+    _cached_regridded_fields =
+        DataStructures.LRUCache{Dates.DateTime, ClimaCore.Fields.Field}(
+            max_size = cache_max_size,
+        )
 
     available_dates = file_reader.available_dates
     # Second() is required to convert from DateTime to float. Also, Second(1) transforms
@@ -306,7 +326,7 @@ function DataHandling.regridded_snapshot(data_handler::DataHandler)
     isempty(data_handler.available_dates) ||
         error("DataHandler is function of time")
 
-    # In this case, we use as cache key Dates.DateTime(0)
+    # In this case, we use as cache key `Dates.DateTime(0)`
     return DataHandling.regridded_snapshot(data_handler, Dates.DateTime(0))
 end
 

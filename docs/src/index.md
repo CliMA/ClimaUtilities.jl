@@ -70,5 +70,11 @@ The `DataHandling` module bundles a `Regridder` and a `FileReader` together to
 serve regridded fields at a given time upon request. The main interface for
 `DataHandling` is `regridded_snapshot(data_handler, date)`, a function that
 returns a `Field` with data read from file for the given `date`. The
-`DataHandler` maintains a cache of regridded fields to amortize the cost of
-(expensive) regridding operations.
+`DataHandler` maintains an least-recently-used (LRU) cache of regridded fields
+to amortize the cost of (expensive) regridding operations.
+
+### `DataStructures`
+
+The `DataStructures` module implements helpful data structures to be used by
+other ClimaUtilities.jl modules or external packages. Currently it contains an
+LRU cache that is used in `DataHandlingExt` and `NCFileReaderExt`.

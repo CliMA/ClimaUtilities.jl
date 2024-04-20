@@ -1,8 +1,7 @@
 import ClimaCore
 import ClimaComms
 
-function make_spherical_space(FT)
-    context = ClimaComms.context()
+function make_spherical_space(FT; context = ClimaComms.context())
     radius = FT(128)
     zlim = (FT(0), FT(1))
     helem = 4

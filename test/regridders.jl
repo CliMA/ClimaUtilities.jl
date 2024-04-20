@@ -6,9 +6,28 @@ import ClimaUtilities: Regridders
 import ClimaCore
 import ClimaComms
 
-import Interpolations
+const context = ClimaComms.context()
+ClimaComms.init(context)
 
 include("TestTools.jl")
+
+@testset "default_regridder_type" begin
+    # Case 1: no regridder available
+    @test_throws ErrorException Regridders.default_regridder_type()
+
+    # Case 2: only TempestRegridder available
+    import ClimaCoreTempestRemap
+    @test Regridders.default_regridder_type() == :TempestRegridder
+
+    # Case 3: TempestRegridder and InterpolationsRegridder both available
+    import Interpolations
+    @test Regridders.default_regridder_type() == :InterpolationsRegridder
+
+    # Case 4: only TempestRegridder available
+    # This case is not currently tested because we don't have a way to remove
+    #  previously-loaded extensions.
+end
+
 
 @testset "InterpolationsRegridder" begin
 
@@ -47,7 +66,7 @@ include("TestTools.jl")
     end
 
     for FT in (Float32, Float64)
-        spaces = make_spherical_space(FT)
+        spaces = make_spherical_space(FT; context)
         horzspace = spaces.horizontal
         hv_center_space = spaces.hybrid
 

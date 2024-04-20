@@ -124,8 +124,8 @@ macro clima_artifact(name, context = nothing)
                     $(platform),
                     $(lazyartifacts),
                 )::String
-                push!(ACCESSED_ARTIFACTS, artifact_name)
             end
+            push!(ACCESSED_ARTIFACTS, artifact_name)
             Base.invokelatest(
                 JuliaArtifacts._artifact_str,
                 $(__module__),
@@ -177,8 +177,8 @@ macro clima_artifact(name, context = nothing)
                     platform,
                     $(lazyartifacts),
                 )::String
-                push!(ACCESSED_ARTIFACTS, artifact_name)
             end
+            push!(ACCESSED_ARTIFACTS, artifact_name)
             Base.invokelatest(maybe_wait, $(esc(context)))
             Base.invokelatest(
                 JuliaArtifacts._artifact_str,

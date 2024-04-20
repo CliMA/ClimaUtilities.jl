@@ -76,12 +76,12 @@ function Regridders.TempestRegridder(
 )
     space = target_space
     comms_ctx = ClimaComms.context(space)
+    outfile_root = varname
 
     if ClimaComms.iamroot(comms_ctx)
         @info "Saving TempestRegrid files to $regrid_dir"
 
         FT = ClimaCore.Spaces.undertype(space)
-        outfile_root = varname
         varnames = [varname]
 
         hdwrite_regridfile_rll_to_cgll(
