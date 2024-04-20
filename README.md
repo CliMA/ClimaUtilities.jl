@@ -13,6 +13,8 @@ Shared utilities for packages within the CliMA project. Please, check out the
 - [`SpaceVaryingInputs` and
   `TimeVaryingInputs`](https://clima.github.io/ClimaUtilities.jl/dev/inputs/) to
   work with external input data.
+- [`DataStructures`](https://clima.github.io/ClimaUtilities.jl/dev/datastrctures/)
+  with useful general purpose data structures.
 - [`FileReaders`](https://clima.github.io/ClimaUtilities.jl/dev/filereaders/),
   [`DataHandling`](https://clima.github.io/ClimaUtilities.jl/dev/datahandling/),
   and [`Regridders`](https://clima.github.io/ClimaUtilities.jl/dev/regridders/)
@@ -21,3 +23,11 @@ Shared utilities for packages within the CliMA project. Please, check out the
   to prepare the output directory structure of a simulation.
 - [`TimeManager`](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/) to
   handle dates.
+
+### Credits
+
+The `Space` and `TimeVaryingInputs` modules were initially developed in the
+context of [`ClimaLand`](https://github.com/CliMA/ClimaLand.jl), the
+`TempestRegridder` and `TimeManager` ones were initially developed in
+[`ClimaCoupler`](https://github.com/CliMA/ClimaCoupler.jl).
+
