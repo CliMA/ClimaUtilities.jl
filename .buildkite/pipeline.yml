@@ -1,4 +1,5 @@
 agents:
+  queue: new-central
   slurm_mem: 8G
   modules: climacommon/2024_04_05
 
