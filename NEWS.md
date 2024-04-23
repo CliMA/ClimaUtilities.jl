@@ -1,7 +1,7 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
-Main
+v0.1.5
 -------
 
 - Support passing down regridder and file reader arguments from higher level constructors. PR [#40](https://github.com/CliMA/ClimaUtilities.jl/pull/40)
