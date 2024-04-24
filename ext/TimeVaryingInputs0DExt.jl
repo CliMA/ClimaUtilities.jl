@@ -3,7 +3,7 @@ module TimeVaryingInputs0DExt
 import ClimaCore
 import ClimaCore: ClimaComms
 import ClimaCore: DeviceSideContext
-import ClimaCore.Fields: Adapt, CUDA
+import ClimaCore.Fields: Adapt
 
 import ClimaUtilities.Utils: searchsortednearest, linear_interpolation
 import ClimaUtilities.TimeVaryingInputs:
@@ -84,12 +84,16 @@ function TimeVaryingInputs.evaluate!(
 )
     time in itp || error("TimeVaryingInput does not cover time $time")
     if ClimaComms.device(itp.context) isa ClimaComms.CUDADevice
-        CUDA.@cuda TimeVaryingInputs.evaluate!(
-            parent(destination),
-            itp,
-            time,
-            itp.method,
-        )
+        @static if isnothing(Base.get_extension(ClimaComms, :ClimaCommsCUDAExt))
+            error("CUDA.jl is required for this operation")
+        else
+            Base.get_extension(ClimaComms, :ClimaCommsCUDAExt).CUDA.@cuda TimeVaryingInputs.evaluate!(
+                parent(destination),
+                itp,
+                time,
+                itp.method,
+            )
+        end
     else
         TimeVaryingInputs.evaluate!(parent(destination), itp, time, itp.method)
     end

@@ -5,7 +5,7 @@ import Dates
 import ClimaCore
 import ClimaCore: ClimaComms
 import ClimaCore: DeviceSideContext
-import ClimaCore.Fields: Adapt, CUDA
+import ClimaCore.Fields: Adapt
 
 import ClimaUtilities.Utils: searchsortednearest, linear_interpolation
 import ClimaUtilities.TimeVaryingInputs
