@@ -1,9 +1,13 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
+v0.1.6
+-------
+- `OutputPathGenerator` now tries to create an active link when one is not available but some data is already there [#50](https://github.com/CliMA/ClimaUtilities.jl/pull/50)
+- Fix compatibility with ClimaCore 0.14. PR [#50](https://github.com/CliMA/ClimaUtilities.jl/pull/50)
+
 v0.1.5
 -------
-
 - Support passing down regridder and file reader arguments from higher level constructors. PR [#40](https://github.com/CliMA/ClimaUtilities.jl/pull/40)
 
 v0.1.4
