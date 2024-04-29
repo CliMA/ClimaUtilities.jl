@@ -84,10 +84,23 @@ function TimeVaryingInputs.evaluate!(
 )
     time in itp || error("TimeVaryingInput does not cover time $time")
     if ClimaComms.device(itp.context) isa ClimaComms.CUDADevice
-        @static if isnothing(Base.get_extension(ClimaComms, :ClimaCommsCUDAExt))
-            error("CUDA.jl is required for this operation")
+        if pkgversion(ClimaComms) >= v"0.6"
+            # For ClimaComms 0.6, CUDA is not automatically available, so we
+            # have to load from the extension
+            @static if isnothing(
+                Base.get_extension(ClimaComms, :ClimaCommsCUDAExt),
+            )
+                error("CUDA.jl is required for this operation")
+            else
+                Base.get_extension(ClimaComms, :ClimaCommsCUDAExt).CUDA.@cuda TimeVaryingInputs.evaluate!(
+                    parent(destination),
+                    itp,
+                    time,
+                    itp.method,
+                )
+            end
         else
-            Base.get_extension(ClimaComms, :ClimaCommsCUDAExt).CUDA.@cuda TimeVaryingInputs.evaluate!(
+            ClimaComms.CUDA.@cuda TimeVaryingInputs.evaluate!(
                 parent(destination),
                 itp,
                 time,

@@ -1,5 +1,8 @@
 import ClimaCore
 import ClimaComms
+@static if pkgversion(ClimaComms) >= v"0.6"
+    ClimaComms.@import_required_backends
+end
 
 function make_spherical_space(FT; context = ClimaComms.context())
     radius = FT(128)

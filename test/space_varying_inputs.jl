@@ -5,6 +5,9 @@ using ClimaUtilities.SpaceVaryingInputs: SpaceVaryingInput
 
 using ClimaCore
 using Interpolations
+@static if pkgversion(ClimaCore.ClimaComms) >= v"0.6"
+    ClimaCore.ClimaComms.@import_required_backends
+end
 
 const context = ClimaCore.ClimaComms.context()
 ClimaCore.ClimaComms.init(context)

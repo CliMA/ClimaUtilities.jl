@@ -17,6 +17,9 @@ expected_path2 = artifact"laskar2004"
 end
 
 import ClimaComms
+@static if pkgversion(ClimaComms) >= v"0.6"
+    ClimaComms.@import_required_backends
+end
 
 const context = ClimaComms.context()
 ClimaComms.init(context)

@@ -5,6 +5,9 @@ import ClimaUtilities: Regridders
 
 import ClimaCore
 import ClimaComms
+@static if pkgversion(ClimaComms) >= v"0.6"
+    ClimaComms.@import_required_backends
+end
 
 const context = ClimaComms.context()
 ClimaComms.init(context)
