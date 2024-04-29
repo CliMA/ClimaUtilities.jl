@@ -7,6 +7,10 @@ import ClimaUtilities.DataHandling
 
 import ClimaCore
 import ClimaComms
+import ClimaComms
+@static if pkgversion(ClimaComms) >= v"0.6"
+    ClimaComms.@import_required_backends
+end
 import Interpolations as Intp
 import ClimaCoreTempestRemap
 using NCDatasets
