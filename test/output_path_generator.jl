@@ -93,10 +93,21 @@ end
     end
     ClimaComms.barrier(context)
     let_filesystem_catch_up()
-    @test_throws ErrorException generate_output_path(
-        output_path,
-        context = context,
-    )
+
+    output_link = generate_output_path(output_path, context = context)
+    @test readlink(output_link) == "output_0002"
+
+    ClimaComms.barrier(context)
+    let_filesystem_catch_up()
+
+    # Remove link, we are going to create a new one
+    if ClimaComms.iamroot(context)
+        Base.rm(output_link)
+    end
+
+    ClimaComms.barrier(context)
+    let_filesystem_catch_up()
+
     # Wrong link
     if ClimaComms.iamroot(context)
         wrong_dir = joinpath(output_path, "wrong")

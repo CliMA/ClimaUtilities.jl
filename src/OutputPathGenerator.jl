@@ -180,14 +180,22 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
             )
         end
     else
-        # The link does not exist, but maybe there are already output folders
-        if any(map(x -> !isnothing(match(name_rx, x)), readdir(output_path)))
-            error(
-                "$output_path already contains some output data, but no active link",
-            )
+        # The link does not exist, but maybe there are already output folders. We can try to
+        # guess what was the last one by first filtering the folders that match the name,
+        # and then taking the first one when sorted in reverse alphabetical order.
+        existing_outputs =
+            filter(x -> !isnothing(match(name_rx, x)), readdir(output_path))
+        if length(existing_outputs) > 0
+            @warn "$output_path already contains some output data, but no active link"
+            latest_output = first(sort(existing_outputs, rev = true))
+            counter_str = match(name_rx, latest_output)
+            counter = parse(Int, counter_str[1])
+            next_counter = counter + 1
+            @warn "Restarting counter from $next_counter"
+        else
+            # This is our first counter
+            next_counter = 0
         end
-        # This is our fist counter
-        next_counter = 0
     end
     # For MPI runs, we have to make sure we are synced
     maybe_wait_filesystem(context, active_link, check_func = (f) -> !ispath(f))
