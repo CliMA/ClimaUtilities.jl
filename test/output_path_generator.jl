@@ -1,9 +1,7 @@
 import ClimaUtilities.OutputPathGenerator:
     generate_output_path, RemovePreexistingStyle, ActiveLinkStyle
 import ClimaComms
-@static if pkgversion(ClimaComms) >= v"0.6"
-    ClimaComms.@import_required_backends
-end
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Base: rm
 using Test
 
