@@ -1,6 +1,11 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
+v0.1.7
+------
+
+- Fix compatibility with ClimaComms 0.6. PR [#54](https://github.com/CliMA/ClimaUtilities.jl/pull/54)
+
 v0.1.6
 -------
 - `OutputPathGenerator` now tries to create an active link when one is not available but some data is already there [#50](https://github.com/CliMA/ClimaUtilities.jl/pull/50)
