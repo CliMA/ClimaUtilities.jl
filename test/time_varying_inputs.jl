@@ -8,9 +8,7 @@ import ClimaUtilities: TimeVaryingInputs
 
 import ClimaCore: Domains, Geometry, Fields, Meshes, Topologies, Spaces
 import ClimaComms
-@static if pkgversion(ClimaComms) >= v"0.6"
-    ClimaComms.@import_required_backends
-end
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 
 import Interpolations
 import NCDatasets
