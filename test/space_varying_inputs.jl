@@ -3,13 +3,13 @@ using Test
 import ClimaUtilities
 using ClimaUtilities.SpaceVaryingInputs: SpaceVaryingInput
 
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 using ClimaCore
 using Interpolations
-@static pkgversion(ClimaCore.ClimaComms) >= v"0.6" &&
-        ClimaCore.ClimaComms.@import_required_backends
 
-const context = ClimaCore.ClimaComms.context()
-ClimaCore.ClimaComms.init(context)
+const context = ClimaComms.context()
+ClimaComms.init(context)
 
 include("TestTools.jl")
 
