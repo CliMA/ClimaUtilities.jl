@@ -11,6 +11,12 @@ ClimaComms.init(context)
 let_filesystem_catch_up() = context isa ClimaComms.MPICommsContext && sleep(0.2)
 
 @testset "RemovePrexistingStyle" begin
+    # Test empty output_path
+    @test_throws ErrorException generate_output_path(
+        "",
+        style = RemovePreexistingStyle(),
+    )
+
     base_output_path = ClimaComms.iamroot(context) ? mktempdir() : ""
     base_output_path = ClimaComms.bcast(context, base_output_path)
     ClimaComms.barrier(context)
@@ -51,6 +57,9 @@ let_filesystem_catch_up() = context isa ClimaComms.MPICommsContext && sleep(0.2)
 end
 
 @testset "ActiveLinkStyle" begin
+    # Test empty output_path
+    @test_throws ErrorException generate_output_path("")
+
     base_output_path = ClimaComms.iamroot(context) ? mktempdir() : ""
     base_output_path = ClimaComms.bcast(context, base_output_path)
     ClimaComms.barrier(context)
