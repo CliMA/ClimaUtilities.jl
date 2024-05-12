@@ -110,6 +110,7 @@ function generate_output_path(
     context = nothing,
     style = ActiveLinkStyle(),
 )
+    output_path == "" && error("output_path cannot be empty")
     return generate_output_path(style, output_path; context)
 end
 
