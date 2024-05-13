@@ -64,6 +64,11 @@ This style generates a unique output path within a base directory specified by
 Additionally, it manages a sequence of subfolders and a symbolic link named "output_active"
 for convenient access to the active output location.
 
+This style is designed to:
+- be non-destructive,
+- provide a deterministic and fixed path for the latest available data,
+- and have nearly zero runtime overhead.
+
 # Examples:
 
 Let us assume that `output_path = dormouse`.
