@@ -82,6 +82,16 @@ Let us assume that `output_path = dormouse`.
 - `dormouse` exists and does not contain a `output_active`, `ActiveLinkStyle` will check if
   any `dormouse/output_XXXX` exists. If not, it creates `dormouse/output_0000` and a link
   `dormouse/output_active` that points to this directory.
+
+## A note for Windows users
+
+Windows does not always allow the creation of symbolic links by unprivileged users. This
+depends on the version of Windows, but also some of its settings. When the creation of
+symbolic links is not possible, `OutputPathGenerator` will create NTFS junction points
+instead. Junction points are similar to symbolic links, with the main difference that they
+have to refer to directories and they have to be absolute paths. As a result, on systems
+that do not allow unprivileged users to create symbolic links, moving the base output folder
+results in breaking the `output_active` link.
 """
 struct ActiveLinkStyle end
 
@@ -215,8 +225,23 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
     # Make new folder
     if root_or_singleton(context)
         mkpath(new_output_folder)
-        # In Windows, symlinks must be explicitly declared as referring to a directory or not
-        symlink("output_$next_counter_str", active_link, dir_target = true)
+        # On Windows, creating symlinks might require admin privileges. This depends on the
+        # version of Windows and some of its settings (e.g., if "Developer Mode" is enabled).
+        # So, we first try creating a symlink. If this fails, we resort to creating a NTFS
+        # junction. This is almost the same as a symlink, except it requires absolute paths.
+        # In general, relative paths would be preferable because they make the output
+        # completely relocatable (whereas absolute paths are not).
+        try
+            symlink("output_$next_counter_str", active_link, dir_target = true)
+        catch e
+            if e isa Base.IOError && Base.uverrorname(e.code) == "EPERM"
+                active_link = abspath(active_link)
+                dest_active_link = abspath("output_$next_counter_str")
+                symlink(dest_active_link, active_link, dir_target = true)
+            else
+                rethrow(e)
+            end
+        end
     end
     maybe_wait_filesystem(context, new_output_folder)
     return active_link

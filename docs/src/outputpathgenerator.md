@@ -53,6 +53,14 @@ Let's assume your `output_path` is set to `data`.
   none are found, it creates `data/output_0000` and a link `data/output_active`
   pointing to it.
 
+#### A note for Windows users
+
+Windows does not always allow the creation of symbolic links by unprivileged
+users, so some details about links might be slightly different depending on your
+system. If you are using Windows, please have a look at docstring on the
+`ActiveLinkStyle` to learn more about possible differences.
+
+
 ## API
 
 ```@docs
