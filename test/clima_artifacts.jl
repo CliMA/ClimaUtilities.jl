@@ -38,7 +38,8 @@ Base.Filesystem.rm(expected_path, recursive = true)
     @test ClimaArtifacts.@clima_artifact("socrates", context) == expected_path
 
     # Test with name as a variable
-    Base.Filesystem.rm(expected_path, force = true, recursive = true)
+    ClimaComms.iamroot(context) &&
+        Base.Filesystem.rm(expected_path, force = true, recursive = true)
     ClimaComms.barrier(context)
     let_filesystem_catch_up()
     artifact_name = "socrates"
