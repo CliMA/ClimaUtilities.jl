@@ -75,6 +75,10 @@ The `@clima_artifact` macro is executed at parse time when the argument is a
 literal string (e.g., `@clima_artifact("socrates")`), and at runtime when it is
 a variable `@clima_artifact(artifact_name)`.
 
+> Note: `context` is a positional argument, not a keyword one. Calling
+> `@clima_artifact("socrates"; context)` will fail. (This is due to how Julia
+> macros handle keyword arguments)
+
 ### Tagging artifacts
 
 A full climate simulation requires lots of external input data. Most of this

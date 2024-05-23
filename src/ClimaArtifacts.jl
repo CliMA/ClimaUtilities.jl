@@ -34,6 +34,10 @@ other wait until the file is fully downloaded.
 Passing the context is required only for lazy artifacts.
 """
 macro clima_artifact(name, context = nothing)
+
+    # Note, we do not handle the case with clima_artifact(name; context)
+    # See, https://github.com/CliMA/ClimaUtilities.jl/pull/62
+
     # Find Artifacts.toml file we're going to load from
     srcfile = string(__source__.file)
     if (
