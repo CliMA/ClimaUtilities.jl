@@ -42,12 +42,12 @@ results.
 
 Let's assume your `output_path` is set to `data`.
 
-* If `data` doesn't exist, the module creates it and returns
-  `data/output_active`. This link points to the newly created subfolder
-  `data/output_0000`.
-* If `data` exists and contains an `output_active` link pointing to
-  `data/output_0005`, the module creates a new subfolder `data/output_0006` and
-  updates `output_active` to point to it.
+* If `data` doesn't exist, the module creates it and returns `data/output_0000`.
+  In doing this, a link `data/output_active` to `data/output_0000` is created so
+  that you can always access your data in `data/output_active`.
+*  If `data` exists and contains an `output_active` link pointing to
+  `data/output_0005`, `output_active` is updated to point to a new subfolder
+  called `data/output_0006`
 * If `data` exists with or without an `output_active` link, the module checks
   for existing subfolders named `data/output_XXXX` (with `XXXX` a number). If
   none are found, it creates `data/output_0000` and a link `data/output_active`
@@ -59,7 +59,6 @@ Windows does not always allow the creation of symbolic links by unprivileged
 users, so some details about links might be slightly different depending on your
 system. If you are using Windows, please have a look at docstring on the
 `ActiveLinkStyle` to learn more about possible differences.
-
 
 ## API
 

@@ -1,6 +1,13 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
+v0.1.8
+------
+
+- `generate_output_path(..., ::ActiveLinkStyle)` now returns the folder instead
+  of the link. Links are still being created and managed. PR
+  [#63](https://github.com/CliMA/ClimaUtilities.jl/pull/63)
+
 v0.1.7
 ------
 
@@ -24,3 +31,5 @@ v0.1.3
 -------
 - Add `DataStructures` module containing `LRUCache` object. PR [#35](https://github.com/CliMA/ClimaUtilities.jl/pull/35)
 - Add `OutputPathGenerator`. PR [#28](https://github.com/CliMA/ClimaLand.jl/pull/28)
+
+[badge-💥breaking]: https://img.shields.io/badge/💥BREAKING-red.svg
