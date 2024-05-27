@@ -69,16 +69,21 @@ This style is designed to:
 - provide a deterministic and fixed path for the latest available data,
 - and have nearly zero runtime overhead.
 
+`generate_output_path` returns path to the newly created folder with the next available
+increment (of the form `output_1234`), and ensures that a valid `output_active` link points
+to that folder.
+
 # Examples:
 
 Let us assume that `output_path = dormouse`.
 
 - `dormouse` does not exist in the current working directory: `ActiveLinkStyle` will create
-  it and return `dormouse/output_active`. `dormouse/output_active` is a symlink that points
-  to the newly created `dormouse/output_0000` directory.
+  it and return `dormouse/output_0000`. In the process, a symlink `dormouse/output_active`
+  is also created. This symlink points to `dormouse/output_0000`.
 - `dormouse` exists and contains a `output_active` link that points to
-  `dormouse/output_0005`, `ActiveLinkStyle` will a new directory `dormouse/output_0006` and
-  change the `output_active` to point to this directory.
+  `dormouse/output_0005`, `ActiveLinkStyle` will a create new directory
+  `dormouse/output_0006`, return this path, and change the `output_active` to point to this
+  directory.
 - `dormouse` exists and does not contain a `output_active`, `ActiveLinkStyle` will check if
   any `dormouse/output_XXXX` exists. If not, it creates `dormouse/output_0000` and a link
   `dormouse/output_active` that points to this directory.
@@ -112,13 +117,13 @@ How the output should be structured (in terms of directory tree) is determined b
 - `RemovePreexistingStyle`: the `output_path` provided is the actual output path. If a directory
   already exists there, remove it without asking for confirmation.
 
-- `ActiveLinkStyle`: the `output_path` provided is `output_path/output_active`, a link to a
-  subdirectory within `output_path`. This style looks at the content of `output_path` and
-  adds new subdirectories. The added directories are named with a counter, with the latest
-  always accessible via the `output_path/output_active` symlink. This is style is
-  non-destructive.
+- `ActiveLinkStyle`: the `output_path` returned is a new folder of the form
+  `output_path/output_1234`, where the number is incremented every time this function is
+  called. `ActiveLinkStyle` also creates a link `output_path/output_active` that ensures
+  that the most recent output is always accessible at the `output_path/output_active` path.
+  This is style is non-destructive.
 
-(Note, "styles" have nothing to do with traits.)
+(Note, "styles" have nothing to do with Julia traits.)
 """
 function generate_output_path(
     output_path;
@@ -244,7 +249,7 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
         end
     end
     maybe_wait_filesystem(context, new_output_folder)
-    return active_link
+    return new_output_folder
 end
 
 end

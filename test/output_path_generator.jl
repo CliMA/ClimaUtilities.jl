@@ -68,7 +68,9 @@ end
     # Folder does not yet exist
     output_path = joinpath(base_output_path, "dormouse")
 
-    expected_output = joinpath(output_path, "output_active")
+    output_link = joinpath(output_path, "output_active")
+
+    expected_output = joinpath(output_path, "output_0000")
 
     @test expected_output ==
           generate_output_path(output_path, context = context)
@@ -76,21 +78,23 @@ end
     # Check that it exists now
     @test isdir(output_path)
 
-    # Check folder output_0000 was created
-    @test isdir(joinpath(output_path, "output_0000"))
+    # Check link output_active was created
+    @test islink(output_link)
 
-    # Check link points to folder
-    @test readlink(expected_output) == "output_0000"
+    # # Check link points to folder
+    @test readlink(output_link) == "output_0000"
 
     # Now the folder exists, let us see if the rotation works
+    expected_output = joinpath(output_path, "output_0001")
+
     @test expected_output ==
           generate_output_path(output_path, context = context)
 
-    # Check folder output_0001 was created
+    # Check folder was created
     @test isdir(joinpath(output_path, "output_0001"))
 
     # Check link points to new folder
-    @test readlink(expected_output) == "output_0001"
+    @test readlink(output_link) == "output_0001"
 
     # Now let us check something wrong
 
@@ -101,7 +105,7 @@ end
     ClimaComms.barrier(context)
     let_filesystem_catch_up()
 
-    output_link = generate_output_path(output_path, context = context)
+    generate_output_path(output_path, context = context)
     @test readlink(output_link) == "output_0002"
 
     ClimaComms.barrier(context)
@@ -119,7 +123,7 @@ end
     if ClimaComms.iamroot(context)
         wrong_dir = joinpath(output_path, "wrong")
         mkdir(wrong_dir)
-        symlink(wrong_dir, expected_output, dir_target = true)
+        symlink(wrong_dir, output_link, dir_target = true)
     end
     ClimaComms.barrier(context)
     @test_throws ErrorException generate_output_path(
