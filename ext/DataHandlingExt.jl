@@ -146,6 +146,11 @@ function DataHandling.DataHandler(
     regridder_args = ()
 
     if regridder_type == :TempestRegridder
+        # TempestRegridder does not currently have the capability to regrid 3D
+        # fields, so we check that the input space is not 3D
+        @assert !(
+            target_space isa ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace
+        )
         if !(:regrid_dir in regridder_kwargs)
             # If we do not have a regrid_dir, create one and broadcast it to all the MPI
             # processes
