@@ -21,7 +21,7 @@ Currently, this work with ClimaCoreTempestRemap. `ClimaCoreTempestRemap` uses Te
 a command-line utility. Hence, This function has to process files, so, for this regridder,
 we cannot really split file processing and remapping.
 
-TempestRegridder only works on CPU and on a single process.
+TempestRegridder only works on CPU and on a single process, and for a non-3D target space.
 
 Implicit assumptions in the code:
 - input_file contains "lat" and "lon"
@@ -225,11 +225,17 @@ function read_from_hdf5(REGRID_DIR, hd_outfile_root, time, varname, space)
     field = ClimaCore.InputOutput.read_field(hdfreader, varname)
     Base.close(hdfreader)
 
-    # Ensure the field is on the correct space when reusing regridded files
-    #  between simulations
+    # Ensure the field is on the correct space
+    @assert ClimaCore.Spaces.topology(axes(field)) ==
+            ClimaCore.Spaces.topology(space)
+    @assert ClimaCore.Spaces.quadrature_style(axes(field)) ==
+            ClimaCore.Spaces.quadrature_style(space)
+    @assert ClimaCore.Spaces.global_geometry(axes(field)) ==
+            ClimaCore.Spaces.global_geometry(space)
+
+    # Since the spaces aren't the same, we need to copy the field values onto the space
     return swap_space(field, space)
 end
-
 
 """
     write_to_hdf5(REGRID_DIR, hd_outfile_root, time, field, varname,
@@ -283,6 +289,44 @@ function write_to_hdf5(
     Base.close(hdfwriter)
 end
 
+"""
+    construct_singleton_space(space)
+
+Constructs a singleton space from a given space. This is not ideal, but
+necessary to use TempestRemap regridding, which is not MPI or GPU compatible.
+"""
+function construct_singleton_space(space)
+    # If doesn't make sense to regrid with GPUs/MPI processes
+    cpu_context =
+        ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded())
+
+    # Check if input space was constructed using `spacefillingcurve`
+    use_spacefillingcurve =
+        ClimaCore.Spaces.topology(space).elemorder isa CartesianIndices ?
+        false : true
+
+    mesh = ClimaCore.Spaces.topology(space).mesh
+    topology = nothing
+    if use_spacefillingcurve
+        topology = ClimaCore.Topologies.Topology2D(
+            cpu_context,
+            mesh,
+            ClimaCore.Topologies.spacefillingcurve(mesh),
+        )
+    else
+        topology = ClimaCore.Topologies.Topology2D(cpu_context, mesh)
+    end
+    Nq =
+        ClimaCore.Spaces.Quadratures.polynomial_degree(
+            ClimaCore.Spaces.quadrature_style(space),
+        ) + 1
+    space_singleton = ClimaCore.Spaces.SpectralElementSpace2D(
+        topology,
+        ClimaCore.Spaces.Quadratures.GLL{Nq}(),
+    )
+
+    return space_singleton
+end
 
 """
     function hdwrite_regridfile_rll_to_cgll(
@@ -334,23 +378,9 @@ function hdwrite_regridfile_rll_to_cgll(
     weightfile = joinpath(REGRID_DIR, outfile_root * "_remap_weights.nc")
 
     # If doesn't make sense to regrid with GPUs/MPI processes
-    cpu_context =
-        ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded())
-
-    # Note: this topology gives us `space == space_undistributed` in the undistributed
-    # case (as desired), which wouldn't hold if we used `spacefillingcurve` here.
-    topology = ClimaCore.Topologies.Topology2D(
-        cpu_context,
-        ClimaCore.Spaces.topology(space).mesh,
-    )
-    Nq =
-        ClimaCore.Spaces.Quadratures.polynomial_degree(
-            ClimaCore.Spaces.quadrature_style(space),
-        ) + 1
-    space_undistributed = ClimaCore.Spaces.SpectralElementSpace2D(
-        topology,
-        ClimaCore.Spaces.Quadratures.GLL{Nq}(),
-    )
+    space_singleton = construct_singleton_space(space)
+    topology_singleton = ClimaCore.Spaces.topology(space_singleton)
+    cpu_context = ClimaCore.Spaces.topology(space_singleton).context
 
     if isfile(datafile_cgll) == false
         isdir(REGRID_DIR) ? nothing : mkpath(REGRID_DIR)
@@ -362,7 +392,7 @@ function hdwrite_regridfile_rll_to_cgll(
         ClimaCoreTempestRemap.rll_mesh(meshfile_rll; nlat = nlat, nlon = nlon)
 
         # write cgll mesh, overlap mesh and weight file
-        ClimaCoreTempestRemap.write_exodus(meshfile_cgll, topology)
+        ClimaCoreTempestRemap.write_exodus(meshfile_cgll, topology_singleton)
         ClimaCoreTempestRemap.overlap_mesh(
             meshfile_overlap,
             meshfile_rll,
@@ -372,6 +402,10 @@ function hdwrite_regridfile_rll_to_cgll(
         # 'in_np = 1' and 'mono = true' arguments ensure mapping is conservative and monotone
         # Note: for a kwarg not followed by a value, set it to true here (i.e. pass 'mono = true' to produce '--mono')
         # Note: out_np = degrees of freedom = polynomial degree + 1
+        Nq =
+            ClimaCore.Spaces.Quadratures.polynomial_degree(
+                ClimaCore.Spaces.quadrature_style(space),
+            ) + 1
         kwargs = (; out_type = out_type, out_np = Nq)
         kwargs = mono ? (; (kwargs)..., in_np = 1, mono = mono) : kwargs
         ClimaCoreTempestRemap.remap_weights(
@@ -400,8 +434,8 @@ function hdwrite_regridfile_rll_to_cgll(
 
     target_unique_idxs =
         out_type == "cgll" ?
-        collect(ClimaCore.Spaces.unique_nodes(space_undistributed)) :
-        collect(ClimaCore.Spaces.all_nodes(space_undistributed))
+        collect(ClimaCore.Spaces.unique_nodes(space_singleton)) :
+        collect(ClimaCore.Spaces.all_nodes(space_singleton))
     target_unique_idxs_i =
         map(row -> target_unique_idxs[row][1][1], row_indices)
     target_unique_idxs_j =
@@ -412,7 +446,7 @@ function hdwrite_regridfile_rll_to_cgll(
 
     R = (; target_idxs = target_unique_idxs, row_indices = row_indices)
 
-    offline_field = ClimaCore.Fields.zeros(FT, space_undistributed)
+    offline_field = ClimaCore.Fields.zeros(FT, space_singleton)
 
     times = [DateTime(0)]
     # Save regridded HDF5 file for each variable in `varnames`
@@ -452,6 +486,7 @@ function hdwrite_regridfile_rll_to_cgll(
             length(times),
         )
 
+        # Save regridded HDF5 file for each time slice
         map(
             x -> write_to_hdf5(
                 REGRID_DIR,

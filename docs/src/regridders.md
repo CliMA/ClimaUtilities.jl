@@ -34,6 +34,9 @@ computational domains. `TempestRegridder` performs all the interpolation ahead
 of time and saves the regridded fields to HDF5 files that can be read during the
 simulation.
 
+Currently, `TempestRegridder` does not support regridding on 3D domains.
+The `InterpolationsRegridder` described below can be used for these cases.
+
 ### Example
 
 Assuming `target_space` is a `ClimaCore` 2D spherical field, the input data is

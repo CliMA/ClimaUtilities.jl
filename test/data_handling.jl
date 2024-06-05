@@ -26,7 +26,7 @@ ClimaComms.init(context)
         if regridder_type == :TempestRegridder && Sys.iswindows()
             continue
         end
-        for FT in (Float32, Float64)
+        for FT in (Float32, Float64), use_spacefillingcurve in (true, false)
             radius = FT(6731e3)
             helem = 40
             Nq = 4
@@ -34,7 +34,16 @@ ClimaComms.init(context)
             horzdomain = ClimaCore.Domains.SphereDomain(radius)
             horzmesh =
                 ClimaCore.Meshes.EquiangularCubedSphere(horzdomain, helem)
-            horztopology = ClimaCore.Topologies.Topology2D(context, horzmesh)
+            if use_spacefillingcurve
+                horztopology = ClimaCore.Topologies.Topology2D(
+                    context,
+                    horzmesh,
+                    ClimaCore.Topologies.spacefillingcurve(horzmesh),
+                )
+            else
+                horztopology =
+                    ClimaCore.Topologies.Topology2D(context, horzmesh)
+            end
             quad = ClimaCore.Spaces.Quadratures.GLL{Nq}()
             target_space =
                 ClimaCore.Spaces.SpectralElementSpace2D(horztopology, quad)
