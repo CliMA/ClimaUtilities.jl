@@ -43,7 +43,10 @@ using NCDatasets
 
         # Test that we need to close all the variables to close the file
         open_ncfiles =
-            Base.get_extension(ClimaUtilities, :NCFileReaderExt).OPEN_NCFILES
+            Base.get_extension(
+                ClimaUtilities,
+                :ClimaUtilitiesNCDatasetsExt,
+            ).NCFileReaderExt.OPEN_NCFILES
 
         close(ncreader_sp)
         @test !isempty(open_ncfiles)
@@ -61,8 +64,8 @@ end
         read_dates_func =
             Base.get_extension(
                 ClimaUtilities,
-                :NCFileReaderExt,
-            ).read_available_dates
+                :ClimaUtilitiesNCDatasetsExt,
+            ).NCFileReaderExt.read_available_dates
 
         available_dates = read_dates_func(nc)
         @test isempty(available_dates)
@@ -78,7 +81,10 @@ end
 
         FileReaders.close_all_ncfiles()
         open_ncfiles =
-            Base.get_extension(ClimaUtilities, :NCFileReaderExt).OPEN_NCFILES
+            Base.get_extension(
+                ClimaUtilities,
+                :ClimaUtilitiesNCDatasetsExt,
+            ).NCFileReaderExt.OPEN_NCFILES
         @test isempty(open_ncfiles)
     end
 end

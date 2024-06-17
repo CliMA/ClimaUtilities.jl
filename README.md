@@ -39,6 +39,18 @@ it should not depend on any package outside of the standard library and should
 have negligible import costs. To accomplish this, everything is implemented in
 Julia extensions.
 
+Extensions are organized in the following way. The extensions defined in the
+`Project.toml` are defined in terms of the packages they require to be loaded.
+This avoids circular dependencies among extensions. Each of these extensions
+`include`s modules that match what is defined in `src`.
+
+For example, `ClimaUtilitiesClimaCoreNCDatasetsExt` is loaded when `ClimaCore`
+and `NCDatasets` are loaded. Internally, `ClimaUtilitiesClimaCoreNCDatasetsExt`
+loads `DataHandlingExt.jl`, `SpaceVaryingInputsExt.jl`, and
+`TimeVaryingInputsExt.jl`. Each of them implements methods defined in
+`src/DataHandling.jl`, `src/SpaceVaryingInputs.jl`, and
+`src/TimeVaryingInputs.jl` respectively
+
 ### Tests and environments
 
 We prioritize well-tested code to guarantee `ClimaUtilities.jl` functions
@@ -75,7 +87,7 @@ used by our Buildkite pipeline.
 
 #### Running tests
 
-There are two equivalent ways to run tests. 
+There are two equivalent ways to run tests.
 
 First, Start a Julia session in the `ClimaUtilities` directory:
 ``` sh
@@ -83,7 +95,7 @@ julia --project
 ```
 Enter `Pkg` mode by typing `]`. This will change the prompt. Run `test`.
 
-Equivalently, you can run 
+Equivalently, you can run
 ``` sh
 julia --project=test tests/runtests.jl
 ```
