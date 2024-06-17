@@ -1,6 +1,12 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
+v0.1.9
+------
+
+- Extensions are internally reorganized, removing precompilation errors. PR
+  [#69](https://github.com/CliMA/ClimaUtilities.jl/pull/69)
+
 v0.1.8
 ------
 

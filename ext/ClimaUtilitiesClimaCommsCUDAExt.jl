@@ -1,6 +1,6 @@
-module CUDAUtilsExt
+module ClimaUtilitiesClimaCommsCUDAExt
 
-import ClimaCore: ClimaComms
+import ClimaComms
 import ClimaUtilities
 import ClimaUtilities.TimeVaryingInputs
 import CUDA
@@ -17,8 +17,8 @@ function TimeVaryingInputs.evaluate!(
     @assert itp isa
             Base.get_extension(
         ClimaUtilities,
-        :TimeVaryingInputs0DExt,
-    ).InterpolatingTimeVaryingInput0D
+        :ClimaUtilitiesClimaCoreExt,
+    ).TimeVaryingInputs0DExt.InterpolatingTimeVaryingInput0D
     CUDA.@cuda TimeVaryingInputs.evaluate!(
         parent(destination),
         itp,

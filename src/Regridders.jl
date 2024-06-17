@@ -35,11 +35,19 @@ based on which regridder(s) are currently loaded.
 function default_regridder_type()
     # Use InterpolationsRegridder if available
     if !isnothing(
-        Base.get_extension(ClimaUtilities, :InterpolationsRegridderExt),
+        Base.get_extension(
+            ClimaUtilities,
+            :ClimaUtilitiesClimaCoreInterpolationsExt,
+        ),
     )
         regridder_type = :InterpolationsRegridder
         # If InterpolationsRegridder isn't available, and TempestRegridder is, use TempestRegridder
-    elseif !isnothing(Base.get_extension(ClimaUtilities, :TempestRegridderExt))
+    elseif !isnothing(
+        Base.get_extension(
+            ClimaUtilities,
+            :ClimaUtilitiesClimaCoreTempestRemapExt,
+        ),
+    )
         regridder_type = :TempestRegridder
     else
         error("No regridder available")

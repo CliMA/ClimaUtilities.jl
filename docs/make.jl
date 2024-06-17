@@ -44,14 +44,17 @@ makedocs(
     clean = true,
     modules = [
         ClimaUtilities,
-        Base.get_extension(ClimaUtilities, :DataHandlingExt),
-        Base.get_extension(ClimaUtilities, :InterpolationsRegridderExt),
-        Base.get_extension(ClimaUtilities, :MPIUtilsExt),
-        Base.get_extension(ClimaUtilities, :NCFileReaderExt),
-        Base.get_extension(ClimaUtilities, :SpaceVaryingInputsExt),
-        Base.get_extension(ClimaUtilities, :TempestRegridderExt),
-        Base.get_extension(ClimaUtilities, :TimeVaryingInputs0DExt),
-        Base.get_extension(ClimaUtilities, :TimeVaryingInputsExt),
+        Base.get_extension(ClimaUtilities, :ClimaUtilitiesClimaCoreExt),
+        Base.get_extension(
+            ClimaUtilities,
+            :ClimaUtilitiesClimaCoreInterpolationsExt,
+        ),
+        Base.get_extension(
+            ClimaUtilities,
+            :ClimaUtilitiesClimaCoreNCDatasetsExt,
+        ),
+        Base.get_extension(ClimaUtilities, :ClimaUtilitiesNCDatasetsExt),
+        Base.get_extension(ClimaUtilities, :ClimaUtilitiesClimaCommsExt),
     ],
 )
 
