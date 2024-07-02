@@ -49,10 +49,12 @@ let_filesystem_catch_up() = context isa ClimaComms.MPICommsContext && sleep(0.2)
         context = context,
         style = RemovePreexistingStyle(),
     )
+    let_filesystem_catch_up()
 
     @test !isfile(joinpath(output_path, "something"))
 
     Base.rm(base_output_path, force = true, recursive = true)
+
     let_filesystem_catch_up()
 end
 
