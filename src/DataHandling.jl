@@ -53,4 +53,6 @@ function next_time end
 
 function regridded_snapshot end
 
+function regridded_snapshot! end
+
 end

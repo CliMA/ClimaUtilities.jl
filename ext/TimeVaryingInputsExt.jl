@@ -15,7 +15,7 @@ import ClimaUtilities.TimeVaryingInputs: NearestNeighbor, LinearInterpolation
 
 import ClimaUtilities.DataHandling
 import ClimaUtilities.DataHandling:
-    DataHandler, previous_time, next_time, regridded_snapshot, available_times
+    DataHandler, previous_time, next_time, regridded_snapshot!, available_times
 
 # Ideally, we should be able to split off the analytic part in a different
 # extension, but precompilation stops working when we do so
@@ -61,6 +61,7 @@ struct InterpolatingTimeVaryingInput23D{
     M <: AbstractInterpolationMethod,
     CC <: ClimaComms.AbstractCommsContext,
     R <: Tuple,
+    RR,
 } <: AbstractTimeVaryingInput
     """Object that has all the information on how to deal with files, data, and so on.
        Having to deal with files, it lives on the CPU."""
@@ -75,6 +76,9 @@ struct InterpolatingTimeVaryingInput23D{
     """Range of times over which the interpolator is defined. range is always defined on the
     CPU. Used by the in() function."""
     range::R
+
+    """Preallocated memory for storing regridded fields"""
+    preallocated_regridded_fields::RR
 end
 
 """
@@ -96,11 +100,18 @@ function TimeVaryingInputs.TimeVaryingInput(
         error("DataHandler does not contain temporal data")
     issorted(available_times) || error("Can only interpolate with sorted times")
     range = (available_times[begin], available_times[end])
+
+    # TODO: Generalize the number of _regridded_fields depending on the interpolation
+    # stencil
+    preallocated_regridded_fields =
+        (zeros(data_handler.target_space), zeros(data_handler.target_space))
+
     return InterpolatingTimeVaryingInput23D(
         data_handler,
         method,
         context,
         range,
+        preallocated_regridded_fields,
     )
 end
 
@@ -154,9 +165,9 @@ function TimeVaryingInputs.evaluate!(
 
     # The closest regridded_snapshot could be either the previous or the next one
     if (time - t0) <= (t1 - time)
-        dest .= regridded_snapshot(itp.data_handler, t0)
+        regridded_snapshot!(dest, itp.data_handler, t0)
     else
-        dest .= regridded_snapshot(itp.data_handler, t1)
+        regridded_snapshot!(dest, itp.data_handler, t1)
     end
     return nothing
 end
@@ -179,9 +190,13 @@ function TimeVaryingInputs.evaluate!(
     t0, t1 =
         previous_time(itp.data_handler, time), next_time(itp.data_handler, time)
     coeff = (time - t0) / (t1 - t0)
-    dest .=
-        (1 - coeff) .* regridded_snapshot(itp.data_handler, t0) .+
-        coeff .* regridded_snapshot(itp.data_handler, t1)
+
+    field_t0 = itp.preallocated_regridded_fields[1]
+    field_t1 = itp.preallocated_regridded_fields[2]
+    regridded_snapshot!(field_t0, itp.data_handler, t0)
+    regridded_snapshot!(field_t1, itp.data_handler, t1)
+
+    dest .= (1 - coeff) .* field_t0 .+ coeff .* field_t1
     return nothing
 end
 

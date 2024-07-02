@@ -299,8 +299,6 @@ The `time` has to be available in the `data_handler`.
 
 `regridded_snapshot` potentially modifies the internal state of `data_handler` and it might be a very
 expensive operation.
-
-TODO: Add `regridded_snapshot!`
 """
 function DataHandling.regridded_snapshot(
     data_handler::DataHandler,
@@ -344,6 +342,11 @@ function DataHandling.regridded_snapshot(data_handler::DataHandler)
 
     # In this case, we use as cache key `Dates.DateTime(0)`
     return DataHandling.regridded_snapshot(data_handler, Dates.DateTime(0))
+end
+
+function DataHandling.regridded_snapshot!(out, data_handler, time)
+    out .= DataHandling.regridded_snapshot(data_handler, time)
+    return nothing
 end
 
 end
