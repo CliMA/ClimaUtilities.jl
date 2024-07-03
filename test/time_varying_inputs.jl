@@ -75,6 +75,7 @@ end
 
         times = collect(range(FT(0), FT(8π), 100))
         vals = sin.(times)
+        dt = times[2] - times[1]
 
         # Nearest neighbor interpolation
         input = TimeVaryingInputs.TimeVaryingInput(
@@ -83,6 +84,41 @@ end
             context,
             method = TimeVaryingInputs.NearestNeighbor(),
         )
+
+        # Nearest neighbor interpolation with Flat
+        input_clamp = TimeVaryingInputs.TimeVaryingInput(
+            times,
+            vals;
+            context,
+            method = TimeVaryingInputs.NearestNeighbor(
+                TimeVaryingInputs.Flat(),
+            ),
+        )
+
+        # Nearest neighbor interpolation with PeriodicCalendar
+        input_periodic_calendar = TimeVaryingInputs.TimeVaryingInput(
+            times,
+            vals;
+            context,
+            method = TimeVaryingInputs.NearestNeighbor(
+                TimeVaryingInputs.PeriodicCalendar(),
+            ),
+        )
+
+        # Linear interpolation with PeriodicCalendar
+        input_periodic_calendar_linear = TimeVaryingInputs.TimeVaryingInput(
+            times,
+            vals;
+            context,
+            method = TimeVaryingInputs.LinearInterpolation(
+                TimeVaryingInputs.PeriodicCalendar(),
+            ),
+        )
+
+        # Test extrapolation_bc
+        @test TimeVaryingInputs.extrapolation_bc(
+            TimeVaryingInputs.NearestNeighbor(),
+        ) == TimeVaryingInputs.Throw()
 
         # Test in
         @test FT(3.0) in input
@@ -96,6 +132,58 @@ end
                 input,
                 FT(-4),
             )
+
+            # Time outside of range with Flat left
+            TimeVaryingInputs.evaluate!(dest, input_clamp, FT(-4))
+
+            @test Array(parent(dest))[1] == vals[begin]
+
+            # Time outside of range with Flat right
+            TimeVaryingInputs.evaluate!(dest, input_clamp, FT(40))
+
+            @test Array(parent(dest))[1] == vals[end]
+
+            # Time outside of range with PeriodicCalendar
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_periodic_calendar,
+                times[begin],
+            )
+            @test Array(parent(dest))[1] == vals[begin]
+
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_periodic_calendar,
+                times[end],
+            )
+            @test Array(parent(dest))[1] == vals[end]
+
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_periodic_calendar,
+                times[end] + 10dt,
+            )
+            @test Array(parent(dest))[1] == vals[begin + 9]
+
+            # Check after times[end] but before times[end] + 0.5dt, should lead be
+            # equivalent to times[end]
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_periodic_calendar,
+                times[end] + 0.3dt,
+            )
+            @test Array(parent(dest))[1] == vals[end]
+
+            # Check after times[end] and after times[end] + 0.5dt, should lead be equivalent
+            # to times[begin]
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_periodic_calendar,
+                times[end] + 0.8dt,
+            )
+            @test Array(parent(dest))[1] == vals[begin]
+
+            # Linear interpolation
 
             TimeVaryingInputs.evaluate!(dest, input, times[10])
 
@@ -119,6 +207,53 @@ end
             TimeVaryingInputs.evaluate!(dest, input, 0.0)
 
             @test Array(parent(dest))[1] ≈ 0.0
+
+            # Linear interpolation with PeriodicCalendar
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_periodic_calendar_linear,
+                times[10],
+            )
+            @test Array(parent(dest))[1] == vals[10]
+
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_periodic_calendar_linear,
+                times[1],
+            )
+            @test Array(parent(dest))[1] == vals[1]
+
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_periodic_calendar_linear,
+                times[end],
+            )
+            @test Array(parent(dest))[1] == vals[end]
+
+            # t_end + dt is equivalent to t_init
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_periodic_calendar_linear,
+                times[end] + dt,
+            )
+            @test Array(parent(dest))[1] ≈ vals[1]
+
+            # t_end + 2dt is equivalent to t_init + dt
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_periodic_calendar_linear,
+                times[end] + 2dt,
+            )
+            @test Array(parent(dest))[1] ≈ vals[2]
+
+            # In between t_end and t_init
+            expected = vals[end] + (vals[begin] - vals[end]) / dt * 0.1dt
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_periodic_calendar_linear,
+                times[end] + 0.1dt,
+            )
+            @test Array(parent(dest))[1] ≈ expected
         end
     end
 end
@@ -156,12 +291,56 @@ end
                 method = TimeVaryingInputs.NearestNeighbor(),
             )
 
+            input_nearest_clamp = TimeVaryingInputs.TimeVaryingInput(
+                PATH,
+                "u10n",
+                target_space;
+                reference_date = Dates.DateTime(2021, 1, 1, 1),
+                t_start = 0.0,
+                regridder_type,
+                method = TimeVaryingInputs.NearestNeighbor(
+                    TimeVaryingInputs.Flat(),
+                ),
+            )
+
+            input_nearest_periodic_calendar =
+                TimeVaryingInputs.TimeVaryingInput(
+                    PATH,
+                    "u10n",
+                    target_space;
+                    reference_date = Dates.DateTime(2021, 1, 1, 1),
+                    t_start = 0.0,
+                    regridder_type,
+                    method = TimeVaryingInputs.NearestNeighbor(
+                        TimeVaryingInputs.PeriodicCalendar(),
+                    ),
+                )
+
+            input_linear_periodic_calendar = TimeVaryingInputs.TimeVaryingInput(
+                PATH,
+                "u10n",
+                target_space;
+                reference_date = Dates.DateTime(2021, 1, 1, 1),
+                t_start = 0.0,
+                regridder_type,
+                method = TimeVaryingInputs.LinearInterpolation(
+                    TimeVaryingInputs.PeriodicCalendar(),
+                ),
+            )
+
             @test 0.0 in input_nearest
             @test !(1e23 in input_nearest)
 
             dest = Fields.zeros(target_space)
 
             available_times = DataHandling.available_times(data_handler)
+
+            # Time outside of range
+            @test_throws ErrorException TimeVaryingInputs.evaluate!(
+                dest,
+                input_nearest,
+                FT(-40000),
+            )
 
             # We are testing NearestNeighbor, so we can just have to check if the fields agree
 
@@ -214,8 +393,88 @@ end
                 ),
             )
 
+            # Flat left
+            target_time = available_times[begin] - 1
+            TimeVaryingInputs.evaluate!(dest, input_nearest_clamp, target_time)
+
+            @test isequal(
+                Array(parent(dest)),
+                Array(
+                    parent(
+                        DataHandling.regridded_snapshot(
+                            data_handler,
+                            available_times[begin],
+                        ),
+                    ),
+                ),
+            )
+
+            # Flat right
+            target_time = available_times[end] + 1
+            TimeVaryingInputs.evaluate!(dest, input_nearest_clamp, target_time)
+
+            @test isequal(
+                Array(parent(dest)),
+                Array(
+                    parent(
+                        DataHandling.regridded_snapshot(
+                            data_handler,
+                            available_times[end],
+                        ),
+                    ),
+                ),
+            )
+
+            # Nearest periodic calendar
+            dt = available_times[2] - available_times[1]
+            target_time = available_times[end] + 0.1dt
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_nearest_periodic_calendar,
+                target_time,
+            )
+
+            @test isequal(
+                Array(parent(dest)),
+                Array(
+                    parent(
+                        DataHandling.regridded_snapshot(
+                            data_handler,
+                            available_times[end],
+                        ),
+                    ),
+                ),
+            )
+
+            dt = available_times[2] - available_times[1]
+            target_time = available_times[end] + 0.6dt
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_nearest_periodic_calendar,
+                target_time,
+            )
+
+            @test isequal(
+                Array(parent(dest)),
+                Array(
+                    parent(
+                        DataHandling.regridded_snapshot(
+                            data_handler,
+                            available_times[begin],
+                        ),
+                    ),
+                ),
+            )
+
             # Now testing LinearInterpolation
             input_linear = TimeVaryingInputs.TimeVaryingInput(data_handler)
+
+            # Time outside of range
+            @test_throws ErrorException TimeVaryingInputs.evaluate!(
+                dest,
+                input_linear,
+                FT(-40000),
+            )
 
             left_value = DataHandling.regridded_snapshot(
                 data_handler,
@@ -240,8 +499,39 @@ end
 
             @test parent(dest) ≈ parent(expected)
 
+            # LinearInterpolation with PeriodicCalendar
+
+            left_value = DataHandling.regridded_snapshot(
+                data_handler,
+                available_times[end],
+            )
+            right_value = DataHandling.regridded_snapshot(
+                data_handler,
+                available_times[begin],
+            )
+
+            time_delta = 0.1dt
+            target_time = available_times[end] + time_delta
+            left_time = available_times[10]
+            right_time = available_times[11]
+
+            TimeVaryingInputs.evaluate!(
+                dest,
+                input_linear_periodic_calendar,
+                target_time,
+            )
+
+            expected = Fields.zeros(target_space)
+            expected .=
+                left_value .+ time_delta / dt .* (right_value .- left_value)
+
+            @test parent(dest) ≈ parent(expected)
+
             close(input_nearest)
             close(input_linear)
+            close(input_nearest_clamp)
+            close(input_nearest_periodic_calendar)
+            close(input_linear_periodic_calendar)
         end
     end
 end

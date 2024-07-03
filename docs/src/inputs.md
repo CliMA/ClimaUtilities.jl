@@ -75,6 +75,28 @@ albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_
 # model developers do not have to worry about anything :)
 ```
 
+`TimeVaryingInput`s can have multiple boundary conditions for extrapolation. By
+default, the `Throw` condition is used, meaning that interpolating onto a
+point that is outside the range of definition of the data is not allowed. Other
+boundary conditions are allowed. For instance, the `PeriodicCalendar` condition
+"repeats" the data over and over. With this boundary condition, if the data is
+defined over a period of time from `t0` to `t1` (e.g., 1 and 5), interpolating
+over `t > t1` (e.g., 7) is equivalent to interpolating to `t*` where `t*` is the
+modulus of `t` and the range (3 in this case). This can be used to repeat one
+year of data (suppose you have data defined on the 15th of every month for the a
+given year Y. With `PeriodicCalendar`, you evaluate the data for any year using
+data for Y). `PeriodicCalendar` requires the data to be uniformly spaced in
+time. To enable this boundary condition, pass
+`LinearInterpolation(PeriodicCalendar())` to the `TimeVaryingInput` (or
+`NearestNeighbor(PeriodicCalendar())`).
+
+> Note: this `PeriodicCalendar` is different from what you might be used to, where the
+> identification is `t1 = t0`. Here, we identify `t1 + dt = t0`. This is so that
+> we can use it to repeat calendar data.
+
+Another option is `Flat`: when interpolating outside of the range of
+definition, return the value of the closest boundary.
+
 ## `SpaceVaryingInputs`
 
 > This extension is loaded when loading `ClimaCore` is loaded. In addition to
@@ -124,9 +146,14 @@ albedo_from_file = SpaceVaryingInputs.SpaceVaryingInput("cesm_albedo.nc", "alb",
 ```@docs
 ClimaUtilities.SpaceVaryingInputs.SpaceVaryingInput
 ClimaUtilities.TimeVaryingInputs.AbstractInterpolationMethod
+ClimaUtilities.TimeVaryingInputs.AbstractInterpolationBoundaryMethod
 ClimaUtilities.TimeVaryingInputs.NearestNeighbor
 ClimaUtilities.TimeVaryingInputs.LinearInterpolation
+ClimaUtilities.TimeVaryingInputs.Throw
+ClimaUtilities.TimeVaryingInputs.PeriodicCalendar
+ClimaUtilities.TimeVaryingInputs.Flat
 ClimaUtilities.TimeVaryingInputs.evaulate!
+ClimaUtilities.TimeVaryingInputs.extrapolation_bc
 Base.in
 Base.close
 ```

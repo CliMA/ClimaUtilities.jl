@@ -7,11 +7,14 @@ import ClimaCore: ClimaComms
 import ClimaCore: DeviceSideContext
 import ClimaCore.Fields: Adapt
 
-import ClimaUtilities.Utils: searchsortednearest, linear_interpolation
+import ClimaUtilities.Utils:
+    searchsortednearest, linear_interpolation, isequispaced, wrap_time
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:
     AbstractInterpolationMethod, AbstractTimeVaryingInput
-import ClimaUtilities.TimeVaryingInputs: NearestNeighbor, LinearInterpolation
+import ClimaUtilities.TimeVaryingInputs:
+    NearestNeighbor, LinearInterpolation, Throw, Flat, PeriodicCalendar
+import ClimaUtilities.TimeVaryingInputs: extrapolation_bc
 
 import ClimaUtilities.DataHandling
 import ClimaUtilities.DataHandling:
@@ -136,6 +139,12 @@ function TimeVaryingInputs.TimeVaryingInput(
         regridder_kwargs,
         file_reader_kwargs,
     )
+    if extrapolation_bc(method) isa PeriodicCalendar &&
+       !isequispaced(DataHandling.available_times(data_handler))
+        error(
+            "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
+        )
+    end
     context = ClimaComms.context(target_space)
     return TimeVaryingInputs.TimeVaryingInput(data_handler; method, context)
 end
@@ -147,8 +156,20 @@ function TimeVaryingInputs.evaluate!(
     args...;
     kwargs...,
 )
-    time in itp || error("TimeVaryingInput does not cover time $time")
-    TimeVaryingInputs.evaluate!(dest, itp, time, itp.method)
+    if extrapolation_bc(itp.method) isa Throw
+        time in itp || error("TimeVaryingInput does not cover time $time")
+    end
+    if extrapolation_bc(itp.method) isa Flat
+        t_init, t_end = itp.range
+        if time >= t_end
+            regridded_snapshot!(dest, itp.data_handler, t_end)
+        else
+            time <= t_init
+            regridded_snapshot!(dest, itp.data_handler, t_init)
+        end
+    else
+        TimeVaryingInputs.evaluate!(dest, itp, time, itp.method)
+    end
     return nothing
 end
 
@@ -160,6 +181,26 @@ function TimeVaryingInputs.evaluate!(
     args...;
     kwargs...,
 )
+
+    if extrapolation_bc(itp.method) isa PeriodicCalendar
+        t_init, t_end = itp.range
+        dt = DataHandling.dt(itp.data_handler)
+        time = wrap_time(time, t_init, t_end; extend_past_t_end = true, dt)
+
+        # Now time is between t_init and t_end + dt. We are doing nearest neighbor
+        # interpolation here, and when time >= t_end + 0.5dt we need to use t_init instead
+        # of t_end as neighbor.
+
+        # TODO: It would be nice to handle this edge case directly instead of copying the
+        # code
+        if (time - t_end) <= 0.5dt
+            regridded_snapshot!(dest, itp.data_handler, t_end)
+        else
+            regridded_snapshot!(dest, itp.data_handler, t_init)
+        end
+        return nothing
+    end
+
     t0, t1 =
         previous_time(itp.data_handler, time), next_time(itp.data_handler, time)
 
@@ -186,6 +227,28 @@ function TimeVaryingInputs.evaluate!(
     # Define coeff = (time - t0) / (t1 - t0)
     #
     # y = (1 - coeff) * y0 + coeff * y1
+
+    if extrapolation_bc(itp.method) isa PeriodicCalendar
+        t_init, t_end = itp.range
+        dt = DataHandling.dt(itp.data_handler)
+        time = wrap_time(time, t_init, t_end; extend_past_t_end = true, dt)
+        # We have to handle separately the edge case where the desired time is past t_end.
+        # In this case, we know that t_end <= time <= t_end + dt and we have to do linear
+        # interpolation between t_init and t_end. In this case, y0 = regridded_field(t_end),
+        # y1 = regridded_field(t_init), t1 - t0 = dt, and time - t0 = time - t_end
+
+        # TODO: It would be nice to handle this edge case directly instead of copying the
+        # code
+        if time > t_end
+            field_t0 = itp.preallocated_regridded_fields[1]
+            field_t1 = itp.preallocated_regridded_fields[2]
+            regridded_snapshot!(field_t0, itp.data_handler, t_end)
+            regridded_snapshot!(field_t1, itp.data_handler, t_init)
+            coeff = (time - t_end) / dt
+            dest .= (1 - coeff) .* field_t0 .+ coeff .* field_t1
+            return nothing
+        end
+    end
 
     t0, t1 =
         previous_time(itp.data_handler, time), next_time(itp.data_handler, time)

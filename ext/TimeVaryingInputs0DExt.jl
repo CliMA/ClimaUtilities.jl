@@ -5,10 +5,13 @@ import ClimaCore: ClimaComms
 import ClimaCore: DeviceSideContext
 import ClimaCore.Fields: Adapt
 
-import ClimaUtilities.Utils: searchsortednearest, linear_interpolation
+import ClimaUtilities.Utils:
+    searchsortednearest, linear_interpolation, wrap_time, isequispaced
 import ClimaUtilities.TimeVaryingInputs:
     AbstractInterpolationMethod, AbstractTimeVaryingInput
-import ClimaUtilities.TimeVaryingInputs: NearestNeighbor, LinearInterpolation
+import ClimaUtilities.TimeVaryingInputs:
+    NearestNeighbor, LinearInterpolation, Throw, Flat, PeriodicCalendar
+import ClimaUtilities.TimeVaryingInputs: extrapolation_bc
 
 import ClimaUtilities.TimeVaryingInputs
 
@@ -82,7 +85,9 @@ function TimeVaryingInputs.evaluate!(
     args...;
     kwargs...,
 )
-    time in itp || error("TimeVaryingInput does not cover time $time")
+    if extrapolation_bc(itp.method) isa Throw
+        time in itp || error("TimeVaryingInput does not cover time $time")
+    end
     TimeVaryingInputs.evaluate!(
         ClimaComms.device(itp.context),
         parent(destination),
@@ -90,6 +95,7 @@ function TimeVaryingInputs.evaluate!(
         time,
         itp.method,
     )
+
     return nothing
 end
 
@@ -115,6 +121,12 @@ function TimeVaryingInputs.TimeVaryingInput(
     length(times) == length(vals) ||
         error("times and vals have different lengths")
 
+    if extrapolation_bc(method) isa PeriodicCalendar && !isequispaced(times)
+        error(
+            "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
+        )
+    end
+
     # When device is CUDADevice, ArrayType will be a CUDADevice, so that times and vals get
     # copied to the GPU.
     ArrayType = ClimaComms.array_type(ClimaComms.device(context))
@@ -137,6 +149,24 @@ function TimeVaryingInputs.evaluate!(
 )
     # Nearest neighbor interpolation: just pick the values corresponding to the entry in
     # itp.times that is closest to the given time.
+    if extrapolation_bc(itp.method) isa Flat
+        t_init, t_end = itp.range
+        if time >= t_end
+            dest .= itp.vals[end]
+        else
+            time <= t_init
+            dest .= itp.vals[begin]
+        end
+        return nothing
+    elseif extrapolation_bc(itp.method) isa PeriodicCalendar
+        t_init, t_end = itp.range
+        dt = itp.times[begin + 1] - itp.times[begin]
+        time = wrap_time(time, t_init, t_end; extend_past_t_end = true, dt)
+        # Now time is between t_init and t_end + dt. We are doing nearest neighbor
+        # interpolation here, and when time >= t_end + 0.5dt we need to use t_init instead
+        # of t_end as neighbor.
+        time >= t_end + 0.5dt && (time = t_init)
+    end
 
     index = searchsortednearest(itp.times, time)
 
@@ -161,14 +191,30 @@ function TimeVaryingInputs.evaluate!(
     time,
     ::LinearInterpolation,
 )
-    # We perform linear interpolation with the two values that bracket the given time.
-    # itp.times is sorted, so we find the first index that is after `time`, the previous
-    # index is the other side of the bracket. searchsortedfirst returns the index of the
-    # first element that is >= than the given. Also, given that we check that range[1] <=
-    # time <= range[2], index will always be 1 <= index <= length(itp.times), so we have to
-    # worry about the edge case where time == itp.times (because it returns 1). In that
-    # case, we just return the value of vals[1] (we are on a node, no need for
-    # interpolation).
+    if extrapolation_bc(itp.method) isa Flat
+        t_init, t_end = itp.range
+        if time >= t_end
+            dest .= itp.vals[end]
+        else
+            time <= t_init
+            dest .= itp.vals[begin]
+        end
+        return nothing
+    elseif extrapolation_bc(itp.method) isa PeriodicCalendar
+        t_init, t_end = itp.range
+        dt = itp.times[begin + 1] - itp.times[begin]
+        time = wrap_time(time, t_init, t_end; extend_past_t_end = true, dt)
+        # We have to handle separately the edge case where the desired time is past t_end.
+        # In this case, we know that t_end <= time <= t_end + dt and we have to do linear
+        # interpolation between t_init and t_end. In this case, y0 = vals[end], y1 =
+        # vals[begin], t1 - t0 = dt, and time - t0 = time - t_end
+        if time > t_end
+            @. dest =
+                itp.vals[end] +
+                (itp.vals[begin] - itp.vals[end]) / dt * (time - t_end)
+            return nothing
+        end
+    end
 
     indep_vars = itp.times
     indep_value = time
