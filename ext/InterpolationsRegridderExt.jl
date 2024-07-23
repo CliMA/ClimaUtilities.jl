@@ -58,6 +58,8 @@ function Regridders.InterpolationsRegridder(
 )
     coordinates = ClimaCore.Fields.coordinate_field(target_space)
 
+    num_dimensions = length(propertynames(coordinates))
+
     if isnothing(extrapolation_bc)
         extrapolation_bc = ()
         if eltype(coordinates) <: ClimaCore.Geometry.LatLongPoint
@@ -69,7 +71,15 @@ function Regridders.InterpolationsRegridder(
         end
     end
 
-    return InterpolationsRegridder(target_space, coordinates, extrapolation_bc)
+    num_dimensions == length(extrapolation_bc) || error(
+        "Number of boundary conditions does not match the number of dimensions",
+    )
+
+    return InterpolationsRegridder(
+        target_space,
+        coordinates,
+        extrapolation_bc
+    )
 end
 
 """
