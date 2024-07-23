@@ -1,6 +1,11 @@
 using Test
 using ClimaUtilities
 using Aqua
+import ExplicitImports
+import NCDatasets
+import ClimaComms
+import Interpolations
+import ClimaCoreTempestRemap
 
 @testset "Aqua tests (performance)" begin
     # This tests that we don't accidentally run into
@@ -28,6 +33,17 @@ end
     Aqua.test_deps_compat(ClimaUtilities)
     Aqua.test_project_extras(ClimaUtilities)
     Aqua.test_piracies(ClimaUtilities)
+end
+
+@testset "Explicit Imports" begin
+    @test isnothing(ExplicitImports.check_no_implicit_imports(ClimaUtilities)) broken =
+        true
+    @test isnothing(
+        ExplicitImports.check_no_stale_explicit_imports(ClimaUtilities),
+    ) broken = true
+    @test isnothing(
+        ExplicitImports.check_all_qualified_accesses_via_owners(ClimaUtilities),
+    ) broken = true
 end
 
 nothing
