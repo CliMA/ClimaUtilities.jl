@@ -27,7 +27,10 @@ let_filesystem_catch_up() = context isa ClimaComms.MPICommsContext && sleep(0.2)
 expected_path = artifact"socrates"
 
 # Remove the artifact, so that we test that we are downloading it
-Base.Filesystem.rm(expected_path, recursive = true)
+ClimaComms.iamroot(context) &&
+    Base.Filesystem.rm(expected_path, force = true, recursive = true)
+ClimaComms.barrier(context)
+let_filesystem_catch_up()
 @info "Removed artifact"
 
 @testset "Lazy artifact with context" begin
