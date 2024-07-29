@@ -1,7 +1,3 @@
-#=
-    Unit tests for ClimaLand FileReaders module
-=#
-
 using Artifacts
 using Dates
 using Test
