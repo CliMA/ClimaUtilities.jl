@@ -1,9 +1,18 @@
 using SafeTestsets
 using Pkg
 
-Pkg.Artifacts.ensure_all_artifacts_installed(
-    joinpath(@__DIR__, "Artifacts.toml"),
-)
+# Download test-only artifacts
+#
+# (Currently not natively supported by Julia)
+artifacts_toml = joinpath(@__DIR__, "Artifacts.toml")
+artifacts = Pkg.Artifacts.select_downloadable_artifacts(artifacts_toml)
+for name in keys(artifacts)
+    Pkg.Artifacts.ensure_artifact_installed(
+        name,
+        artifacts[name],
+        artifacts_toml,
+    )
+end
 
 # Performance and code quality tests
 @safetestset "Aqua tests" begin
