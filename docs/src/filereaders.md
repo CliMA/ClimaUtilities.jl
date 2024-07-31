@@ -23,9 +23,10 @@ The only file reader currently implemented is the `NCFileReader`, used to read
 NetCDF files. Each `NCFileReader` is associated to one particular file and
 variable (but multiple `NCFileReader`s can share the same file).
 
-Once created, `NCFileReader` is accessed with the `read(file_reader, date)`
+Once created, `NCFileReader` is accessed with the `read!(file_reader, date)`
 function, which returns the `Array` associated to given `date` (if available).
-The `date` can be omitted if the data is static.
+The `date` can be omitted if the data is static. The data is stored in a
+preallocated array so it can be accessed multiple times without reallocating.
 
 `NCFileReader`s implement two additional features: (1) optional preprocessing,
 and (2) cache reads. `NCFileReader`s can be created with a `preprocessing_func`
@@ -78,6 +79,7 @@ close(v_var)
 ```@docs
 ClimaUtilities.FileReaders.NCFileReader
 ClimaUtilities.FileReaders.read
+ClimaUtilities.FileReaders.read!
 ClimaUtilities.FileReaders.available_dates
 ClimaUtilities.FileReaders.close_all_ncfiles
 Base.close

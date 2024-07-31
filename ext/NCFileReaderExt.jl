@@ -174,6 +174,14 @@ end
 Read and preprocess the data at the given `date`.
 """
 function FileReaders.read(file_reader::NCFileReader, date::Dates.DateTime)
+    # For cache hits, return a copy to give away ownership of the data (if we were to just
+    # return _cached_reads[date], modifying the return value would modify the private state
+    # of the file reader)
+
+    if haskey(file_reader._cached_reads, date)
+        return copy(file_reader._cached_reads[date])
+    end
+
     # DateTime(0) is the sentinel value for static datasets
     if date == Dates.DateTime(0)
         return get!(file_reader._cached_reads, date) do
@@ -188,16 +196,14 @@ function FileReaders.read(file_reader::NCFileReader, date::Dates.DateTime)
         error("Problem with date $date in $(file_reader.file_path)")
     index = index[]
 
-    return get!(file_reader._cached_reads, date) do
-        var = file_reader.dataset[file_reader.varname]
-        slicer = [
-            i == file_reader.time_index ? index : Colon() for
-            i in 1:length(NCDatasets.dimnames(var))
-        ]
-        return file_reader.preprocess_func.(
-            file_reader.dataset[file_reader.varname][slicer...]
-        )
-    end
+    var = file_reader.dataset[file_reader.varname]
+    slicer = [
+        i == file_reader.time_index ? index : Colon() for
+        i in 1:length(NCDatasets.dimnames(var))
+    ]
+    return file_reader.preprocess_func.(
+        file_reader.dataset[file_reader.varname][slicer...]
+    )
 end
 
 """
@@ -224,6 +230,30 @@ function FileReaders.read(file_reader::NCFileReader)
             Array(file_reader.dataset[file_reader.varname])
         )
     end
+end
+
+"""
+    read!(dest, file_reader::NCFileReader)
+
+Read and preprocess data (for static datasets), saving the output to `dest`.
+"""
+function FileReaders.read!(dest, file_reader::NCFileReader)
+    dest .= FileReaders.read(file_reader)
+    return nothing
+end
+
+"""
+    read!(dest, file_reader::NCFileReader, date::Dates.DateTime)
+
+Read and preprocess the data at the given `date`, saving the output to `dest`.
+"""
+function FileReaders.read!(
+    dest,
+    file_reader::NCFileReader,
+    date::Dates.DateTime,
+)
+    dest .= FileReaders.read(file_reader, date)
+    return nothing
 end
 
 end
