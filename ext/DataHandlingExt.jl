@@ -8,7 +8,7 @@ import ClimaCore: ClimaComms
 
 import ClimaUtilities.DataStructures
 import ClimaUtilities.Regridders
-import ClimaUtilities.FileReaders: AbstractFileReader, NCFileReader, read
+import ClimaUtilities.FileReaders: AbstractFileReader, NCFileReader, read, read!
 import ClimaUtilities.Regridders: AbstractRegridder, regrid
 
 import ClimaUtilities.DataHandling
@@ -24,6 +24,7 @@ import ClimaUtilities.DataHandling
          DIMS,
          TIMES <: AbstractArray{<:AbstractFloat},
          CACHE <: DataStructures.LRUCache{<:Dates.DateTime, ClimaCore.Fields.Field},
+         PR
      }
 
 Currently, the `DataHandler` works with one variable at the time. This might not be the most
@@ -48,6 +49,7 @@ struct DataHandler{
     DIMS,
     TIMES <: AbstractArray{<:AbstractFloat},
     CACHE <: DataStructures.LRUCache{<:Dates.DateTime, ClimaCore.Fields.Field},
+    PR,
 }
     """Object responsible for getting the data from disk to memory"""
     file_reader::FR
@@ -76,6 +78,9 @@ struct DataHandler{
 
     """Private field where cached data is stored"""
     _cached_regridded_fields::CACHE
+
+    """Preallocated memory for storing read dataset"""
+    preallocated_read_data::PR
 end
 
 """
@@ -92,6 +97,8 @@ end
 Create a `DataHandler` to read `varname` from `file_path` and remap it to `target_space`.
 
 The DataHandler maintains an LRU cache of Fields that were previously computed.
+
+Creating this object results in the file being accessed (to preallocate some memory).
 
 Positional arguments
 =====================
@@ -181,6 +188,9 @@ function DataHandling.DataHandler(
     times_s = Second.(available_dates .- reference_date) ./ Second(1)
     available_times = times_s .- t_start
 
+    one_date = isempty(available_dates) ? () : (first(available_dates),)
+    preallocated_read_data = read(file_reader, one_date...)
+
     return DataHandler(
         file_reader,
         regridder,
@@ -191,6 +201,7 @@ function DataHandling.DataHandler(
         reference_date,
         available_times,
         _cached_regridded_fields,
+        preallocated_read_data,
     )
 end
 
@@ -318,8 +329,13 @@ function DataHandling.regridded_snapshot(
         if regridder_type == :TempestRegridder
             regrid_args = (date,)
         elseif regridder_type == :InterpolationsRegridder
+            read!(
+                data_handler.preallocated_read_data,
+                data_handler.file_reader,
+                date,
+            )
             regrid_args =
-                (read(data_handler.file_reader, date), data_handler.dimensions)
+                (data_handler.preallocated_read_data, data_handler.dimensions)
         else
             error("Uncaught case")
         end
