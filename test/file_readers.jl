@@ -41,6 +41,12 @@ using NCDatasets
         @test FileReaders.read(ncreader_u, DateTime(2021, 01, 01, 01)) ==
               nc["u10n"][:, :, 2]
 
+        # Test read!
+        dest = copy(nc["u10n"][:, :, 2])
+        fill!(dest, 0)
+        FileReaders.read!(dest, ncreader_u, DateTime(2021, 01, 01, 01))
+        @test dest == nc["u10n"][:, :, 2]
+
         # Test that we need to close all the variables to close the file
         open_ncfiles =
             Base.get_extension(

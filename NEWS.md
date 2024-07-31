@@ -4,8 +4,10 @@ ClimaUtilities.jl Release Notes
 v0.1.10
 ------
 
-- Reduced alloctions in regridding. Now method `regridded_snapshot!`. PR
+- Reduced alloctions in regridding. New method `regridded_snapshot!`. PR
   [#72](https://github.com/CliMA/ClimaUtilities.jl/pull/72)
+- Reduced alloctions in regridding. New method `read!`. PR
+  [#83](https://github.com/CliMA/ClimaUtilities.jl/pull/83)
 
 v0.1.9
 ------
