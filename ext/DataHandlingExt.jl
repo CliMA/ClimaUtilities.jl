@@ -8,7 +8,7 @@ import ClimaCore: ClimaComms
 
 import ClimaUtilities.DataStructures
 import ClimaUtilities.Regridders
-import ClimaUtilities.FileReaders: AbstractFileReader, NCFileReader, read
+import ClimaUtilities.FileReaders: AbstractFileReader, NCFileReader, read, read!
 import ClimaUtilities.Regridders: AbstractRegridder, regrid
 
 import ClimaUtilities.Utils: isequispaced, period_to_seconds_float
@@ -57,6 +57,7 @@ struct DataHandler{
     CACHE <: DataStructures.LRUCache{Dates.DateTime, ClimaCore.Fields.Field},
     FUNC <: Function,
     NAMES <: AbstractArray{<:AbstractString},
+    PR <: AbstractDict{<:AbstractString, <:AbstractArray},
 }
     """Dictionary of variable names and objects responsible for getting the input data from disk to memory"""
     file_readers::FR
@@ -87,6 +88,9 @@ struct DataHandler{
 
     """Names of the datasets in the NetCDF that have to be read and processed"""
     varnames::NAMES
+
+    """Preallocated memory for storing read dataset"""
+    preallocated_read_data::PR
 end
 
 """
@@ -104,6 +108,8 @@ Create a `DataHandler` to read `varnames` from `file_paths` and remap them to `t
 In the latter case, the entries of `file_paths` and `varnames` are expected to match based on position.
 
 The DataHandler maintains an LRU cache of Fields that were previously computed.
+
+Creating this object results in the file being accessed (to preallocate some memory).
 
 Positional arguments
 =====================
@@ -264,6 +270,13 @@ function DataHandling.DataHandler(
     available_times = period_to_seconds_float.(available_dates .- start_date)
     dimensions = first(values(file_readers)).dimensions
 
+    # Preallocate space for each variable to be read
+    one_date = isempty(available_dates) ? () : (first(available_dates),)
+    preallocated_read_data = Dict(
+        varname => read(file_readers[varname], one_date...) for
+        varname in varnames
+    )
+
     return DataHandler(
         file_readers,
         regridder,
@@ -275,6 +288,7 @@ function DataHandling.DataHandler(
         _cached_regridded_fields,
         compose_function,
         varnames,
+        preallocated_read_data,
     )
 end
 
@@ -460,11 +474,19 @@ function DataHandling.regridded_snapshot(
                 regrid_args = (date,)
             end
         elseif regridder_type == :InterpolationsRegridder
+
             # Read input data from each file, maintaining order, and apply composing function
             # In the case of a single input variable, it will remain unchanged
+            for varname in varnames
+                read!(
+                    data_handler.preallocated_read_data[varname],
+                    data_handler.file_readers[varname],
+                    date,
+                )
+            end
             data_composed = compose_function(
                 (
-                    read(data_handler.file_readers[varname], date) for
+                    data_handler.preallocated_read_data[varname] for
                     varname in varnames
                 )...,
             )
