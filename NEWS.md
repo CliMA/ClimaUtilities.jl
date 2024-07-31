@@ -12,6 +12,12 @@ main
 `Utils.isequispaced` is now more efficient: it fails fast and does not allocate
 as much. More redundant allocations due to `Utils.isequispaced` were fixed.
 
+### Features
+
+- Reduced allocations in regridding. New method `read!`.
+Existing `read` now returns a copy of the data when returning from the cache.
+PR [#119](https://github.com/CliMA/ClimaUtilities.jl/pull/119)
+
 v0.1.15
 -------
 
