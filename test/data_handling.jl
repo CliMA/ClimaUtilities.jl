@@ -138,6 +138,20 @@ end
                 @test DataHandling.dt(data_handler) ==
                       available_times[2] - available_times[1]
 
+                @test DataHandling.time_to_date(data_handler, 0.0) ==
+                      data_handler.reference_date
+                @test DataHandling.time_to_date(data_handler, 1.0) ==
+                      data_handler.reference_date + Second(1)
+
+                @test DataHandling.date_to_time(
+                    data_handler,
+                    data_handler.reference_date,
+                ) == data_handler.t_start
+                @test DataHandling.date_to_time(
+                    data_handler,
+                    data_handler.reference_date + Second(1),
+                ) == 1.0
+
                 # Previous time with time
                 @test_throws ErrorException DataHandling.previous_time(
                     data_handler,

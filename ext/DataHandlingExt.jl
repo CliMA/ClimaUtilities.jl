@@ -260,10 +260,31 @@ Convert the given time to a calendar date.
 date = reference_date + t_start + time
 ```
 """
-function time_to_date(data_handler::DataHandler, time::AbstractFloat)
+function DataHandling.time_to_date(
+    data_handler::DataHandler,
+    time::AbstractFloat,
+)
     return data_handler.reference_date +
            Second(data_handler.t_start) +
            Second(time)
+end
+
+"""
+    date_to_time(data_handler::DataHandler, time::AbstractFloat)
+
+Convert the given calendar date to a time (in seconds).
+
+```
+date = reference_date + t_start + time
+```
+"""
+function DataHandling.date_to_time(
+    data_handler::DataHandler,
+    date::Dates.DateTime,
+)
+    # date / Second(1) produces a float in seconds
+    return (date - data_handler.reference_date) / Second(1) -
+           data_handler.t_start
 end
 
 """
@@ -279,7 +300,7 @@ function DataHandling.previous_time(
     data_handler::DataHandler,
     time::AbstractFloat,
 )
-    date = time_to_date(data_handler, time)
+    date = DataHandling.time_to_date(data_handler, time)
     return DataHandling.previous_time(data_handler, date)
 end
 
@@ -307,7 +328,7 @@ If `time` is one of the snapshots, return the next time.
 If `time` is not in the `data_handler`, return an error.
 """
 function DataHandling.next_time(data_handler::DataHandler, time::AbstractFloat)
-    date = time_to_date(data_handler, time)
+    date = DataHandling.time_to_date(data_handler, time)
     return DataHandling.next_time(data_handler, date)
 end
 
@@ -371,7 +392,7 @@ function DataHandling.regridded_snapshot(
     data_handler::DataHandler,
     time::AbstractFloat,
 )
-    date = time_to_date(data_handler, time)
+    date = DataHandling.time_to_date(data_handler, time)
     return DataHandling.regridded_snapshot(data_handler, date)
 end
 
