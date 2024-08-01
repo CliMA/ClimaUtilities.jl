@@ -104,4 +104,6 @@ ClimaUtilities.DataHandling.next_time
 ClimaUtilities.DataHandling.regridded_snapshot
 ClimaUtilities.DataHandling.regridded_snapshot!
 ClimaUtilities.DataHandling.dt
+ClimaUtilities.DataHandling.time_to_date
+ClimaUtilities.DataHandling.date_to_time
 ```
