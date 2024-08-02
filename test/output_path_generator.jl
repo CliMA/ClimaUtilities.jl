@@ -133,5 +133,9 @@ end
         context = context,
     )
 
-    Base.rm(base_output_path, force = true, recursive = true)
+    if ClimaComms.iamroot(context)
+        Base.rm(base_output_path, force = true, recursive = true)
+    end
+    ClimaComms.barrier(context)
+    let_filesystem_catch_up()
 end
