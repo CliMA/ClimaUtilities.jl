@@ -1,7 +1,15 @@
 using Test
 
+using Dates
+
 import ClimaUtilities.Utils:
-    searchsortednearest, linear_interpolation, isequispaced, wrap_time
+    searchsortednearest,
+    linear_interpolation,
+    isequispaced,
+    wrap_time,
+    beginningofperiod,
+    endofperiod,
+    bounding_dates
 
 @testset "searchsortednearest" begin
     A = 10 * collect(range(1, 10))
@@ -44,4 +52,39 @@ end
     # Wrapping when time equals t_init or t_end
     @test wrap_time(10, t_init, t_end) == 10
     @test wrap_time(20, t_init, t_end) == 10
+end
+
+@testset "bounding_dates" begin
+    @test beginningofperiod(Date(1993, 11, 19), Year(1)) == DateTime(1993, 1, 1)
+    @test beginningofperiod(Date(1993, 11, 19), Month(1)) ==
+          DateTime(1993, 11, 1)
+    @test beginningofperiod(Date(1993, 11, 19), Week(1)) ==
+          DateTime(1993, 11, 15)
+    @test beginningofperiod(Date(1993, 11, 19), Day(1)) ==
+          DateTime(1993, 11, 19)
+    @test beginningofperiod(DateTime(1993, 11, 19, 1), Day(1)) ==
+          DateTime(1993, 11, 19)
+
+    @test endofperiod(Date(1993, 11, 19), Year(1)) ==
+          DateTime(1993, 12, 31, 23, 59, 59)
+    @test endofperiod(Date(1993, 11, 19), Month(1)) ==
+          DateTime(1993, 11, 30, 23, 59, 59)
+    @test endofperiod(Date(1993, 11, 19), Week(1)) ==
+          DateTime(1993, 11, 21, 23, 59, 59)
+    @test endofperiod(Date(1993, 11, 19), Day(1)) ==
+          DateTime(1993, 11, 19, 23, 59, 59)
+
+    dates = [
+        Date(1993, 8, 13),
+        Date(1993, 8, 18),
+        Date(1993, 11, 19),
+        Date(1994, 1, 1),
+        Date(1998, 1, 17),
+    ]
+
+    @test_throws ErrorException bounding_dates(dates, Date(2000, 1, 1), Year(1))
+    @test bounding_dates(dates, Date(1993, 8, 15), Year(1)) ==
+          (Date(1993, 08, 13), Date(1993, 11, 19))
+    @test bounding_dates(dates, Date(1993, 8, 15), Month(1)) ==
+          (Date(1993, 08, 13), Date(1993, 08, 18))
 end
