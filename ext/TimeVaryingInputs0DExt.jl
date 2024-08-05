@@ -114,17 +114,24 @@ end
 function TimeVaryingInputs.TimeVaryingInput(
     times::AbstractArray,
     vals::AbstractArray;
-    method = LinearInterpolation(),
+    method::AbstractInterpolationMethod = LinearInterpolation(),
     context = ClimaComms.context(),
 )
     issorted(times) || error("Can only interpolate with sorted times")
     length(times) == length(vals) ||
         error("times and vals have different lengths")
 
-    if extrapolation_bc(method) isa PeriodicCalendar && !isequispaced(times)
-        error(
-            "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
-        )
+    if extrapolation_bc(method) isa PeriodicCalendar
+        if extrapolation_bc(method) isa PeriodicCalendar{Nothing}
+            isequispaced(times) || error(
+                "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
+            )
+        else
+            # We have the period in PeriodicCalendar
+            error(
+                "PeriodicCalendar(period) is not supported when the input data is 1D",
+            )
+        end
     end
 
     # When device is CUDADevice, ArrayType will be a CUDADevice, so that times and vals get
@@ -141,6 +148,24 @@ function TimeVaryingInputs.TimeVaryingInput(
     )
 end
 
+function _evalulate_flat!(dest, itp::InterpolatingTimeVaryingInput0D, time)
+    t_init, t_end = itp.range
+    if time >= t_end
+        dest .= itp.vals[end]
+    else
+        time <= t_init
+        dest .= itp.vals[begin]
+    end
+    return nothing
+end
+
+function _time_range_target_time_dt(itp::InterpolatingTimeVaryingInput0D, time)
+    t_init, t_end = itp.range
+    dt = itp.times[begin + 1] - itp.times[begin]
+    time = wrap_time(time, t_init, t_end + dt)
+    return t_init, t_end, time, dt
+end
+
 function TimeVaryingInputs.evaluate!(
     dest,
     itp::InterpolatingTimeVaryingInput0D,
@@ -150,18 +175,10 @@ function TimeVaryingInputs.evaluate!(
     # Nearest neighbor interpolation: just pick the values corresponding to the entry in
     # itp.times that is closest to the given time.
     if extrapolation_bc(itp.method) isa Flat
-        t_init, t_end = itp.range
-        if time >= t_end
-            dest .= itp.vals[end]
-        else
-            time <= t_init
-            dest .= itp.vals[begin]
-        end
+        _evalulate_flat!(dest, itp, time)
         return nothing
-    elseif extrapolation_bc(itp.method) isa PeriodicCalendar
-        t_init, t_end = itp.range
-        dt = itp.times[begin + 1] - itp.times[begin]
-        time = wrap_time(time, t_init, t_end; extend_past_t_end = true, dt)
+    elseif extrapolation_bc(itp.method) isa PeriodicCalendar{Nothing}
+        t_init, t_end, time, dt = _time_range_target_time_dt(itp, time)
         # Now time is between t_init and t_end + dt. We are doing nearest neighbor
         # interpolation here, and when time >= t_end + 0.5dt we need to use t_init instead
         # of t_end as neighbor.
@@ -192,18 +209,10 @@ function TimeVaryingInputs.evaluate!(
     ::LinearInterpolation,
 )
     if extrapolation_bc(itp.method) isa Flat
-        t_init, t_end = itp.range
-        if time >= t_end
-            dest .= itp.vals[end]
-        else
-            time <= t_init
-            dest .= itp.vals[begin]
-        end
+        _evalulate_flat!(dest, itp, time)
         return nothing
     elseif extrapolation_bc(itp.method) isa PeriodicCalendar
-        t_init, t_end = itp.range
-        dt = itp.times[begin + 1] - itp.times[begin]
-        time = wrap_time(time, t_init, t_end; extend_past_t_end = true, dt)
+        t_init, t_end, time, dt = _time_range_target_time_dt(itp, time)
         # We have to handle separately the edge case where the desired time is past t_end.
         # In this case, we know that t_end <= time <= t_end + dt and we have to do linear
         # interpolation between t_init and t_end. In this case, y0 = vals[end], y1 =

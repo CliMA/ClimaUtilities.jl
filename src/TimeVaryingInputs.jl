@@ -30,6 +30,8 @@
 
 module TimeVaryingInputs
 
+import Dates: DateTime, DatePeriod, Date
+
 """
     AbstractTimeVaryingInput
 
@@ -74,19 +76,54 @@ struct Throw <: AbstractInterpolationBoundaryMethod end
 """
     PeriodicCalendar
 
-When interpolating outside of range, restart from the beginning.
+Repeat data periodically.
+
+`PeriodicCalendar` has two modes of operation:
+
+First, when provided with a `period` (described a `DatePeriod`, e.g., `Dates.Month(1)` or
+`Dates.Year(1)`), assume that the provided data is repeated over that calendar period. A
+`date` can be passed too, indicating what data to use. Only simple periods (e.g.,
+`Dates.Month(1)`) are supported. When provided a period, a `repeat_date` is required too.
+This is the period of time that is repeated. For example, if `period = Dates.Month(1)` and
+`repeat_date = Dates.Date(1993, 11)`, November 1993 is repeated (if available in the input
+data).
+
+> Note: Passing a period is not supported by all the interpolators (e.g., when reading from
+  1D files).
+
+Second, if no period is provided, when interpolating outside of range, restart from the beginning.
 
 For example, if the data is defined from t0 = 0 to t1 = 10, extrapolating at t=13 is
 equivalent to interpolating at t=2. In practice, we identify `t1 + dt` to be `t0` again.
+This is different from what you might be used to for periodic boundary conditions, where the
+identification is `t1 = t0`.
 
-This can be used to repeat one year of data over and over.
+This second mode of operation `PeriodicCalendar` requires data to be uniformly sampled in time.
 
-`PeriodicCalendar` requires data to be uniformly sampled in time.
-
-Note: this `PeriodicCalendar` is different from what you might be used to for `Periodic`,
-where the identification is `t1 = t0`.
+If the data is defined on a calendar year, this second mode of operation is equivalent to
+using the first mode with `period = Dates.Year` (same with other periods).
 """
-struct PeriodicCalendar <: AbstractInterpolationBoundaryMethod end
+struct PeriodicCalendar{
+    P <: Union{Nothing, DatePeriod},
+    D <: Union{Nothing, DateTime, Date},
+} <: AbstractInterpolationBoundaryMethod
+    period::P
+    repeat_date::D
+
+    function PeriodicCalendar(
+        period::Union{Nothing, DatePeriod},
+        repeat_date::Union{Nothing, DateTime, Date},
+    )
+        if period isa DatePeriod && period.value != 1
+            error("Only simple periods are supported (e.g., Month(1))")
+        end
+        return new{typeof(period), typeof(repeat_date)}(period, repeat_date)
+    end
+end
+
+function PeriodicCalendar()
+    return PeriodicCalendar(nothing, nothing)
+end
 
 """
     Flat
