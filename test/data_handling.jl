@@ -135,7 +135,15 @@ end
                 available_times = DataHandling.available_times(data_handler)
                 available_dates = DataHandling.available_dates(data_handler)
 
+                @test DataHandling.dt(data_handler) ==
+                      available_times[2] - available_times[1]
+
                 # Previous time with time
+                @test_throws ErrorException DataHandling.previous_time(
+                    data_handler,
+                    available_times[1] - 1,
+                )
+
                 @test DataHandling.previous_time(
                     data_handler,
                     available_times[10] + 1,
@@ -144,6 +152,17 @@ end
                     data_handler,
                     available_times[1] + 1,
                 ) == available_times[1]
+
+                # Previous time with time, boundaries (return the node)
+                @test DataHandling.previous_time(
+                    data_handler,
+                    available_times[1],
+                ) == available_times[1]
+                @test DataHandling.previous_time(
+                    data_handler,
+                    available_times[end],
+                ) == available_times[end]
+
                 # Previous time with date
                 @test DataHandling.previous_time(
                     data_handler,
@@ -169,6 +188,11 @@ end
                 ) == available_times[10]
 
                 # Next time with time
+                @test_throws ErrorException DataHandling.next_time(
+                    data_handler,
+                    available_times[end] + 1,
+                )
+
                 @test DataHandling.next_time(
                     data_handler,
                     available_times[10] + 1,
