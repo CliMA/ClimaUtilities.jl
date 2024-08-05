@@ -1,6 +1,12 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
+v0.1.12
+-------
+
+- Add support for boundary conditions in interpolation. PR
+  [#84](https://github.com/CliMA/ClimaUtilities.jl/pull/84)
+
 v0.1.11
 ------
 

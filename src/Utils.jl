@@ -32,6 +32,7 @@ returns the endpoint value closest.
 function linear_interpolation(indep_vars, dep_vars, indep_value)
     N = length(indep_vars)
     id = searchsortedfirst(indep_vars, indep_value)
+    indep_value in indep_vars && return dep_vars[id]
     if id == 1
         dep_vars[begin]
     elseif id == N + 1
@@ -43,4 +44,93 @@ function linear_interpolation(indep_vars, dep_vars, indep_value)
         y0 + (y1 - y0) / (x1 - x0) * (indep_value - x0)
     end
 end
+
+"""
+    isequispaced(v; tol::Real = sqrt(eps(eltype(v)))
+
+Check if the vector `v` has uniform spacing between its elements within a given tolerance
+`tol`.
+
+# Arguments
+- `v::AbstractVector{<:Number}`: A vector of numerical values.
+- `tol::Real`: A tolerance value to account for floating-point precision errors (default is
+  `sqrt(eps(eltype(v)))`).
+
+# Returns
+
+- `Bool`: Returns `true` if the vector is equispaced within the given tolerance, `false`
+  otherwise.
+
+# Example
+
+```jldoctest
+julia> v1 = [1, 2, 3, 4, 5];
+julia> isequispaced(v1)
+true
+
+julia> v2 = [1, 2, 4, 8, 16];
+julia> isequispaced(v2)
+false
+
+julia> v3 = [1.0, 2.0, 3.0, 4.0, 5.0];
+julia> isequispaced(v3)
+true
+
+julia> v4 = [1.0, 2.0, 3.1, 4.0, 5.0];
+julia> isequispaced(v4)
+false
+```
+"""
+function isequispaced(
+    v;
+    tol = eltype(v) <: AbstractFloat ? sqrt(eps(eltype(v))) : eps(),
+)
+    length(v) < 2 && return true
+    diffs = diff(v)
+    return all(abs(d - diffs[begin]) < tol for d in diffs)
+end
+
+"""
+    wrap_time(time, t_init, t_end)
+
+Return `time` assuming periodicity so that `t_init <= time < t_end`.
+
+> Note: pay attention to the floating point representation! Sometimes it will lead to
+  unexpected results.
+
+Examples
+========
+
+With `extend_past_t_end = false`:
+
+```jldoctest
+julia> t_init = 0.1; t_end = 1.0;
+julia> wrap_time(0.1, t_init, t_end)
+0.1
+
+julia> wrap_time(0.5, t_init, t_end)
+0.5
+
+julia> wrap_time(0.8, t_init, t_end)
+0.8
+
+julia> wrap_time(1.0, t_init, t_end)
+0.1
+
+julia> wrap_time(1.6, t_init, t_end)
+0.7
+
+julia> wrap_time(2.2, t_init, t_end)
+0.4
+
+# Floating points, 1.9 should be identified with 0.1, but
+julia> wrap_time(1.9, t_init, t_end)
+0.9999999999999998
+```
+"""
+function wrap_time(time, t_init, t_end)
+    period = t_end - t_init
+    return t_init + mod(time - t_init, period)
+end
+
 end

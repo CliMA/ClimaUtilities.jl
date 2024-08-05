@@ -50,8 +50,53 @@ Defines how to perform interpolation.
 
 Not all the TimeVaryingInputs support all the interpolation methods (e.g., no interpolation
 methods are supported when the given function is analytic).
+
+`AbstractInterpolationMethod`s have to implement a `extrapolation_bc` field.
 """
 abstract type AbstractInterpolationMethod end
+
+"""
+    AbstractInterpolationBoundaryMethod
+
+Defines how to handle values outside of the data boundary.
+
+Not all the `AbstractInterpolationMethod` support all the `AbstractInterpolationBoundaryMethod`s.
+"""
+abstract type AbstractInterpolationBoundaryMethod end
+
+"""
+    Throw
+
+Throw an error when interpolating outside of range.
+"""
+struct Throw <: AbstractInterpolationBoundaryMethod end
+
+"""
+    PeriodicCalendar
+
+When interpolating outside of range, restart from the beginning.
+
+For example, if the data is defined from t0 = 0 to t1 = 10, extrapolating at t=13 is
+equivalent to interpolating at t=2. In practice, we identify `t1 + dt` to be `t0` again.
+
+This can be used to repeat one year of data over and over.
+
+`PeriodicCalendar` requires data to be uniformly sampled in time.
+
+Note: this `PeriodicCalendar` is different from what you might be used to for `Periodic`,
+where the identification is `t1 = t0`.
+"""
+struct PeriodicCalendar <: AbstractInterpolationBoundaryMethod end
+
+"""
+    Flat
+
+When interpolating outside of range, use the boundary value.
+
+For example, if the data is defined from t0 = 0 to t1 = 10, extrapolating at t=13 returns
+the value at t1 = 10. When interpolating at t=-3, use t0 = 0.
+"""
+struct Flat <: AbstractInterpolationBoundaryMethod end
 
 """
     TimeVaryingInput(func)
@@ -101,17 +146,46 @@ an analytic one. In that case, `args` and `kwargs` are passed down to the functi
 function evaluate! end
 
 """
-    NearestNeighbor
+    extrapolation_bc(aim::AbstractInterpolationMethod)
+
+Return the interpolation boundary conditions associated to `aim`.
+"""
+function extrapolation_bc(aim::AbstractInterpolationMethod)
+    return aim.extrapolation_bc
+end
+
+"""
+    NearestNeighbor(extrapolation_bc::AbstractInterpolationBoundaryMethod)
 
 Return the value corresponding to the point closest to the input time.
+
+`extrapolation_bc` specifies how to deal with out of boundary values.
+The default value is `Throw`.
 """
-struct NearestNeighbor <: AbstractInterpolationMethod end
+struct NearestNeighbor{BC <: AbstractInterpolationBoundaryMethod} <:
+       AbstractInterpolationMethod
+    extrapolation_bc::BC
+end
+
+function NearestNeighbor()
+    return NearestNeighbor(Throw())
+end
 
 """
-    LinearInterpolation
+    LinearInterpolation(extrapolation_bc::AbstractInterpolationBoundaryMethod)
 
 Perform linear interpolation between the two neighboring points.
+
+`extrapolation_bc` specifies how to deal with out of boundary values.
+The default value is `Throw`.
 """
-struct LinearInterpolation <: AbstractInterpolationMethod end
+struct LinearInterpolation{BC <: AbstractInterpolationBoundaryMethod} <:
+       AbstractInterpolationMethod
+    extrapolation_bc::BC
+end
+
+function LinearInterpolation()
+    return LinearInterpolation(Throw())
+end
 
 end

@@ -11,6 +11,8 @@ import ClimaUtilities.Regridders
 import ClimaUtilities.FileReaders: AbstractFileReader, NCFileReader, read, read!
 import ClimaUtilities.Regridders: AbstractRegridder, regrid
 
+import ClimaUtilities.Utils: isequispaced
+
 import ClimaUtilities.DataHandling
 
 """
@@ -235,6 +237,21 @@ function DataHandling.available_dates(data_handler::DataHandler)
 end
 
 """
+    dt(data_handler::DataHandler)
+
+Return the time interval between data points for the data in `data_handler`.
+
+This requires the data to be defined on a equispaced temporal mesh.
+"""
+function DataHandling.dt(data_handler::DataHandler)
+    isequispaced(DataHandling.available_times(data_handler)) ||
+        error("dt not defined for non equispaced data")
+    return DataHandling.available_times(data_handler)[begin + 1] -
+           DataHandling.available_times(data_handler)[begin]
+end
+
+
+"""
     time_to_date(data_handler::DataHandler, time::AbstractFloat)
 
 Convert the given time to a calendar date.
@@ -255,6 +272,8 @@ end
 
 Return the time in seconds of the snapshot before the given `time`.
 If `time` is one of the snapshots, return itself.
+
+If `time` is not in the `data_handler`, return an error.
 """
 function DataHandling.previous_time(
     data_handler::DataHandler,
@@ -274,6 +293,7 @@ function DataHandling.previous_time(
     else
         index = searchsortedfirst(data_handler.available_dates, date) - 1
     end
+    index < 1 && error("Date $date is before available dates")
     return data_handler.available_times[index]
 end
 
@@ -283,6 +303,8 @@ end
 
 Return the time in seconds of the snapshot after the given `time`.
 If `time` is one of the snapshots, return the next time.
+
+If `time` is not in the `data_handler`, return an error.
 """
 function DataHandling.next_time(data_handler::DataHandler, time::AbstractFloat)
     date = time_to_date(data_handler, time)
@@ -296,6 +318,8 @@ function DataHandling.next_time(data_handler::DataHandler, date::Dates.DateTime)
     else
         index = searchsortedfirst(data_handler.available_dates, date)
     end
+    index > length(data_handler.available_dates) &&
+        error("Date $date is after available dates")
     return data_handler.available_times[index]
 end
 
