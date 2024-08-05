@@ -17,8 +17,6 @@ function NCFileReader end
 
 function read end
 
-function read! end
-
 function available_dates end
 
 function close_all_ncfiles end

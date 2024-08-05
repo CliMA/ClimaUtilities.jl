@@ -6,18 +6,20 @@ v0.1.12
 
 - Add support for boundary conditions in interpolation. PR
   [#84](https://github.com/CliMA/ClimaUtilities.jl/pull/84)
+- Increased allocations in regridding. `read!` method removed. PR
+  [#84](https://github.com/CliMA/ClimaUtilities.jl/pull/84)
 
 v0.1.11
 ------
 
-- Reduced alloctions in regridding. New method `regridded_snapshot!`. PR
-  [#72](https://github.com/CliMA/ClimaUtilities.jl/pull/72)
+- Reduced allocations in regridding. New method `read!`. PR
+  [#83](https://github.com/CliMA/ClimaUtilities.jl/pull/83)
 
 v0.1.10
 ------
 
-- Reduced alloctions in regridding. New method `read!`. PR
-  [#83](https://github.com/CliMA/ClimaUtilities.jl/pull/83)
+- Reduced allocations in regridding. New method `regridded_snapshot!`. PR
+  [#72](https://github.com/CliMA/ClimaUtilities.jl/pull/72)
 
 v0.1.9
 ------

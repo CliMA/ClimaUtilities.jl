@@ -78,7 +78,6 @@ close(v_var)
 ```@docs
 ClimaUtilities.FileReaders.NCFileReader
 ClimaUtilities.FileReaders.read
-ClimaUtilities.FileReaders.read!
 ClimaUtilities.FileReaders.available_dates
 ClimaUtilities.FileReaders.close_all_ncfiles
 Base.close
