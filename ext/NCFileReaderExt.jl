@@ -226,28 +226,4 @@ function FileReaders.read(file_reader::NCFileReader)
     end
 end
 
-"""
-    read!(dest, file_reader::NCFileReader)
-
-Read and preprocess data (for static datasets), saving the output to `dest`.
-"""
-function FileReaders.read!(dest, file_reader::NCFileReader)
-    dest .= FileReaders.read(file_reader)
-    return nothing
-end
-
-"""
-    read!(dest, file_reader::NCFileReader, date::Dates.DateTime)
-
-Read and preprocess the data at the given `date`, saving the output to `dest`.
-"""
-function FileReaders.read!(
-    dest,
-    file_reader::NCFileReader,
-    date::Dates.DateTime,
-)
-    dest .= FileReaders.read(file_reader, date)
-    return nothing
-end
-
 end
