@@ -8,7 +8,12 @@ import ClimaCore: DeviceSideContext
 import ClimaCore.Fields: Adapt
 
 import ClimaUtilities.Utils:
-    searchsortednearest, linear_interpolation, isequispaced, wrap_time
+    searchsortednearest,
+    linear_interpolation,
+    isequispaced,
+    wrap_time,
+    bounding_dates,
+    endofperiod
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:
     AbstractInterpolationMethod, AbstractTimeVaryingInput
@@ -18,7 +23,13 @@ import ClimaUtilities.TimeVaryingInputs: extrapolation_bc
 
 import ClimaUtilities.DataHandling
 import ClimaUtilities.DataHandling:
-    DataHandler, previous_time, next_time, regridded_snapshot!, available_times
+    DataHandler,
+    previous_time,
+    next_time,
+    regridded_snapshot!,
+    available_times,
+    available_dates,
+    date_to_time
 
 # Ideally, we should be able to split off the analytic part in a different
 # extension, but precompilation stops working when we do so
@@ -139,7 +150,7 @@ function TimeVaryingInputs.TimeVaryingInput(
         regridder_kwargs,
         file_reader_kwargs,
     )
-    if extrapolation_bc(method) isa PeriodicCalendar &&
+    if extrapolation_bc(method) isa PeriodicCalendar{Nothing} &&
        !isequispaced(DataHandling.available_times(data_handler))
         error(
             "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
@@ -173,6 +184,93 @@ function TimeVaryingInputs.evaluate!(
     return nothing
 end
 
+function _time_range_dt_dt_e(itp::InterpolatingTimeVaryingInput23D)
+    return _time_range_dt_dt_e(itp, extrapolation_bc(itp.method))
+end
+
+function _time_range_dt_dt_e(
+    itp::InterpolatingTimeVaryingInput23D,
+    extrapolation_bc::PeriodicCalendar{Nothing},
+)
+    isequispaced(DataHandling.available_times(itp.data_handler)) || error(
+        "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
+    )     # Here for good measure
+    dt = DataHandling.dt(itp.data_handler)
+    return itp.range[begin], itp.range[end], dt, dt / 2
+end
+
+function _time_range_dt_dt_e(
+    itp::InterpolatingTimeVaryingInput23D,
+    extrapolation_bc::PeriodicCalendar,
+)
+    period, repeat_date = extrapolation_bc.period, extrapolation_bc.repeat_date
+
+    date_init, date_end =
+        bounding_dates(available_dates(itp.data_handler), repeat_date, period)
+    # Suppose date_init date_end are 15/01/23 and 14/12/23
+    # dt_e is endofperiod(14/12/23) - 14/12/23
+    # dt is 15/01/23 + period - 14/12/23
+    # if period = 1 Year, dt_e = 17 days / Second(1)
+
+    t_init, t_end = date_to_time(itp.data_handler, date_init),
+    date_to_time(itp.data_handler, date_end)
+    # We have to add 1 MilliSecond because endofperiod(date_end, period) returns
+    # the very last millisecond *before* the next period
+    dt_e =
+        (endofperiod(date_end, period) - date_end + Dates.Millisecond(1)) /
+        Dates.Second(1)
+    dt = (date_init + period - date_end) / Dates.Second(1)
+    return t_init, t_end, dt, dt_e
+end
+
+"""
+    _interpolation_times_periodic_calendar(time, itp::InterpolatingTimeVaryingInput23D)
+
+Return time, t_init, t_end, dt, dt_e.
+
+Implementation details
+======================
+
+Okay, how are we implementing PeriodicCalendar?
+
+There are two modes, one with provided `period` and `repeat_date`, and the other without.
+When it comes to implementation, we reduce the first case to the second one. So, let's start
+by looking at the second case, then, we will look at how we reduce it to the first one.
+
+In the second case, we have `t_init`, `t_end`, and a `dt`. `t_init`, `t_end` define the earliest and
+latest data we are going to use and are in units of simulation time. `dt` is so that `t_init =
+t_end + dt`. We are also given a `dt_e` so that, for interpolation purposes, we attribute
+points that are within `t_end + dt_e` to `t_end`, and points that are beyond that to `t_init`. For
+equispaced timeseries, `dt_e = 0.5dt`.
+
+Once we have all of this, we can wrap the given time to be within `t_init` and `t_end + dt`. For
+all the cases where the wrapped time is between `t_init` and `t_end`, the function can use the
+standard interpolation scheme, so, the only case we have to worry about is when the wrapped
+time is between `t_end` and `t_end + dt`. We handle this case manually by working explicitly
+with `dt_e`.
+
+Now, let us reduce the case where we are given dates and a period.
+
+Let us look at an example, suppose we have data defined at these dates
+
+16/12/22, 15/01/23 ...,  14/12/23, 13/12/24
+
+and we want to repeat the year 2023. period will be `Dates.Year` and `repeat_date` will be
+01/01/2023 (or any date in the year 2023)
+
+First, we identify the bounding dates that correspond to the given period that has to be
+repeated. We can assume that dates are sorted. In this case, this will be 15/01/23 and
+14/12/23. Then, we translate this into simulation time and compute `dt` and `dt_e`. That's it!
+"""
+function _interpolation_times_periodic_calendar(
+    time,
+    itp::InterpolatingTimeVaryingInput23D,
+)
+    t_init, t_end, dt, dt_e = _time_range_dt_dt_e(itp)
+    time = wrap_time(time, t_init, t_end + dt)
+    return time, t_init, t_end, dt, dt_e
+end
+
 function TimeVaryingInputs.evaluate!(
     dest,
     itp::InterpolatingTimeVaryingInput23D,
@@ -181,19 +279,17 @@ function TimeVaryingInputs.evaluate!(
     args...;
     kwargs...,
 )
-
     if extrapolation_bc(itp.method) isa PeriodicCalendar
-        t_init, t_end = itp.range
-        dt = DataHandling.dt(itp.data_handler)
-        time = wrap_time(time, t_init, t_end; extend_past_t_end = true, dt)
+        time, t_init, t_end, _, dt_e =
+            _interpolation_times_periodic_calendar(time, itp)
 
         # Now time is between t_init and t_end + dt. We are doing nearest neighbor
-        # interpolation here, and when time >= t_end + 0.5dt we need to use t_init instead
-        # of t_end as neighbor.
+        # interpolation here, and when time >= t_end + dt_e we need to use t_init instead of
+        # t_end as neighbor.
 
         # TODO: It would be nice to handle this edge case directly instead of copying the
         # code
-        if (time - t_end) <= 0.5dt
+        if (time - t_end) <= dt_e
             regridded_snapshot!(dest, itp.data_handler, t_end)
         else
             regridded_snapshot!(dest, itp.data_handler, t_init)
@@ -229,9 +325,9 @@ function TimeVaryingInputs.evaluate!(
     # y = (1 - coeff) * y0 + coeff * y1
 
     if extrapolation_bc(itp.method) isa PeriodicCalendar
-        t_init, t_end = itp.range
-        dt = DataHandling.dt(itp.data_handler)
-        time = wrap_time(time, t_init, t_end; extend_past_t_end = true, dt)
+        time, t_init, t_end, dt, _ =
+            _interpolation_times_periodic_calendar(time, itp)
+
         # We have to handle separately the edge case where the desired time is past t_end.
         # In this case, we know that t_end <= time <= t_end + dt and we have to do linear
         # interpolation between t_init and t_end. In this case, y0 = regridded_field(t_end),
@@ -240,8 +336,7 @@ function TimeVaryingInputs.evaluate!(
         # TODO: It would be nice to handle this edge case directly instead of copying the
         # code
         if time > t_end
-            field_t0 = itp.preallocated_regridded_fields[1]
-            field_t1 = itp.preallocated_regridded_fields[2]
+            field_t0, field_t1 = itp.preallocated_regridded_fields
             regridded_snapshot!(field_t0, itp.data_handler, t_end)
             regridded_snapshot!(field_t1, itp.data_handler, t_init)
             coeff = (time - t_end) / dt
@@ -254,8 +349,7 @@ function TimeVaryingInputs.evaluate!(
         previous_time(itp.data_handler, time), next_time(itp.data_handler, time)
     coeff = (time - t0) / (t1 - t0)
 
-    field_t0 = itp.preallocated_regridded_fields[1]
-    field_t1 = itp.preallocated_regridded_fields[2]
+    field_t0, field_t1 = itp.preallocated_regridded_fields
     regridded_snapshot!(field_t0, itp.data_handler, t0)
     regridded_snapshot!(field_t1, itp.data_handler, t1)
 
