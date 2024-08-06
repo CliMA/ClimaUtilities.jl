@@ -2,6 +2,8 @@ using Test
 using ClimaUtilities
 using Aqua
 
+using Documenter
+
 @testset "Aqua tests (performance)" begin
     # This tests that we don't accidentally run into
     # https://github.com/JuliaLang/julia/issues/29393
@@ -30,4 +32,14 @@ end
     Aqua.test_piracies(ClimaUtilities)
 end
 
-nothing
+@testset "Test docstrings" begin
+
+    DocMeta.setdocmeta!(
+        ClimaUtilities,
+        :DocTestSetup,
+        :(using Dates);
+        recursive = true,
+    )
+
+    doctest(ClimaUtilities; manual = false)
+end

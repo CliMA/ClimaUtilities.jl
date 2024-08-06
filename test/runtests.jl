@@ -15,8 +15,8 @@ for name in keys(artifacts)
 end
 
 # Performance and code quality tests
-@safetestset "Aqua tests" begin
-    include("aqua.jl")
+@safetestset "Quality Assurance tests" begin
+    include("quality_assurance.jl")
 end
 
 # Unit tests
