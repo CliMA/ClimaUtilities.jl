@@ -68,19 +68,25 @@ Check if the vector `v` has uniform spacing between its elements within a given 
 # Example
 
 ```jldoctest
+julia> import ClimaUtilities.Utils: isequispaced
+
 julia> v1 = [1, 2, 3, 4, 5];
+
 julia> isequispaced(v1)
 true
 
 julia> v2 = [1, 2, 4, 8, 16];
+
 julia> isequispaced(v2)
 false
 
 julia> v3 = [1.0, 2.0, 3.0, 4.0, 5.0];
+
 julia> isequispaced(v3)
 true
 
 julia> v4 = [1.0, 2.0, 3.1, 4.0, 5.0];
+
 julia> isequispaced(v4)
 false
 ```
@@ -108,7 +114,10 @@ Examples
 With `extend_past_t_end = false`:
 
 ```jldoctest
+julia> import ClimaUtilities.Utils: wrap_time
+
 julia> t_init = 0.1; t_end = 1.0;
+
 julia> wrap_time(0.1, t_init, t_end)
 0.1
 
@@ -127,7 +136,6 @@ julia> wrap_time(1.6, t_init, t_end)
 julia> wrap_time(2.2, t_init, t_end)
 0.4
 
-# Floating points, 1.9 should be identified with 0.1, but
 julia> wrap_time(1.9, t_init, t_end)
 0.9999999999999998
 ```
@@ -148,7 +156,8 @@ period is `Month`, return 01/05/2022 at 00:00.
 Examples
 ========
 ```jldoctest
-julia> using Dates
+julia> import ClimaUtilities.Utils: beginningofperiod
+
 julia> beginningofperiod(Date(1993, 11, 19), Year(1))
 1993-01-01T00:00:00
 
@@ -188,7 +197,8 @@ Examples
 ========
 
 ```jldoctest
-julia> using Dates
+julia> import ClimaUtilities.Utils: endofperiod
+
 julia> endofperiod(Date(1993, 11, 19), Year(1))
 1993-12-31T23:59:59
 
@@ -250,18 +260,20 @@ Examples
 
 
 ```jldoctest
-julia> using Dates
+julia> import ClimaUtilities.Utils: bounding_dates
+
 julia> dates = [Date(1993, 8, 13),
                 Date(1993, 8, 18),
                 Date(1993, 11, 19),
                 Date(1994, 1, 1),
                 Date(1998, 1, 17),
-                ]
-julia> bounding_dates(dates, Date(1993, 1, 1), Year(1))
-(DateTime("1993-08-13"), DateTime("1993-11-19T23:59:59"))
+                ];
 
-julia> bounding_dates(dates, Date(1993, 1, 1), Month(1))
-(DateTime("1993-08-13"), DateTime("1993-08-18T23:59:59"))
+julia> bounding_dates(dates, Date(1993, 10, 1), Year(1))
+(Date("1993-08-13"), Date("1993-11-19"))
+
+julia> bounding_dates(dates, Date(1993, 8, 1), Month(1))
+(Date("1993-08-13"), Date("1993-08-18"))
 ```
 """
 function bounding_dates(
