@@ -10,7 +10,12 @@ import ClimaUtilities.Utils:
 import ClimaUtilities.TimeVaryingInputs:
     AbstractInterpolationMethod, AbstractTimeVaryingInput
 import ClimaUtilities.TimeVaryingInputs:
-    NearestNeighbor, LinearInterpolation, Throw, Flat, PeriodicCalendar
+    NearestNeighbor,
+    LinearInterpolation,
+    LinearPeriodFillingInterpolation,
+    Throw,
+    Flat,
+    PeriodicCalendar
 import ClimaUtilities.TimeVaryingInputs: extrapolation_bc
 
 import ClimaUtilities.TimeVaryingInputs
@@ -120,6 +125,12 @@ function TimeVaryingInputs.TimeVaryingInput(
     issorted(times) || error("Can only interpolate with sorted times")
     length(times) == length(vals) ||
         error("times and vals have different lengths")
+
+    if method isa LinearPeriodFillingInterpolation
+        error(
+            "LinearPeriodFillingInterpolation is not supported when the input data is 1D",
+        )
+    end
 
     if extrapolation_bc(method) isa PeriodicCalendar
         if extrapolation_bc(method) isa PeriodicCalendar{Nothing}

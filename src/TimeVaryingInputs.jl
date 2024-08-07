@@ -30,6 +30,7 @@
 
 module TimeVaryingInputs
 
+import Dates: Year
 import Dates: DateTime, DatePeriod, Date
 
 """
@@ -223,6 +224,85 @@ end
 
 function LinearInterpolation()
     return LinearInterpolation(Throw())
+end
+
+"""
+    LinearPeriodFillingInterpolation(period::Dates.DatePeriod,
+                                     extrapolation_bc::AbstractInterpolationBoundaryMethod)
+
+Perform a period-filling linear interpolation between the two neighboring points.
+
+This interpolation is period-filling because it ensures that there is no gap on input data
+larger than the given period.
+
+This interpolation method is best explained with an example. Let us assume data is defined
+on 03/01/1985, 05/01/1985, 11/02/1985, ... 17/12/1985, 07/01/1995, 11/01/1995, 14/02/1995,
+..., 19/12/1995. In this case, data is defined every 10 years (date format is DD/MM/YYYY).
+You can think of `LinearPeriodFillingInterpolation` as first filling the years in between by
+performing linear interpolation across years, then performs a second linear interpolation
+for the specific day (in actuality, the order of operations is reversed). In this example,
+suppose first we want to evaluate the input on 04/01/1985. Since we have data for 1985, we
+simply perform linear interpolation between 03/01/1985 and 05/01/1985. Suppose now, we want
+to evaluate on 08/01/1987. We do not have data for the year 1987, so, we perform three
+linear interpolations, first to evaluate the data on 08/01/1985 and 08/01/1995 (using the
+neighboring points), and then between the resulting two values.
+
+`extrapolation_bc` specifies how to deal with out of boundary values. The default value is
+`Throw`, meaning that extrapolation is not allowed.
+
+When is this interpolation method useful?
+==========================================
+
+This interpolation method is useful when certain variations are more important than others.
+For example, suppose you have hourly data defined once a month, on the 15th. A naive
+interpolation method would interpolate use data from 15 Jan at 23.00 and 15 Feb at 00.00 to
+interpolate on any day/hour of the days in between 15 Jan and 15 Feb. However, this would be
+remove the diurnal cycle. `LinearPeriodFillingInterpolation` solves this problem.
+
+Implementation details
+======================
+
+How is `LinearPeriodFillingInterpolation` actually implemented?
+
+First, let get a high level perspective. Let us continue with the example above.
+
+There are two cases:
+
+First, the target date falls within other dates that are boundary dates for the two
+neighboring years. An example is 08/01/1986 because both 08/01/1985 and 08/01/1995 have two
+neighboring dates (05/01/1985, 11/02/1985 and 07/01/1995, 11/01/1995). This is the easy
+case: we interpolate 05/01/1985 and 11/02/1985 to get 08/01/1985, and 07/01/1995 and
+11/01/1995 to get 08/01/1995, and interpolate the two results to get 08/01/1986.
+
+Second, the other cases, when the target date does not have two boundary dates defined in
+1995. An example is 04/01/1986 because 07/01/1995 is the earliest date available on that
+year. We have to be careful with this interpolation because we do not want to mix December
+1985 with January 1995. In this case, we perform another interpolation to obtain a date in
+December 1994 and reduce to the first case using this date as second half of the
+interpolation bracket. To find what date to interpolate to, we walk the available dates
+backwards in time at find the first date that we can interpolate because it falls into the
+first case. In this example, it is 17/12/1994 (which we can obtain because we have data for
+17/12/1985 and we can interpolate data on 17/12/1995).
+"""
+struct LinearPeriodFillingInterpolation{
+    BC <: AbstractInterpolationBoundaryMethod,
+} <: AbstractInterpolationMethod
+    period::DatePeriod
+    extrapolation_bc::BC
+
+    function LinearPeriodFillingInterpolation(
+        period::DatePeriod = Year(1),
+        bc::AbstractInterpolationBoundaryMethod = Throw(),
+    )
+        period.value == 1 ||
+            error("Only simple periods are supported (e.g., Year(1))")
+        period isa Year ||
+            @warn("Only `period = Year(1)` has been tested, check results!")
+        bc isa PeriodicCalendar && error(
+            "LinearPeriodFillingInterpolation is incompatible with PeriodicCalendar",
+        )
+        return new{typeof(bc)}(period, bc)
+    end
 end
 
 end

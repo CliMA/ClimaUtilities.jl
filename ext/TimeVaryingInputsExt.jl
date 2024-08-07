@@ -13,13 +13,21 @@ import ClimaUtilities.Utils:
     isequispaced,
     wrap_time,
     bounding_dates,
+    beginningofperiod,
     endofperiod,
-    period_to_seconds_float
+    period_to_seconds_float,
+    unique_periods
+
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:
     AbstractInterpolationMethod, AbstractTimeVaryingInput
 import ClimaUtilities.TimeVaryingInputs:
-    NearestNeighbor, LinearInterpolation, Throw, Flat, PeriodicCalendar
+    NearestNeighbor,
+    LinearInterpolation,
+    LinearPeriodFillingInterpolation,
+    Throw,
+    Flat,
+    PeriodicCalendar
 import ClimaUtilities.TimeVaryingInputs: extrapolation_bc
 
 import ClimaUtilities.DataHandling
@@ -117,9 +125,10 @@ function TimeVaryingInputs.TimeVaryingInput(
     range = (available_times[begin], available_times[end])
 
     # TODO: Generalize the number of _regridded_fields depending on the interpolation
-    # stencil
+    # stencil. At the moment, we use four for LinearPeriodFilling
+    _num_fields = method isa LinearPeriodFillingInterpolation ? 4 : 2
     preallocated_regridded_fields =
-        (zeros(data_handler.target_space), zeros(data_handler.target_space))
+        ntuple(_ -> zeros(data_handler.target_space), _num_fields)
 
     return InterpolatingTimeVaryingInput23D(
         data_handler,
@@ -325,6 +334,8 @@ function TimeVaryingInputs.evaluate!(
     #
     # y = (1 - coeff) * y0 + coeff * y1
 
+    field_t0, field_t1 = itp.preallocated_regridded_fields[begin:(begin + 1)]
+
     if extrapolation_bc(itp.method) isa PeriodicCalendar
         time, t_init, t_end, dt, _ =
             _interpolation_times_periodic_calendar(time, itp)
@@ -337,7 +348,6 @@ function TimeVaryingInputs.evaluate!(
         # TODO: It would be nice to handle this edge case directly instead of copying the
         # code
         if time > t_end
-            field_t0, field_t1 = itp.preallocated_regridded_fields
             regridded_snapshot!(field_t0, itp.data_handler, t_end)
             regridded_snapshot!(field_t1, itp.data_handler, t_init)
             coeff = (time - t_end) / dt
@@ -355,7 +365,6 @@ function TimeVaryingInputs.evaluate!(
         next_time(itp.data_handler, time)
         coeff = (time - t0) / (t1 - t0)
 
-        field_t0, field_t1 = itp.preallocated_regridded_fields
         regridded_snapshot!(field_t0, itp.data_handler, t0)
         regridded_snapshot!(field_t1, itp.data_handler, t1)
 
@@ -363,6 +372,8 @@ function TimeVaryingInputs.evaluate!(
     end
     return nothing
 end
+
+include("time_varying_inputs_linearperiodfilling.jl")
 
 """
     close(time_varying_input::TimeVaryingInputs.AbstractTimeVaryingInput)

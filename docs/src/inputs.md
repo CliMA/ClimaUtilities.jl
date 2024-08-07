@@ -29,12 +29,60 @@ regridding onto the computational domains (using [`Regridders`](@ref) and
 - analytic functions of time;
 - pairs of 1D arrays (for `PointSpaces`);
 - 2/3D NetCDF files;
-- linear interpolation in time (default) and nearest neighbors;
+- linear interpolation in time (default), nearest neighbors, and "period filling";
 - boundary conditions and repeating periodic data.
 
 It is possible to pass down keyword arguments to underlying constructors in the
 `Regridder` with the `regridder_kwargs` and `file_reader_kwargs`. These have to
 be a named tuple or a dictionary that maps `Symbol`s to values.
+
+### Extrapolation boundary conditions
+
+`TimeVaryingInput`s can have multiple boundary conditions for extrapolation. By
+default, the `Throw` condition is used, meaning that interpolating onto a point
+that is outside the range of definition of the data is not allowed. Other
+boundary conditions are allowed. With the `Flat` boundary condition, when
+interpolating outside of the range of definition, return the value of the
+of closest boundary is used instead.
+
+Another boundary condition that is often useful is `PeriodicCalendar`, which
+repeats data over and over.
+
+In general `PeriodicCalendar` takes two inputs: the `period` and `repeat_date`.
+The repeat period is a `Dates.DatePeriod` (e.g., `Dates.Year(1)`) that defines
+the duration of the period that has to be repeated. The `repeat_date` defines
+what date range needs to be repeated. For example, if `period = Dates.Month(1)`
+and `repeat_date = Dates.Date(1993, 11)`, November 1993 will be repeated.
+
+The two inputs are not required. When they are not provided, `ClimaUtilities`
+will assume that the input data constitutes one period and use that. For
+example, if the data is defined from `t0` to `t1` (e.g., 1 and 5), interpolating
+over `t > t1` (e.g., 7) is equivalent to interpolating to `t*` where `t*` is the
+modulus of `t` and the range (3 in this case). In this case, `PeriodicCalendar`
+requires the data to be uniformly spaced in time. To enable this boundary
+condition, pass `LinearInterpolation(PeriodicCalendar())` to the
+`TimeVaryingInput` (or `NearestNeighbor(PeriodicCalendar())`).
+
+> Note: this `PeriodicCalendar` is different from what you might be used to, where the
+> identification is `t1 = t0`. Here, we identify `t1 + dt = t0`. This is so that
+> we can use it to repeat calendar data.
+
+### `LinearPeriodFillingInterpolation`
+
+Often, data is not available at the frequency we would like it to be. For
+example, we might have hourly data for a given quantity but only on the 15th of
+the month. Performing linear interpolation with data with this type of gap is
+typically not accurate. Consider the example of a quantity with a diurnal cycle
+but measured only once a month. If we were to blindly perform linear
+interpolation, we would find that the diurnal cycle is completely removed for
+every day of the month but the 15th. This is because we would interpolate the
+last point for the day of a given month, with the first for the following.
+
+`LinearPeriodFillingInterpolation` is an interpolation method that solves this
+problem by preserving periodic structures. This is accomplished by performing
+linear interpolation across corresponding periods (in the case of the day,
+across corresponding hours of different days). For more information, please
+refer to the docstring.
 
 ### Example
 
@@ -75,36 +123,6 @@ albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_
 # In either cases, we can always call evolve_model(albedo_tv, albedo_field), so
 # model developers do not have to worry about anything :)
 ```
-
-`TimeVaryingInput`s can have multiple boundary conditions for extrapolation. By
-default, the `Throw` condition is used, meaning that interpolating onto a point
-that is outside the range of definition of the data is not allowed. Other
-boundary conditions are allowed. With the `Flat` boundary condition, when
-interpolating outside of the range of definition, return the value of the
-of closest boundary is used instead.
-
-Another boundary condition that is often useful is `PeriodicCalendar`, which
-repeats data over and over.
-
-In general `PeriodicCalendar` takes two inputs: the `period` and `repeat_date`.
-The repeat period is a `Dates.DatePeriod` (e.g., `Dates.Year(1)`) that defines
-the duration of the period that has to be repeated. The `repeat_date` defines
-what date range needs to be repeated. For example, if `period = Dates.Month(1)`
-and `repeat_date = Dates.Date(1993, 11)`, November 1993 will be repeated.
-
-The two inputs are not required. When they are not provided, `ClimaUtilities`
-will assume that the input data constitutes one period and use that. For
-example, if the data is defined from `t0` to `t1` (e.g., 1 and 5), interpolating
-over `t > t1` (e.g., 7) is equivalent to interpolating to `t*` where `t*` is the
-modulus of `t` and the range (3 in this case). In this case, `PeriodicCalendar`
-requires the data to be uniformly spaced in time. To enable this boundary
-condition, pass `LinearInterpolation(PeriodicCalendar())` to the
-`TimeVaryingInput` (or `NearestNeighbor(PeriodicCalendar())`).
-
-> Note: this `PeriodicCalendar` is different from what you might be used to, where the
-> identification is `t1 = t0`. Here, we identify `t1 + dt = t0`. This is so that
-> we can use it to repeat calendar data.
-
 
 ## `SpaceVaryingInputs`
 
