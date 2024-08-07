@@ -20,7 +20,6 @@ import ClimaUtilities.DataHandling
          FR <: AbstractFileReader,
          REG <: AbstractRegridder,
          SPACE <: ClimaCore.Spaces.AbstractSpace,
-         REF_DATE <: Dates.DateTime,
          TSTART <: AbstractFloat,
          DATES <: AbstractArray{<:Dates.DateTime},
          DIMS,
@@ -44,7 +43,6 @@ struct DataHandler{
     FR <: AbstractFileReader,
     REG <: AbstractRegridder,
     SPACE <: ClimaCore.Spaces.AbstractSpace,
-    REF_DATE <: Dates.DateTime,
     TSTART <: AbstractFloat,
     DATES <: AbstractArray{<:Dates.DateTime},
     DIMS,
@@ -71,7 +69,7 @@ struct DataHandler{
     t_start::TSTART
 
     """Reference calendar date at the beginning of the simulation."""
-    reference_date::REF_DATE
+    reference_date::Dates.DateTime
 
     """Timesteps over which the data is defined (in seconds)"""
     available_times::TIMES
@@ -129,7 +127,11 @@ function DataHandling.DataHandler(
     file_path::AbstractString,
     varname::AbstractString,
     target_space::ClimaCore.Spaces.AbstractSpace;
-    reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
+    reference_date::Union{Dates.DateTime, Dates.Date} = Dates.DateTime(
+        1979,
+        1,
+        1,
+    ),
     t_start::AbstractFloat = 0.0,
     regridder_type = nothing,
     cache_max_size::Int = 128,
@@ -190,7 +192,7 @@ function DataHandling.DataHandler(
         file_reader.dimensions,
         available_dates,
         t_start,
-        reference_date,
+        Dates.DateTime(reference_date),
         available_times,
         _cached_regridded_fields,
     )
