@@ -10,7 +10,8 @@ import ClimaUtilities.Utils:
     beginningofperiod,
     endofperiod,
     bounding_dates,
-    period_to_seconds_float
+    period_to_seconds_float,
+    unique_periods
 
 @testset "searchsortednearest" begin
     A = 10 * collect(range(1, 10))
@@ -99,4 +100,44 @@ end
     @test period_to_seconds_float(Week(1)) == 604800.0
     @test period_to_seconds_float(Month(1)) == 2.629746e6
     @test period_to_seconds_float(Year(1)) == 3.1556952e7
+end
+
+@testset "unique_periods" begin
+    dates = [
+        DateTime(2022, 1, 1),
+        DateTime(2022, 5, 15),
+        DateTime(2023, 1, 1),
+        DateTime(2023, 5, 5),
+        DateTime(2024, 10, 10),
+    ]
+
+    # Test with non simple period
+    @test_throws ErrorException unique_periods(dates, Year(2))
+
+    @test unique_periods(dates, Year(1)) ==
+          [DateTime(2022, 1, 1), DateTime(2023, 1, 1), DateTime(2024, 1, 1)]
+
+    @test unique_periods(dates, Month(1)) == [
+        DateTime(2022, 1, 1),
+        DateTime(2022, 5, 1),
+        DateTime(2023, 1, 1),
+        DateTime(2023, 5, 1),
+        DateTime(2024, 10, 1),
+    ]
+
+    @test unique_periods(dates, Week(1)) == [
+        DateTime(2021, 12, 27),
+        DateTime(2022, 5, 9),
+        DateTime(2022, 12, 26),
+        DateTime(2023, 5, 1),
+        DateTime(2024, 10, 7),
+    ]
+
+    @test unique_periods(dates, Day(1)) == [
+        DateTime(2022, 1, 1),
+        DateTime(2022, 5, 15),
+        DateTime(2023, 1, 1),
+        DateTime(2023, 5, 5),
+        DateTime(2024, 10, 10),
+    ]
 end
