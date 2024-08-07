@@ -60,6 +60,10 @@ end
     include("time_varying_inputs23.jl")
 end
 
+@safetestset "TimeVaryingInputs tests LinearPeriodFilling" begin
+    include("time_varying_inputs_linearperiodfilling.jl")
+end
+
 @safetestset "ClimaArtifacts tests" begin
     include("clima_artifacts.jl")
 end
