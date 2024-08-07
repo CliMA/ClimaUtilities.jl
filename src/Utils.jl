@@ -1,7 +1,8 @@
 module Utils
 
-import Dates: DatePeriod, Date, DateTime, Year, Month, Week, Day, Second
-import Dates: year, month, week, dayofweek, day
+import Dates: Period, DatePeriod, Date, DateTime, OtherPeriod
+import Dates: Year, Month, Week, Day, Second
+import Dates: year, month, week, dayofweek, day, days
 
 """
     searchsortednearest(a, x)
@@ -258,7 +259,6 @@ period one year).
 Examples
 ========
 
-
 ```jldoctest
 julia> import ClimaUtilities.Utils: bounding_dates
 
@@ -290,6 +290,45 @@ function bounding_dates(
     length(dates_in_period) >= 2 ||
         error("$(target_date) not in given dates for given period")
     return first(dates_in_period), last(dates_in_period)
+end
+
+"""
+    period_to_seconds_float(period::Period)
+
+Convert the given `period` to seconds in Float64.
+
+```jldoctest
+julia> import ClimaUtilities.Utils: period_to_seconds_float
+
+julia> period_to_seconds_float(Millisecond(1))
+0.001
+
+julia> period_to_seconds_float(Second(1))
+1.0
+
+julia> period_to_seconds_float(Minute(1))
+60.0
+
+julia> period_to_seconds_float(Hour(1))
+3600.0
+
+julia> period_to_seconds_float(Day(1))
+86400.0
+
+julia> period_to_seconds_float(Week(1))
+604800.0
+
+julia> period_to_seconds_float(Month(1))
+2.629746e6
+
+julia> period_to_seconds_float(Year(1))
+3.1556952e7
+```
+"""
+function period_to_seconds_float(period::Period)
+    # See https://github.com/JuliaLang/julia/issues/55406
+    period isa OtherPeriod && (period = Second(Day(1)) * days(period))
+    return period / Second(1)
 end
 
 end

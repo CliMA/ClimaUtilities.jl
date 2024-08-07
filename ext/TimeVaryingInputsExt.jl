@@ -13,7 +13,8 @@ import ClimaUtilities.Utils:
     isequispaced,
     wrap_time,
     bounding_dates,
-    endofperiod
+    endofperiod,
+    period_to_seconds_float
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:
     AbstractInterpolationMethod, AbstractTimeVaryingInput
@@ -210,16 +211,16 @@ function _time_range_dt_dt_e(
     # Suppose date_init date_end are 15/01/23 and 14/12/23
     # dt_e is endofperiod(14/12/23) - 14/12/23
     # dt is 15/01/23 + period - 14/12/23
-    # if period = 1 Year, dt_e = 17 days / Second(1)
+    # if period = 1 Year, dt_e = 17 days (in seconds)
 
     t_init, t_end = date_to_time(itp.data_handler, date_init),
     date_to_time(itp.data_handler, date_end)
     # We have to add 1 Second because endofperiod(date_end, period) returns the very last
     # second before the next period
     dt_e =
-        (endofperiod(date_end, period) + Dates.Second(1) - date_end) /
-        Dates.Second(1)
-    dt = (date_init + period - date_end) / Dates.Second(1)
+        (endofperiod(date_end, period) + Dates.Second(1) - date_end) |>
+        period_to_seconds_float
+    dt = (date_init + period - date_end) |> period_to_seconds_float
     return t_init, t_end, dt, dt_e
 end
 
