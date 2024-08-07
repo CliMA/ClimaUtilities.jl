@@ -67,10 +67,30 @@ end
         ),
     )
 
+    # Test with LinearPeriodFillingInterpolation with a given period
+    # This is not allowed for 1D data because we don't have dates
+    @test_throws ErrorException TimeVaryingInputs.TimeVaryingInput(
+        sort(xs),
+        ys,
+        method = TimeVaryingInputs.LinearPeriodFillingInterpolation(),
+    )
+
     # Test PeriodicCalendar with non simple duration
     @test_throws ErrorException TimeVaryingInputs.PeriodicCalendar(
         Month(2),
         Date(2024),
+    )
+
+    # Test LinearPeriodFillingInterpolation with non simple duration
+    @test_throws ErrorException TimeVaryingInputs.LinearPeriodFillingInterpolation(
+        Month(2),
+        TimeVaryingInputs.Throw(),
+    )
+
+    # Test LinearPeriodFillingInterpolation with PeriodicCalendar (they are incompatible)
+    @test_throws ErrorException TimeVaryingInputs.LinearPeriodFillingInterpolation(
+        Year(1),
+        TimeVaryingInputs.PeriodicCalendar(),
     )
 
     for FT in (Float32, Float64)
