@@ -21,10 +21,10 @@ import ClimaUtilities.DataHandling
          REG <: AbstractRegridder,
          SPACE <: ClimaCore.Spaces.AbstractSpace,
          TSTART <: AbstractFloat,
-         DATES <: AbstractArray{<:Dates.DateTime},
+         DATES <: AbstractArray{Dates.DateTime},
          DIMS,
          TIMES <: AbstractArray{<:AbstractFloat},
-         CACHE <: DataStructures.LRUCache{<:Dates.DateTime, ClimaCore.Fields.Field},
+         CACHE <: DataStructures.LRUCache{Dates.DateTime, ClimaCore.Fields.Field},
      }
 
 Currently, the `DataHandler` works with one variable at the time. This might not be the most
@@ -44,10 +44,10 @@ struct DataHandler{
     REG <: AbstractRegridder,
     SPACE <: ClimaCore.Spaces.AbstractSpace,
     TSTART <: AbstractFloat,
-    DATES <: AbstractArray{<:Dates.DateTime},
+    DATES <: AbstractArray{Dates.DateTime},
     DIMS,
     TIMES <: AbstractArray{<:AbstractFloat},
-    CACHE <: DataStructures.LRUCache{<:Dates.DateTime, ClimaCore.Fields.Field},
+    CACHE <: DataStructures.LRUCache{Dates.DateTime, ClimaCore.Fields.Field},
 }
     """Object responsible for getting the data from disk to memory"""
     file_reader::FR
