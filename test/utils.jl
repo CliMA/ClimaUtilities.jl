@@ -9,7 +9,8 @@ import ClimaUtilities.Utils:
     wrap_time,
     beginningofperiod,
     endofperiod,
-    bounding_dates
+    bounding_dates,
+    period_to_seconds_float
 
 @testset "searchsortednearest" begin
     A = 10 * collect(range(1, 10))
@@ -87,4 +88,15 @@ end
           (Date(1993, 08, 13), Date(1993, 11, 19))
     @test bounding_dates(dates, Date(1993, 8, 15), Month(1)) ==
           (Date(1993, 08, 13), Date(1993, 08, 18))
+end
+
+@testset "period_to_seconds_float" begin
+    @test period_to_seconds_float(Millisecond(1)) == 0.001
+    @test period_to_seconds_float(Second(1)) == 1.0
+    @test period_to_seconds_float(Minute(1)) == 60.0
+    @test period_to_seconds_float(Hour(1)) == 3600.0
+    @test period_to_seconds_float(Day(1)) == 86400.0
+    @test period_to_seconds_float(Week(1)) == 604800.0
+    @test period_to_seconds_float(Month(1)) == 2.629746e6
+    @test period_to_seconds_float(Year(1)) == 3.1556952e7
 end

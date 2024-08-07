@@ -11,7 +11,7 @@ import ClimaUtilities.Regridders
 import ClimaUtilities.FileReaders: AbstractFileReader, NCFileReader, read
 import ClimaUtilities.Regridders: AbstractRegridder, regrid
 
-import ClimaUtilities.Utils: isequispaced
+import ClimaUtilities.Utils: isequispaced, period_to_seconds_float
 
 import ClimaUtilities.DataHandling
 
@@ -178,9 +178,7 @@ function DataHandling.DataHandler(
         )
 
     available_dates = file_reader.available_dates
-    # Second() is required to convert from DateTime to float. Also, Second(1) transforms
-    # from milliseconds to seconds.
-    times_s = Second.(available_dates .- reference_date) ./ Second(1)
+    times_s = period_to_seconds_float.(available_dates .- reference_date)
     available_times = times_s .- t_start
 
     return DataHandler(
@@ -253,9 +251,9 @@ function DataHandling.time_to_date(
     data_handler::DataHandler,
     time::AbstractFloat,
 )
-    return data_handler.reference_date +
-           Second(data_handler.t_start) +
-           Second(time)
+    # We go through nanoseconds to allow fractions of a second (otherwise, Second(0.8) would fail)
+    time_ms = Dates.Nanosecond(1_000_000_000 * (data_handler.t_start + time))
+    return data_handler.reference_date + time_ms
 end
 
 """
@@ -271,8 +269,7 @@ function DataHandling.date_to_time(
     data_handler::DataHandler,
     date::Dates.DateTime,
 )
-    # date / Second(1) produces a float in seconds
-    return (date - data_handler.reference_date) / Second(1) -
+    return period_to_seconds_float(date - data_handler.reference_date) -
            data_handler.t_start
 end
 
