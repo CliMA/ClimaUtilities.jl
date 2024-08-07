@@ -60,4 +60,14 @@ end
 ```@docs
 ClimaUtilities.DataStructures.LRUCache
 Base.get!
+Base.get
+Base.haskey
+Base.copy
+Base.deepcopy
+Base.empty
+Base.empty!
+Base.pop!
+Base.delete!
+Base.getindex
+Base.setindex!
 ```
