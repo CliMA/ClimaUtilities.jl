@@ -214,10 +214,10 @@ function _time_range_dt_dt_e(
 
     t_init, t_end = date_to_time(itp.data_handler, date_init),
     date_to_time(itp.data_handler, date_end)
-    # We have to add 1 MilliSecond because endofperiod(date_end, period) returns
-    # the very last millisecond *before* the next period
+    # We have to add 1 Second because endofperiod(date_end, period) returns the very last
+    # second before the next period
     dt_e =
-        (endofperiod(date_end, period) - date_end + Dates.Millisecond(1)) /
+        (endofperiod(date_end, period) + Dates.Second(1) - date_end) /
         Dates.Second(1)
     dt = (date_init + period - date_end) / Dates.Second(1)
     return t_init, t_end, dt, dt_e
