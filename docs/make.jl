@@ -8,6 +8,13 @@ import ClimaCore
 import NCDatasets
 import ClimaCoreTempestRemap
 
+DocMeta.setdocmeta!(
+    ClimaUtilities,
+    :DocTestSetup,
+    :(using Dates);
+    recursive = true,
+)
+
 pages = [
     "Overview" => "index.md",
     "ClimaArtifacts" => "climaartifacts.md",
