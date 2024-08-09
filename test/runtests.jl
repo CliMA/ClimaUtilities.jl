@@ -54,6 +54,9 @@ end
 
 @safetestset "TimeVaryingInputs tests" begin
     include("time_varying_inputs.jl")
+end
+
+@safetestset "TimeVaryingInputs23D tests" begin
     include("time_varying_inputs23.jl")
 end
 
