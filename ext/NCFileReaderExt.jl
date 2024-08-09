@@ -29,9 +29,9 @@ struct NCFileReader{
     STR2 <: AbstractString,
     DIMS <: Tuple,
     NC <: NCDatasets.NCDataset,
-    DATES <: AbstractArray{<:Dates.DateTime},
+    DATES <: AbstractArray{Dates.DateTime},
     PREP <: Function,
-    CACHE <: DataStructures.LRUCache{<:Dates.DateTime, <:AbstractArray},
+    CACHE <: DataStructures.LRUCache{Dates.DateTime, <:AbstractArray},
 } <: FileReaders.AbstractFileReader
     """Path of the NetCDF file"""
     file_path::STR1
