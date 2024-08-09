@@ -331,4 +331,55 @@ function period_to_seconds_float(period::Period)
     return period / Second(1)
 end
 
+"""
+    unique_periods(dates, period::DatePeriod)
+
+Extracts all the unique periods available in the input list of `dates` for a given `period`.
+
+A period is always defined from its starting day.
+
+# Examples
+
+```jldoctest
+julia> import ClimaUtilities.Utils: unique_periods;
+
+julia> dates = [DateTime(2022, 1, 1), DateTime(2022, 5, 15), DateTime(2023, 1, 1), DateTime(2023, 5, 5), DateTime(2024, 10, 10)];
+
+julia> unique_periods(dates, Year(1))
+3-element Vector{DateTime}:
+ 2022-01-01T00:00:00
+ 2023-01-01T00:00:00
+ 2024-01-01T00:00:00
+
+julia> unique_periods(dates, Month(1))
+5-element Vector{DateTime}:
+ 2022-01-01T00:00:00
+ 2022-05-01T00:00:00
+ 2023-01-01T00:00:00
+ 2023-05-01T00:00:00
+ 2024-10-01T00:00:00
+
+julia> unique_periods(dates, Week(1))
+5-element Vector{DateTime}:
+ 2021-12-27T00:00:00
+ 2022-05-09T00:00:00
+ 2022-12-26T00:00:00
+ 2023-05-01T00:00:00
+ 2024-10-07T00:00:00
+
+julia> unique_periods(dates, Day(1))
+5-element Vector{DateTime}:
+ 2022-01-01T00:00:00
+ 2022-05-15T00:00:00
+ 2023-01-01T00:00:00
+ 2023-05-05T00:00:00
+ 2024-10-10T00:00:00
+```
+"""
+function unique_periods(dates, period::DatePeriod)
+    period.value == 1 ||
+        error("Only simple periods (e.g., `Year(1)`) are supported")
+    return map(d -> beginningofperiod(d, period), dates) |> unique |> sort
+end
+
 end
