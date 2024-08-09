@@ -17,7 +17,7 @@ import Base: Callable
 
 export LRUCache
 
-struct LRUCache{K, V}
+struct LRUCache{K, V} <: AbstractDict{K, V}
     """The cache itself, containing key-value pairs of information."""
     cache::Dict{K, V}
 
