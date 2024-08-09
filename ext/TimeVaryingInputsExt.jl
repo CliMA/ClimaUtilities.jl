@@ -346,15 +346,21 @@ function TimeVaryingInputs.evaluate!(
         end
     end
 
-    t0, t1 =
-        previous_time(itp.data_handler, time), next_time(itp.data_handler, time)
-    coeff = (time - t0) / (t1 - t0)
+    # We have to consider the edge case where time is precisely the last available_time.
+    # This is relevant also because it can be triggered by LinearPeriodFilling
+    if time in DataHandling.available_times(itp.data_handler)
+        regridded_snapshot!(dest, itp.data_handler, time)
+    else
+        t0, t1 = previous_time(itp.data_handler, time),
+        next_time(itp.data_handler, time)
+        coeff = (time - t0) / (t1 - t0)
 
-    field_t0, field_t1 = itp.preallocated_regridded_fields
-    regridded_snapshot!(field_t0, itp.data_handler, t0)
-    regridded_snapshot!(field_t1, itp.data_handler, t1)
+        field_t0, field_t1 = itp.preallocated_regridded_fields
+        regridded_snapshot!(field_t0, itp.data_handler, t0)
+        regridded_snapshot!(field_t1, itp.data_handler, t1)
 
-    dest .= (1 - coeff) .* field_t0 .+ coeff .* field_t1
+        dest .= (1 - coeff) .* field_t0 .+ coeff .* field_t1
+    end
     return nothing
 end
 
