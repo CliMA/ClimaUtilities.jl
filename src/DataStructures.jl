@@ -43,7 +43,7 @@ end
 """
     Base.setindex!(cache::LRUCache{K, V}, value::V, key::K)
 
-Store the mapping from `key` to `value` in `cache`.
+Store the mapping from `key` to `value` in `cache`. Then, return `cache`.
 """
 function Base.setindex!(cache::LRUCache{K, V}, value::V, key::K) where {K, V}
     _update_priority!(cache, key)
@@ -93,6 +93,40 @@ function Base.get!(
     _update_priority!(cache, key)
     _enforce_size!(cache)
     return get!(default, cache.cache, key)
+end
+
+"""
+    Base.length(cache::LRUCache{K, V})
+
+Return the number of elements in `cache`.
+"""
+function Base.length(cache::LRUCache{K, V}) where {K, V}
+    return length(cache.cache)
+end
+
+"""
+    ==(cache1::LRUCache{K1, V2}, cache2::LRUCache{K2, V2})
+
+Return whether the two caches are identical in content and priority.
+"""
+function Base.:(==)(
+    cache1::LRUCache{K1, V1},
+    cache2::LRUCache{K2, V2},
+) where {K1, V1, K2, V2}
+    return cache1.max_size == cache2.max_size &&
+           cache1.cache == cache2.cache &&
+           cache1.priority == cache2.priority
+end
+
+"""
+    iterate(cache::LRUCache{K, V})
+
+Advance the iterator to obtain the next element. If no elements remain, nothing
+should be returned. Otherwise, a 2-tuple of the next element and the new
+iteration state should be returned.
+"""
+function Base.iterate(cache::LRUCache{K, V}) where {K, V}
+    return iterate(cache.cache)
 end
 
 """
@@ -155,8 +189,7 @@ end
 """
     Base.empty(cache::LRUCache{K, V}, key_type::DataType=K, value_type::DataType=V)
 
-
-Create an empty `LRUCache` with keys of type `key_type` and values of type `value_type`. 
+Create an empty `LRUCache` with keys of type `key_type` and values of type `value_type`.
 
 The second and third arguments are optional and default to the input's `keytype` and `valuetype`. 
 If only one of the two type is specified, it is assumed to be the `value_type`, and `key_type` is 

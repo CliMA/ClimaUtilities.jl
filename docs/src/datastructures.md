@@ -70,4 +70,5 @@ Base.pop!
 Base.delete!
 Base.getindex
 Base.setindex!
+Base.length
 ```

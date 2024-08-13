@@ -46,6 +46,30 @@ end
     @test_throws KeyError cache["c"]
 end
 
+@testset "length for LRUCache" begin
+    cache = DataStructures.LRUCache{String, Int}(max_size = 3)
+
+    @test length(cache) == 0
+
+    cache["a"] = 1
+    @test length(cache) == 1
+end
+
+@testset "== for LRUCache" begin
+    cache1 = DataStructures.LRUCache{String, Int}(max_size = 3)
+    cache2 = DataStructures.LRUCache{String, Int}(max_size = 4)
+
+    @test cache1 != cache2
+
+    cache3 = DataStructures.LRUCache{String, Int}(max_size = 3)
+
+    @test cache1 == cache3
+
+    cache1["a"] = 1
+
+    @test cache1 != cache3
+end
+
 @testset "get! with default value" begin
     cache = DataStructures.LRUCache{String, Int}(max_size = 3)
 
