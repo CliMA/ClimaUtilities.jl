@@ -1,6 +1,12 @@
 <h1 align="center">
   <img src="logo.svg" width="180px"> <br>
 ClimaUtilities.jl
+
+[![CI](https://github.com/CliMA/ClimaUtilities.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/CliMA/ClimaUtilities.jl/actions/workflows/ci.yml)
+[![Downstream](https://github.com/CliMA/ClimaUtilities.jl/actions/workflows/downstream.yml/badge.svg)](https://github.com/CliMA/ClimaUtilities.jl/actions/workflows/downstream.yml)
+[![codecov](https://codecov.io/gh/CliMA/ClimaUtilities.jl/graph/badge.svg?token=sbYkr5ydzp)](https://codecov.io/gh/CliMA/ClimaUtilities.jl)
+[![Docs](https://img.shields.io/badge/docs_are_here-click_me!-blue.svg)](https://clima.github.io/ClimaUtilities.jl/dev/)
+
 </h1>
 
 Shared utilities for packages within the CliMA project. Please, check out the
