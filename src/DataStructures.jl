@@ -119,7 +119,7 @@ function Base.:(==)(
 end
 
 """
-    iterate(cache::LRUCache{K, V})
+    iterate(cache::LRUCache{K, V} [, state])
 
 Advance the iterator to obtain the next element. If no elements remain, nothing
 should be returned. Otherwise, a 2-tuple of the next element and the new
@@ -127,6 +127,10 @@ iteration state should be returned.
 """
 function Base.iterate(cache::LRUCache{K, V}) where {K, V}
     return iterate(cache.cache)
+end
+
+function Base.iterate(cache::LRUCache{K, V}, state) where {K, V}
+    return iterate(cache.cache, state)
 end
 
 """
