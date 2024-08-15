@@ -1,6 +1,12 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
+v0.1.13
+-------
+
+- Fix `show` for `LRUCache` (and `iterate` with a state). PR
+  [#96](https://github.com/CliMA/ClimaUtilities.jl/pull/96)
+
 v0.1.12
 -------
 
