@@ -247,6 +247,11 @@ to evaluate on 08/01/1987. We do not have data for the year 1987, so, we perform
 linear interpolations, first to evaluate the data on 08/01/1985 and 08/01/1995 (using the
 neighboring points), and then between the resulting two values.
 
+`period` specifies the period within which we want to preserve time variations. For the
+above example, `period` would be `Year(1)` as we want to preserve the seasonal cycle within
+a year. For a different example where we want to preserve the diurnal cycle, `period` would
+be `Day(1)`.
+
 `extrapolation_bc` specifies how to deal with out of boundary values. The default value is
 `Throw`, meaning that extrapolation is not allowed.
 
