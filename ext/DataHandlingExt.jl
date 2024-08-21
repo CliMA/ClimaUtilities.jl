@@ -254,8 +254,8 @@ function DataHandling.time_to_date(
     time::AbstractFloat,
 )
     # We go through nanoseconds to allow fractions of a second (otherwise, Second(0.8) would fail)
-    time_ms = Dates.Nanosecond(1_000_000_000 * (data_handler.t_start + time))
-    return data_handler.reference_date + time_ms
+    time_ns = Dates.Nanosecond(1_000_000_000 * (data_handler.t_start + time))
+    return data_handler.reference_date + time_ns
 end
 
 """
