@@ -1,6 +1,12 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
+v0.1.14
+-------
+
+- Reduce floating point errors in times for DataHandling. PR
+  [#101](https://github.com/CliMA/ClimaUtilities.jl/pull/101)
+
 v0.1.13
 -------
 
