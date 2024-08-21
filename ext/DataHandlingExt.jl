@@ -253,9 +253,13 @@ function DataHandling.time_to_date(
     data_handler::DataHandler,
     time::AbstractFloat,
 )
-    # We go through nanoseconds to allow fractions of a second (otherwise, Second(0.8) would fail)
-    time_ns = Dates.Nanosecond(1_000_000_000 * (data_handler.t_start + time))
-    return data_handler.reference_date + time_ns
+    # We go through milliseconds to allow fractions of a second (otherwise, Second(0.8)
+    # would fail). Milliseconds is the level of resolution that one gets when taking the
+    # difference between two DateTimes. In addition to this, we add a round to account for
+    # floating point errors. If the floating point error is small enough, round will correct
+    # it.
+    time_ms = Dates.Millisecond(round(1_000 * (data_handler.t_start + time)))
+    return data_handler.reference_date + time_ms
 end
 
 """
