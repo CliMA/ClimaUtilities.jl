@@ -153,7 +153,6 @@ defined on and `cesm_albedo.nc` a NetCDF file containing albedo data as a time
 in a variable named `alb`.
 
 ```julia
-```julia
 import ClimaUtilities: SpaceVaryingInputs
 import ClimaCore
 import NCDatasets

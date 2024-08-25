@@ -392,8 +392,20 @@ function DataHandling.regridded_snapshot(data_handler::DataHandler)
     return DataHandling.regridded_snapshot(data_handler, Dates.DateTime(0))
 end
 
-function DataHandling.regridded_snapshot!(out, data_handler, time)
-    out .= DataHandling.regridded_snapshot(data_handler, time)
+"""
+    regridded_snapshot(dest::ClimaCore.Fields.Field, data_handler::DataHandler, date::Dates.DateTime)
+    regridded_snapshot(data_handler::DataHandler, time::AbstractFloat)
+    regridded_snapshot(data_handler::DataHandler)
+
+Write to `dest` the regridded snapshot from `data_handler` associated to the given `time`.
+
+The `time` has to be available in the `data_handler`.
+
+`regridded_snapshot!` potentially modifies the internal state of `data_handler` and it might be a very
+expensive operation.
+"""
+function DataHandling.regridded_snapshot!(dest, data_handler, time)
+    dest .= DataHandling.regridded_snapshot(data_handler, time)
     return nothing
 end
 

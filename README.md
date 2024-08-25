@@ -9,8 +9,7 @@ ClimaUtilities.jl
 
 </h1>
 
-Shared utilities for packages within the CliMA project. Please, check out the
-[documentation](https://clima.github.io/ClimaUtilities.jl/dev/).
+`ClimaUtilities` is collection of general-purpose tools for CliMA packages.
 
 `ClimaUtilities.jl` contains:
 - [`ClimaArtifacts`](https://clima.github.io/ClimaUtilities.jl/dev/climaartifacts/),
