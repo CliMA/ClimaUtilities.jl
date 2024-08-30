@@ -24,6 +24,7 @@ pages = [
     "Regridders" => "regridders.md",
     "OutputPathGenerator" => "outputpathgenerator.md",
     "TimeManager" => "timemanager.md",
+    "Frequently Asked Questions" => "faqs.md",
 ]
 
 mathengine = MathJax(
