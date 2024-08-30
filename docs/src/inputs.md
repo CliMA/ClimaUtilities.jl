@@ -124,6 +124,25 @@ albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_
 # model developers do not have to worry about anything :)
 ```
 
+As seen in this example, `Inputs` can take keyword arguments and pass them down
+to other constructors. This often used to preprocess files that are being read
+(most commonly to change units). For example, if we want to multiply the albedo
+by a factor of 100, we would change `albedo_tv` with
+```julia
+albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_space;
+                                               reference_date, regridder_kwargs = (; regrid_dir = "/tmp"),
+                                               file_reader_kwargs = (; preprocess_func = (x) -> 100x)
+```
+
+!!! note In this example we used the [`TempestRegridder`](@ref). This is not the
+    best choice in most cases because the [`TempestRegridder`](@ref) is slower,
+    and not well-compatible with MPI and GPUs (`ClimaUtilities` implements
+    workarounds for this, so the code would still work).
+    [`InterpolationsRegridder`](@ref) should be preferred, unless there is a
+    strict requirement of conservation: while [`TempestRegridder`](@ref) is
+    guaranteed to conserve various properties, [`InterpolationsRegridder`](@ref)
+    is not.
+
 ## `SpaceVaryingInputs`
 
 > This extension is loaded when loading `ClimaCore` is loaded. In addition to
