@@ -126,8 +126,8 @@ end
 
 """
     SpaceVaryingInput(data_handler::DataHandler)
-    SpaceVaryingInput(file_path::AbstractString,
-                      varname::AbstractString,
+    SpaceVaryingInput(file_paths::Union{AbstractString, AbstractArray{String}},
+                      varnames::Union{AbstractString, AbstractArray{String}},
                       target_space::Spaces.AbstractSpace;
                       regridder_type::Symbol,
                       regridder_kwargs = (),
@@ -144,21 +144,23 @@ function SpaceVaryingInputs.SpaceVaryingInput(data_handler)
 end
 
 function SpaceVaryingInputs.SpaceVaryingInput(
-    file_path,
-    varname,
+    file_paths,
+    varnames,
     target_space;
     regridder_type = nothing,
     regridder_kwargs = (),
     file_reader_kwargs = (),
+    compose_function = identity,
 )
     return SpaceVaryingInputs.SpaceVaryingInput(
         DataHandler(
-            file_path,
-            varname,
+            file_paths,
+            varnames,
             target_space;
             regridder_type,
             regridder_kwargs,
             file_reader_kwargs,
+            compose_function,
         ),
     )
 end

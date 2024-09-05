@@ -17,7 +17,7 @@ import ClimaUtilities.DataHandling
 
 """
     DataHandler{
-         FR <: AbstractFileReader,
+         FR <: AbstractDict{<:AbstractString, <:AbstractFileReader},
          REG <: AbstractRegridder,
          SPACE <: ClimaCore.Spaces.AbstractSpace,
          TSTART <: AbstractFloat,
@@ -25,22 +25,31 @@ import ClimaUtilities.DataHandling
          DIMS,
          TIMES <: AbstractArray{<:AbstractFloat},
          CACHE <: DataStructures.LRUCache{Dates.DateTime, ClimaCore.Fields.Field},
+         FUNC <: Function,
      }
 
-Currently, the `DataHandler` works with one variable at the time. This might not be the most
+Currently, the `DataHandler` remaps one variable at the time. This might not be the most
 efficiently way to tackle the problem: we should be able to reuse the interpolation weights if
 multiple variables are defined on the same grid and have to be remapped to the same grid.
 
+Multiple input variables may be stored in the `DataHandler` by providing a dictionary
+`file_readers` of variable names mapped to `FileReader` objects, along with a `compose_function`
+that combines them into a single data variable. This is useful when we require variables
+that are not directly available in the input data, but can be computed from the available variables.
+The order of the variables in `varnames` must match the argument order of `compose_function`.
+
 Assumptions:
-- There is only one file with the entire time development of the given variable
+- For each input variable, there is only one file with the entire time development of the given variable
 - The file has well-defined physical dimensions (e.g., lat/lon)
 - Currently, the time dimension has to be either "time" or "date", the spatial
   dimensions have to be lat and lon (restriction from TempestRegridder)
+- If using multiple input variables, the input variables must have the same time development
+  and spatial resolution
 
 DataHandler is meant to live on the CPU, but the Fields can be on the GPU as well.
 """
 struct DataHandler{
-    FR <: AbstractFileReader,
+    FR <: AbstractDict{<:AbstractString, <:AbstractFileReader},
     REG <: AbstractRegridder,
     SPACE <: ClimaCore.Spaces.AbstractSpace,
     TSTART <: AbstractFloat,
@@ -48,9 +57,11 @@ struct DataHandler{
     DIMS,
     TIMES <: AbstractArray{<:AbstractFloat},
     CACHE <: DataStructures.LRUCache{Dates.DateTime, ClimaCore.Fields.Field},
+    FUNC <: Function,
+    NAMES <: AbstractArray{<:AbstractString},
 }
-    """Object responsible for getting the data from disk to memory"""
-    file_reader::FR
+    """Dictionary of variable names and objects responsible for getting the input data from disk to memory"""
+    file_readers::FR
 
     """Object responsible for resampling a rectangular grid to the simulation grid"""
     regridder::REG
@@ -76,11 +87,17 @@ struct DataHandler{
 
     """Private field where cached data is stored"""
     _cached_regridded_fields::CACHE
+
+    """Function to combine multiple input variables into a single data variable"""
+    compose_function::FUNC
+
+    """Names of the datasets in the NetCDF that have to be read and processed"""
+    varnames::NAMES
 end
 
 """
-    DataHandler(file_path::AbstractString,
-                varname::AbstractString,
+    DataHandler(file_paths::Union{AbstractString, AbstractArray{<:AbstractString}},
+                varnames::Union{AbstractString, AbstractArray{<:AbstractString}},
                 target_space::ClimaCore.Spaces.AbstractSpace;
                 reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
                 t_start::AbstractFloat = 0.0,
@@ -89,15 +106,17 @@ end
                 regridder_kwargs = (),
                 file_reader_kwargs = ())
 
-Create a `DataHandler` to read `varname` from `file_path` and remap it to `target_space`.
+Create a `DataHandler` to read `varnames` from `file_paths` and remap them to `target_space`.
+`file_paths` may contain either one path for all variables or one path for each variable.
+In the latter case, the entries of `file_paths` and `varnames` are expected to match based on position.
 
 The DataHandler maintains an LRU cache of Fields that were previously computed.
 
 Positional arguments
 =====================
 
-- `file_path`: Path of the NetCDF file that contains the data.
-- `varname`: Name of the dataset in the NetCDF that has to be read and processed.
+- `file_paths`: Paths of the NetCDF file(s) that contain the input data.
+- `varnames`: Names of the datasets in the NetCDF that have to be read and processed.
 - `target_space`: Space where the simulation is run, where the data has to be regridded to.
 
 Keyword arguments
@@ -122,10 +141,13 @@ everything more type stable.)
                       It can be a NamedTuple, or a Dictionary that maps Symbols to values.
 - `file_reader_kwargs`: Additional keywords to be passed to the constructor of the file reader.
                         It can be a NamedTuple, or a Dictionary that maps Symbols to values.
+- `compose_function`: Function to combine multiple input variables into a single data variable.
+                    The default, to be used in the case of one input variable, is the identity.
+                    Note that the order of `varnames` must match the argument order of `compose_function`.
 """
 function DataHandling.DataHandler(
-    file_path::AbstractString,
-    varname::AbstractString,
+    file_paths::Union{AbstractString, AbstractArray{<:AbstractString}},
+    varnames::Union{AbstractString, AbstractArray{<:AbstractString}},
     target_space::ClimaCore.Spaces.AbstractSpace;
     reference_date::Union{Dates.DateTime, Dates.Date} = Dates.DateTime(
         1979,
@@ -137,15 +159,64 @@ function DataHandling.DataHandler(
     cache_max_size::Int = 128,
     regridder_kwargs = (),
     file_reader_kwargs = (),
+    compose_function = identity,
 )
+    # Convert `file_paths` and `varnames` to arrays if they are not already
+    # After this point, we assume that `file_paths` and `varnames` are arrays, possibly with only one element
+    if file_paths isa AbstractString
+        file_paths = [file_paths]
+    end
+    if varnames isa AbstractString
+        varnames = [varnames]
+    end
+
+    # Verify that the number of file paths and variable names match
+    (length(file_paths) > 1 && length(file_paths) != length(varnames)) && error(
+        "Number of file paths ($(length(file_paths))) and variable names ($(length(varnames))) do not match.",
+    )
+
+    # Verify that `compose_function` is specified when using multiple input variables
+    (length(varnames) > 1 && compose_function == identity) && error(
+        "`compose_function` must be specified when using multiple input variables",
+    )
+
+    # Verify that `compose_function` is identity when using a single input variable
+    (length(varnames) == 1 && compose_function != identity) && error(
+        "`compose_function` must be identity when using a single input variable",
+    )
+
+    # TempestRegridder does not support multiple input variables
+    (length(varnames) > 1 && regridder_type == :TempestRegridder) &&
+        error("TempestRegridder does not support multiple input variables")
 
     # Determine which regridder to use if not already specified
     regridder_type =
         isnothing(regridder_type) ? Regridders.default_regridder_type() :
         regridder_type
 
-    # File reader, deals with ingesting data, possibly buffered/cached
-    file_reader = NCFileReader(file_path, varname; file_reader_kwargs...)
+    # Construct a file reader, which deals with ingesting data and is possibly buffered/cached, for each input file
+    file_readers = Dict{String, AbstractFileReader}()
+    all_vars_in_same_file = length(file_paths) == 1
+    for (i, varname) in enumerate(varnames)
+        file_path = all_vars_in_same_file ? first(file_paths) : file_paths[i]
+        file_readers[varname] =
+            NCFileReader(file_path, varname; file_reader_kwargs...)
+    end
+
+    # Verify that the spatial dimensions are the same for each variable
+    @assert length(
+        Set(file_reader.dimensions for file_reader in values(file_readers)),
+    ) == 1
+
+    # Verify that the time information is the same for all variables
+    @assert length(
+        Set(
+            file_reader.available_dates for file_reader in values(file_readers)
+        ),
+    ) == 1
+    @assert length(
+        Set(file_reader.time_index for file_reader in values(file_readers)),
+    ) == 1
 
     regridder_args = ()
 
@@ -165,7 +236,9 @@ function DataHandling.DataHandler(
             regridder_kwargs = merge((; regrid_dir), regridder_kwargs)
         end
 
-        regridder_args = (target_space, varname, file_path)
+        # Note: using one arbitrary element of `varnames` and of `file_paths` assumes
+        #  that all input variables will use the same regridding
+        regridder_args = (target_space, first(varnames), first(file_paths))
     elseif regridder_type == :InterpolationsRegridder
         regridder_args = (target_space,)
     end
@@ -179,30 +252,35 @@ function DataHandling.DataHandler(
             max_size = cache_max_size,
         )
 
-    available_dates = file_reader.available_dates
+    # Note: using one arbitrary element of `file_readers` assumes
+    #  that all input variables have the same time development
+    available_dates = first(values(file_readers)).available_dates
     times_s = period_to_seconds_float.(available_dates .- reference_date)
     available_times = times_s .- t_start
+    dimensions = first(values(file_readers)).dimensions
 
     return DataHandler(
-        file_reader,
+        file_readers,
         regridder,
         target_space,
-        file_reader.dimensions,
+        dimensions,
         available_dates,
         t_start,
         Dates.DateTime(reference_date),
         available_times,
         _cached_regridded_fields,
+        compose_function,
+        varnames,
     )
 end
 
 """
     close(data_handler::DataHandler)
 
-Close any file associated to the given `data_handler`.
+Close all files associated to the given `data_handler`.
 """
 function Base.close(data_handler::DataHandler)
-    close(data_handler.file_reader)
+    foreach(close, values(data_handler.file_readers))
     return nothing
 end
 
@@ -345,6 +423,9 @@ Return the regridded snapshot from `data_handler` associated to the given `time`
 
 The `time` has to be available in the `data_handler`.
 
+When using multiple input variables, the `varnames` argument determines the order of arguments
+to the `compose_function` function used to produce the data variable.
+
 `regridded_snapshot` potentially modifies the internal state of `data_handler` and it might be a very
 expensive operation.
 """
@@ -352,24 +433,41 @@ function DataHandling.regridded_snapshot(
     data_handler::DataHandler,
     date::Dates.DateTime,
 )
+    varnames = data_handler.varnames
+    compose_function = data_handler.compose_function
+
     # Dates.DateTime(0) is the cache key for static maps
     if date != Dates.DateTime(0)
-        date in data_handler.available_dates || error(
-            "Date $date not available in file $(data_handler.file_reader.file_path)",
-        )
+        file_path = data_handler.file_readers[first(varnames)].file_path
+        date in data_handler.available_dates ||
+            error("Date $date not available in file $(file_path)")
     end
 
     regridder_type = nameof(typeof(data_handler.regridder))
     regrid_args = ()
 
+    # Check if the regridded field at this date is already in the cache
     return get!(data_handler._cached_regridded_fields, date) do
         if regridder_type == :TempestRegridder
-            regrid_args = (date,)
+            if length(data_handler.file_readers) > 1
+                error(
+                    "TempestRegridder does not support multiple input variables. Please use InterpolationsRegridder.",
+                )
+            else
+                regrid_args = (date,)
+            end
         elseif regridder_type == :InterpolationsRegridder
-            regrid_args =
-                (read(data_handler.file_reader, date), data_handler.dimensions)
+            # Read input data from each file, maintaining order, and apply composing function
+            # In the case of a single input variable, it will remain unchanged
+            data_composed = compose_function(
+                (
+                    read(data_handler.file_readers[varname], date) for
+                    varname in varnames
+                )...,
+            )
+            regrid_args = (data_composed, data_handler.dimensions)
         else
-            error("Uncaught case")
+            error("Invalid regridder type")
         end
         regrid(data_handler.regridder, regrid_args...)
     end
@@ -393,9 +491,7 @@ function DataHandling.regridded_snapshot(data_handler::DataHandler)
 end
 
 """
-    regridded_snapshot(dest::ClimaCore.Fields.Field, data_handler::DataHandler, date::Dates.DateTime)
-    regridded_snapshot(data_handler::DataHandler, time::AbstractFloat)
-    regridded_snapshot(data_handler::DataHandler)
+    regridded_snapshot!(dest::ClimaCore.Fields.Field, data_handler::DataHandler, date::Dates.DateTime)
 
 Write to `dest` the regridded snapshot from `data_handler` associated to the given `time`.
 
