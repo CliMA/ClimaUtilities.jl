@@ -140,8 +140,8 @@ function TimeVaryingInputs.TimeVaryingInput(
 end
 
 function TimeVaryingInputs.TimeVaryingInput(
-    file_path::AbstractString,
-    varname::AbstractString,
+    file_paths::Union{AbstractString, AbstractArray{<:AbstractString}},
+    varnames::Union{AbstractString, AbstractArray{<:AbstractString}},
     target_space::ClimaCore.Spaces.AbstractSpace;
     method = LinearInterpolation(),
     reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
@@ -149,16 +149,18 @@ function TimeVaryingInputs.TimeVaryingInput(
     regridder_type = nothing,
     regridder_kwargs = (),
     file_reader_kwargs = (),
+    compose_function = identity,
 )
     data_handler = DataHandling.DataHandler(
-        file_path,
-        varname,
+        file_paths,
+        varnames,
         target_space;
         reference_date,
         t_start,
         regridder_type,
         regridder_kwargs,
         file_reader_kwargs,
+        compose_function,
     )
     if extrapolation_bc(method) isa PeriodicCalendar{Nothing} &&
        !isequispaced(DataHandling.available_times(data_handler))

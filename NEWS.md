@@ -1,6 +1,33 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
+main
+-------
+- [Feature] Add support for composing input variables.
+  PR [#105](https://github.com/CliMA/ClimaUtilities.jl/pull/105/)
+
+  This allows a list of `varnames` (and possibly `file_paths`) to be
+  passed to `TimeVaryingInput` or `SpaceVaryingInput`, along with a
+  `compose_function` to compose them, as so:
+
+  ```julia
+  # Define the pointwise composing function we want, a simple sum in this case
+  compose_function = (x, y) -> x + y
+  # Define pre-processing function to convert units of input
+  unit_conversion_func = (data) -> 1000 * data
+
+  data_handler = TimeVaryingInputs.TimeVaryingInput("era5_example.nc",
+                                          ["u", "v"],
+                                          target_space,
+                                          reference_date = Dates.DateTime(2000, 1, 1),
+                                          regridder_type = :InterpolationsRegridder,
+                                          file_reader_kwargs = (; preprocess_func = unit_conversion_func),
+                                          compose_function)
+  ```
+
+  See the `TimeVaryingInput` or `DataHandler` docs "NetCDF file input"
+  sections for more details.
+
 v0.1.14
 -------
 

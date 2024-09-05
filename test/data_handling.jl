@@ -7,7 +7,6 @@ import ClimaUtilities.DataHandling
 
 import ClimaCore
 import ClimaComms
-import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Interpolations as Intp
 import ClimaCoreTempestRemap
@@ -21,12 +20,19 @@ ClimaComms.init(context)
         artifact"era5_static_example",
         "era5_t2m_sp_u10n_20210101_static.nc",
     )
-    varname = "sp"
     for regridder_type in (:InterpolationsRegridder, :TempestRegridder)
         if regridder_type == :TempestRegridder && Sys.iswindows()
             continue
         end
-        for FT in (Float32, Float64), use_spacefillingcurve in (true, false)
+        for FT in (Float32, Float64),
+            use_spacefillingcurve in (true, false),
+            varnames in (["sp"], ["sp", "t2m"])
+
+            # TempestRegridder does not support multiple input variables
+            if regridder_type == :TempestRegridder && length(varnames) > 1
+                continue
+            end
+
             radius = FT(6731e3)
             helem = 40
             Nq = 4
@@ -48,11 +54,14 @@ ClimaComms.init(context)
             target_space =
                 ClimaCore.Spaces.SpectralElementSpace2D(horztopology, quad)
 
+            compose_function =
+                length(varnames) == 1 ? identity : (x, y) -> x + y
             data_handler = DataHandling.DataHandler(
                 PATH,
-                varname,
+                varnames,
                 target_space;
                 regridder_type,
+                compose_function,
             )
 
             @test DataHandling.available_dates(data_handler) == DateTime[]
@@ -62,15 +71,64 @@ ClimaComms.init(context)
             @test field isa ClimaCore.Fields.Field
             @test axes(field) == target_space
             @test eltype(field) == FT
-            @test minimum(field) >=
-                  minimum(data_handler.file_reader.dataset[varname][:, :])
-            @test maximum(field) <=
-                  maximum(data_handler.file_reader.dataset[varname][:, :])
+
+            # For one variable, check that the regridded data is the same as the original data
+            if length(varnames) == 1
+                @test minimum(field) >= minimum(
+                    data_handler.file_readers[first(varnames)].dataset[first(
+                        varnames,
+                    )][
+                        :,
+                        :,
+                    ],
+                )
+                @test maximum(field) <= maximum(
+                    data_handler.file_readers[first(varnames)].dataset[first(
+                        varnames,
+                    )][
+                        :,
+                        :,
+                    ],
+                )
+            else
+                # For more than one variable, check that both point to the same file path
+                @test data_handler.file_readers[varnames[1]].file_path ==
+                      data_handler.file_readers[varnames[2]].file_path
+                # For more than one variable, check that the compose function was applied correctly
+                @test data_handler.compose_function == compose_function
+
+                @test minimum(field) >= minimum(
+                    compose_function.(
+                        data_handler.file_readers[varnames[1]].dataset[varnames[1]][
+                            :,
+                            :,
+                        ],
+                        data_handler.file_readers[varnames[2]].dataset[varnames[2]][
+                            :,
+                            :,
+                        ],
+                    ),
+                )
+                @test maximum(field) <= maximum(
+                    compose_function.(
+                        data_handler.file_readers[varnames[1]].dataset[varnames[1]][
+                            :,
+                            :,
+                        ],
+                        data_handler.file_readers[varnames[2]].dataset[varnames[2]][
+                            :,
+                            :,
+                        ],
+                    ),
+                )
+            end
 
             close(data_handler)
         end
     end
+
     # Test passing arguments down
+    varnames = ["sp"]
     radius = 6731e3
     helem = 40
     Nq = 4
@@ -83,7 +141,7 @@ ClimaComms.init(context)
 
     data_handler = DataHandling.DataHandler(
         PATH,
-        varname,
+        varnames,
         target_space;
         regridder_type = :InterpolationsRegridder,
         file_reader_kwargs = (; preprocess_func = (data) -> 0.0 * data),
@@ -96,6 +154,71 @@ ClimaComms.init(context)
           (Intp.Flat(), Intp.Flat(), Intp.Flat())
     field = DataHandling.regridded_snapshot(data_handler)
     @test extrema(field) == (0.0, 0.0)
+end
+
+@testset "DataHandler errors" begin
+    # Create dummy file paths and variable names
+    path1 = "abc"
+    path2 = "def"
+
+    var1 = "var1"
+    var2 = "var2"
+    var3 = "var3"
+
+    # Construct space
+    FT = Float32
+    radius = FT(6731e3)
+    helem = 40
+    Nq = 4
+
+    horzdomain = ClimaCore.Domains.SphereDomain(radius)
+    horzmesh = ClimaCore.Meshes.EquiangularCubedSphere(horzdomain, helem)
+    horztopology = ClimaCore.Topologies.Topology2D(
+        context,
+        horzmesh,
+        ClimaCore.Topologies.spacefillingcurve(horzmesh),
+    )
+    quad = ClimaCore.Spaces.Quadratures.GLL{Nq}()
+    target_space = ClimaCore.Spaces.SpectralElementSpace2D(horztopology, quad)
+
+    regridder_type = :InterpolationsRegridder
+    compose_function = (x, y) -> x + y
+
+    # Test that multiple paths and multiple variables with different quantities are not allowed
+    @test_throws ErrorException data_handler = DataHandling.DataHandler(
+        [path1, path2],
+        [var1, var2, var3],
+        target_space;
+        regridder_type,
+        compose_function,
+    )
+
+    # Providing multiple variables without a compose function is not allowed
+    @test_throws ErrorException DataHandling.DataHandler(
+        path1,
+        [var1, var2],
+        target_space;
+        regridder_type,
+    )
+
+    # Providing a compose function with a single variable is not allowed
+    @test_throws ErrorException DataHandling.DataHandler(
+        path1,
+        var1,
+        target_space;
+        regridder_type,
+        compose_function,
+    )
+
+    # TempestRegridder does not support multiple input variables
+    regridder_type_tr = :TempestRegridder
+    @test_throws ErrorException DataHandling.DataHandler(
+        path1,
+        [var1, var2],
+        target_space;
+        regridder_type = regridder_type_tr,
+        compose_function,
+    )
 end
 
 @testset "DataHandler, TempestRegridder, time data" begin
@@ -127,7 +250,7 @@ end
                 )
 
                 @test DataHandling.available_dates(data_handler) ==
-                      data_handler.file_reader.available_dates
+                      data_handler.file_readers[varname].available_dates
                 @test data_handler.reference_date .+
                       Second.(DataHandling.available_times(data_handler)) ==
                       DataHandling.available_dates(data_handler)
@@ -252,10 +375,18 @@ end
                 @test axes(field) == target_space
                 @test eltype(field) == FT
                 @test minimum(field) >= minimum(
-                    data_handler.file_reader.dataset[varname][:, :, 10],
+                    data_handler.file_readers[varname].dataset[varname][
+                        :,
+                        :,
+                        10,
+                    ],
                 )
                 @test maximum(field) <= maximum(
-                    data_handler.file_reader.dataset[varname][:, :, 10],
+                    data_handler.file_readers[varname].dataset[varname][
+                        :,
+                        :,
+                        10,
+                    ],
                 )
 
                 close(data_handler)

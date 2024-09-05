@@ -51,6 +51,19 @@ include("TestTools.jl")
                     regridder_type,
                 )
 
+                # Test constructor with multiple variables
+                regridder_type_interp = :InterpolationsRegridder
+                compose_function = (x, y) -> x + y
+                input_multiple_vars = TimeVaryingInputs.TimeVaryingInput(
+                    PATH,
+                    ["u10n", "t2m"],
+                    target_space;
+                    reference_date = Dates.DateTime(2021, 1, 1, 1),
+                    t_start = 0.0,
+                    regridder_type = regridder_type_interp,
+                    compose_function,
+                )
+
                 input_nearest = TimeVaryingInputs.TimeVaryingInput(
                     PATH,
                     "u10n",
@@ -373,6 +386,7 @@ include("TestTools.jl")
 
                 @test parent(dest) ≈ parent(expected)
 
+                close(input_multiple_vars)
                 close(input_nearest)
                 close(input_linear)
                 close(input_nearest_flat)

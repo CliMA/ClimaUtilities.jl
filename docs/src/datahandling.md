@@ -17,7 +17,7 @@ interface). For instance, if need arises, the `DataHandler` can be used (almost)
 directly to process files with a different format from NetCDF.
 
 The key struct in `DataHandling` is the `DataHandler`. The `DataHandler`
-contains a `FileReader`, a `Regridder`, and other metadata necessary to perform
+contains one or more `FileReader`(s), a `Regridder`, and other metadata necessary to perform
 its operations (e.g., target `ClimaCore.Space`). The `DataHandler` can be used
 for static or temporal data, and exposes the following key functions:
 - `regridded_snapshot(time)`: to obtain the regridded field at the given `time`.
@@ -52,7 +52,21 @@ It is possible to pass down keyword arguments to underlying constructors in
 `DataHandler` with the `regridder_kwargs` and `file_reader_kwargs`. These have
 to be a named tuple or a dictionary that maps `Symbol`s to values.
 
-## Example
+A `DataHandler` can contain information about a variable that we read directly from
+an input file, or about a variable that is produced by composing data from multiple
+input variables. In the latter case, the input variables may either all come from
+the same input file, or may each come from a separate input file. The user must
+provide the composing function, which operates pointwise on each of the inputs,
+as well as an ordered list of the variable names to be passed to the function.
+Additionally, input variables that are composed together must have the same
+spatial and temporal dimensions.
+Note that, if a non-identity pre-processing function is provided as part of
+`file_reader_kwargs`, it will be applied to each input variable before they
+are composed.
+Composing multiple input variables is currently only supported with the
+`InterpolationsRegridder`, not with `TempestRegridder`.
+
+## Example: Linear interpolation of a single data variable
 
 As an example, let us implement a simple linear interpolation for a variable `u`
 defined in the `era5_example.nc` NetCDF file. The file contains monthly averages
@@ -68,7 +82,8 @@ import Interpolations
 
 import Dates
 
-unit_conversion_func = (data) -> 1000. * data
+# Define pre-processing function to convert units of input
+unit_conversion_func = (data) -> 1000 * data
 
 data_handler = DataHandling.DataHandler("era5_example.nc",
                                         "u",
@@ -91,6 +106,29 @@ function linear_interpolation(data_handler, time)
     return @. prev_snapshot + (next_snapshot - prev_snapshot) *
         (time - time_of_prev_snapshot) / (time_of_next_snapshot - time_of_prev_snapshot)
 end
+```
+
+### Example appendix: Using multiple input data variables
+
+Suppose that the input NetCDF file `era5_example.nc` contains two variables `u`
+and `v`, and we care about their sum `u + v` but not their individual values.
+We can provide a pointwise composing function to perform the sum, along with
+the `InterpolationsRegridder` to produce the data we want, `u + v`.
+The `preprocess_func` passed in `file_reader_kwargs` will be applied to `u`
+and to `v` individually, before the composing function is applied. The regridding
+is applied after the composing function. `u` and `v` could also come from separate
+NetCDF files, but they must still have the same spatial and temporal dimensions.
+
+```julia
+# Define the pointwise composing function we want, a simple sum in this case
+compose_function = (x, y) -> x + y
+data_handler = DataHandling.DataHandler("era5_example.nc",
+                                        ["u", "v"],
+                                        target_space,
+                                        reference_date = Dates.DateTime(2000, 1, 1),
+                                        regridder_type = :InterpolationsRegridder,
+                                        file_reader_kwargs = (; preprocess_func = unit_conversion_func),
+                                        compose_function)
 ```
 
 ## API

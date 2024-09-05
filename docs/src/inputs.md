@@ -28,13 +28,65 @@ regridding onto the computational domains (using [`Regridders`](@ref) and
 `TimeVaryingInputs` support:
 - analytic functions of time;
 - pairs of 1D arrays (for `PointSpaces`);
-- 2/3D NetCDF files;
+- 2/3D NetCDF files (including composing multiple variables from one or more files into one variable);
 - linear interpolation in time (default), nearest neighbors, and "period filling";
 - boundary conditions and repeating periodic data.
 
 It is possible to pass down keyword arguments to underlying constructors in the
 `Regridder` with the `regridder_kwargs` and `file_reader_kwargs`. These have to
 be a named tuple or a dictionary that maps `Symbol`s to values.
+
+### NetCDF file inputs
+2D or 3D NetCDF files can be provided as inputs using `TimeVaryingInputs`. This
+could be a single variable provided in a single file, multiple variables provided
+in a single file, or multiple variables each coming from a unique file.
+When using multiple variables, a composing function must be provided as well,
+which will be used to combine the input variables into one data variable that
+is ultimately stored in the `TimeVaryingInput`. In this case, the order of
+variables provided in `varnames` determines the order of the arguments
+passed to the composing function.
+
+Note that if a non-identity pre-processing function is provided as part of
+`file_reader_kwargs`, it will be applied to each input variable before they
+are composed.
+All input variables to be composed together must have the same spatial and
+temporal dimensions.
+
+Composing multiple input variables is currently only supported with the
+`InterpolationsRegridder`, not with `TempestRegridder`. The regridding
+is applied after the pre-processing and composing.
+
+Composing multiple input variables in one `Input` is also possible with
+a `SpaceVaryingInput`, and everything mentioned here applies in that case.
+
+#### Example: NetCDF file input with multiple input variables
+
+Suppose that the input NetCDF file `era5_example.nc` contains two variables `u`
+and `v`, and we care about their sum `u + v` but not their individual values.
+We can provide a pointwise composing function to perform the sum, along with
+the `InterpolationsRegridder` to produce the data we want, `u + v`.
+The `preprocess_func` passed in `file_reader_kwargs` will be applied to `u`
+and to `v` individually, before the composing function is applied. The regridding
+is applied after the composing function. `u` and `v` could also come from separate
+NetCDF files, but they must still have the same spatial and temporal dimensions.
+
+```julia
+# Define the pointwise composing function we want, a simple sum in this case
+compose_function = (x, y) -> x + y
+# Define pre-processing function to convert units of input
+unit_conversion_func = (data) -> 1000 * data
+
+data_handler = TimeVaryingInputs.TimeVaryingInput("era5_example.nc",
+                                        ["u", "v"],
+                                        target_space,
+                                        reference_date = Dates.DateTime(2000, 1, 1),
+                                        regridder_type = :InterpolationsRegridder,
+                                        file_reader_kwargs = (; preprocess_func = unit_conversion_func),
+                                        compose_function)
+```
+
+The same arguments (excluding `reference_date`) could be passed to a
+`SpaceVaryingInput` to compose multiple input variables with that type.
 
 ### Extrapolation boundary conditions
 
@@ -131,7 +183,7 @@ by a factor of 100, we would change `albedo_tv` with
 ```julia
 albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_space;
                                                reference_date, regridder_kwargs = (; regrid_dir = "/tmp"),
-                                               file_reader_kwargs = (; preprocess_func = (x) -> 100x)
+                                               file_reader_kwargs = (; preprocess_func = (x) -> 100x))
 ```
 
 !!! note In this example we used the [`TempestRegridder`](@ref). This is not the
@@ -153,10 +205,10 @@ albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_
 (chiefly the [`DataHandling`](@ref) module) to construct a `Field` from
 different sources.
 
-`TimeVaryingInputs` support:
+`SpaceVaryingInputs` support:
 - analytic functions of coordinates;
 - pairs of 1D arrays (for columns);
-- 2/3D NetCDF files.
+- 2/3D NetCDF files (including composing multiple variables from one or more files into one variable).
 
 In some ways, a `SpaceVaryingInput` can be thought as an alternative constructor
 for a `ClimaCore` `Field`.
@@ -164,6 +216,11 @@ for a `ClimaCore` `Field`.
 It is possible to pass down keyword arguments to underlying constructors in the
 `Regridder` with the `regridder_kwargs` and `file_reader_kwargs`. These have to
 be a named tuple or a dictionary that maps `Symbol`s to values.
+
+`SpaceVaryingInputs` support reading individual input variables from NetCDF files,
+as well as composing multiple input variables into one `SpaceVaryingInput`.
+See the [`TimeVaryingInput`](@ref) "NetCDF file inputs" section for more
+information about this feature.
 
 ### Example
 
@@ -202,4 +259,3 @@ ClimaUtilities.TimeVaryingInputs.extrapolation_bc
 Base.in
 Base.close
 ```
-
