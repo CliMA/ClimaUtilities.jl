@@ -7,10 +7,12 @@ functions from Julia's [Dates](https://docs.julialang.org/en/v1/stdlib/Dates/) m
 ## CallbackManager API
 
 ```@docs
+ClimaUtilities.CallbackManager.HourlyCallback
+ClimaUtilities.CallbackManager.MonthlyCallback
+ClimaUtilities.CallbackManager.Monthly
+ClimaUtilities.CallbackManager.EveryTimestep
 ClimaUtilities.CallbackManager.to_datetime
 ClimaUtilities.CallbackManager.strdate_to_datetime
 ClimaUtilities.CallbackManager.datetime_to_strdate
 ClimaUtilities.CallbackManager.trigger_callback
-ClimaUtilities.CallbackManager.Monthly
-ClimaUtilities.CallbackManager.EveryTimestep
 ```

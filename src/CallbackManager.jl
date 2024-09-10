@@ -8,12 +8,109 @@ module CallbackManager
 
 import Dates
 
-export to_datetime,
-    strdate_to_datetime,
-    datetime_to_strdate,
-    trigger_callback,
+export HourlyCallback,
+    MonthlyCallback,
     Monthly,
-    EveryTimestep
+    EveryTimestep,
+    trigger_callback,
+    to_datetime,
+    strdate_to_datetime,
+    datetime_to_strdate
+
+"""
+    AbstractCallback
+"""
+abstract type AbstractCallback end
+
+"""
+    HourlyCallback{FT}
+
+This is a callback type that triggers at intervals of 1h or multiple hours.
+"""
+@kwdef struct HourlyCallback{FT} <: AbstractCallback
+    """ Time interval at which the callback is triggered. """
+    dt::FT = FT(1) # hours
+    """ Function to be called at each trigger. """
+    func::Function = do_nothing
+    """ Reference date for the callback. """
+    ref_date::Array = [Dates.DateTime(0)]
+    """ Whether the callback is active. """
+    active::Bool = false
+    """ Data to be passed to the callback function. """
+    data::Array = []
+end
+
+"""
+    MonthlyCallback{FT}
+
+This is a callback type that triggers at intervals of 1 month or multiple months.
+"""
+@kwdef struct MonthlyCallback{FT} <: AbstractCallback
+    """ Time interval at which the callback is triggered. """
+    dt::FT = FT(1) # months
+    """ Function to be called at each trigger. """
+    func::Function = do_nothing
+    """ Reference date for the callback. """
+    ref_date::Array = [Dates.DateTime(0)]
+    """ Whether the callback is active. """
+    active::Bool = false
+    """ Data to be passed to the callback function. """
+    data::Array = []
+end
+
+"""
+    dt_cb(cb::HourlyCallback)
+    dt_cb(cb::MonthlyCallback)
+
+This function returns the time interval for the callback.
+"""
+dt_cb(cb::HourlyCallback) = Dates.Hour(cb.dt)
+dt_cb(cb::MonthlyCallback) = Dates.Month(cb.dt)
+
+
+"""
+    AbstractFrequency
+
+This is an abstract type for the frequency of a callback function.
+"""
+abstract type AbstractFrequency end
+struct Monthly <: AbstractFrequency end
+struct EveryTimestep <: AbstractFrequency end
+
+"""
+    trigger_callback(date_nextcall::Dates.DateTime,
+        date_current::Dates.DateTime,
+        ::Monthly,
+        func::Function,)
+
+If the current date is equal to or later than the "next call" date at time
+00:00:00, call the callback function and increment the next call date by one
+month. Otherwise, do nothing and leave the next call date unchanged.
+
+The tuple of arguments `func_args` must match the types, number, and order
+of arguments expected by `func`.
+
+# Arguments
+- `date_nextcall::DateTime` the next date to call the callback function at or after
+- `date_current::DateTime` the current date of the simulation
+- `save_freq::AbstractFrequency` frequency with which to trigger callback
+- `func::Function` function to be triggered if date is at or past the next call date
+- `func_args::Tuple` a tuple of arguments to be passed into the callback function
+"""
+function trigger_callback(
+    date_nextcall::Dates.DateTime,
+    date_current::Dates.DateTime,
+    ::Monthly,
+    func::Function,
+    func_args::Tuple,
+)
+    if date_current >= date_nextcall
+        func(func_args...)
+        return date_nextcall + Dates.Month(1)
+    else
+        return date_nextcall
+    end
+end
 
 """
     to_datetime(date)
@@ -66,43 +163,5 @@ datetime_to_strdate(datetime::Dates.DateTime) =
     string(string(lpad(Dates.month(datetime), 2, "0"))) *
     string(lpad(Dates.day(datetime), 2, "0"))
 
-abstract type AbstractFrequency end
-struct Monthly <: AbstractFrequency end
-struct EveryTimestep <: AbstractFrequency end
-
-"""
-    trigger_callback(date_nextcall::Dates.DateTime,
-        date_current::Dates.DateTime,
-        ::Monthly,
-        func::Function,)
-
-If the current date is equal to or later than the "next call" date at time
-00:00:00, call the callback function and increment the next call date by one
-month. Otherwise, do nothing and leave the next call date unchanged.
-
-The tuple of arguments `func_args` must match the types, number, and order
-of arguments expected by `func`.
-
-# Arguments
-- `date_nextcall::DateTime` the next date to call the callback function at or after
-- `date_current::DateTime` the current date of the simulation
-- `save_freq::AbstractFrequency` frequency with which to trigger callback
-- `func::Function` function to be triggered if date is at or past the next call date
-- `func_args::Tuple` a tuple of arguments to be passed into the callback function
-"""
-function trigger_callback(
-    date_nextcall::Dates.DateTime,
-    date_current::Dates.DateTime,
-    ::Monthly,
-    func::Function,
-    func_args::Tuple,
-)
-    if date_current >= date_nextcall
-        func(func_args...)
-        return date_nextcall + Dates.Month(1)
-    else
-        return date_nextcall
-    end
-end
 
 end # module CallbackManager
