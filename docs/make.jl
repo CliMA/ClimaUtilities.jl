@@ -23,7 +23,7 @@ pages = [
     "DataHandling" => "datahandling.md",
     "Regridders" => "regridders.md",
     "OutputPathGenerator" => "outputpathgenerator.md",
-    "TimeManager" => "timemanager.md",
+    "CallbackManager" => "callbackmanager.md",
     "Frequently Asked Questions" => "faqs.md",
 ]
 
