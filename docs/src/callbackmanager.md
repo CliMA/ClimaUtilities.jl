@@ -14,5 +14,5 @@ ClimaUtilities.CallbackManager.EveryTimestep
 ClimaUtilities.CallbackManager.to_datetime
 ClimaUtilities.CallbackManager.strdate_to_datetime
 ClimaUtilities.CallbackManager.datetime_to_strdate
-ClimaUtilities.CallbackManager.trigger_callback
+ClimaUtilities.CallbackManager.trigger_callback!
 ```

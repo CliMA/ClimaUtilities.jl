@@ -38,7 +38,7 @@ for FT in (Float32, Float64)
               "00000101"
     end
 
-    @testset "test trigger_callback for FT=$FT" begin
+    @testset "test trigger_callback! for FT=$FT" begin
         # Define callback function
         func! = (val) -> val[1] += 1
         # Case 1: date_current == date_nextcall
@@ -47,7 +47,7 @@ for FT in (Float32, Float64)
         arg_copy = copy(arg)
         date_current =
             date_nextcall = date_nextcall_copy = Dates.DateTime(1979, 3, 21)
-        date_nextcall = CallbackManager.trigger_callback(
+        date_nextcall = CallbackManager.trigger_callback!(
             date_nextcall,
             date_current,
             CallbackManager.Monthly(),
@@ -61,7 +61,7 @@ for FT in (Float32, Float64)
         # Case 2: date_current > date_nextcall
         date_nextcall = date_nextcall_copy = Dates.DateTime(1979, 3, 21)
         date_current = date_nextcall + Dates.Day(1)
-        date_nextcall = CallbackManager.trigger_callback(
+        date_nextcall = CallbackManager.trigger_callback!(
             date_nextcall,
             date_current,
             CallbackManager.Monthly(),
@@ -75,7 +75,7 @@ for FT in (Float32, Float64)
         # Case 3: date_current < date_nextcall
         date_nextcall = date_nextcall_copy = Dates.DateTime(1979, 3, 21)
         date_current = date_nextcall - Dates.Day(1)
-        date_nextcall = CallbackManager.trigger_callback(
+        date_nextcall = CallbackManager.trigger_callback!(
             date_nextcall,
             date_current,
             CallbackManager.Monthly(),
