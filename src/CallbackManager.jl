@@ -1,10 +1,10 @@
 """
-    TimeManager
+    CallbackManager
 
 This module facilitates calendar functions and temporal interpolations
 of data.
 """
-module TimeManager
+module CallbackManager
 
 import Dates
 
@@ -105,4 +105,4 @@ function trigger_callback(
     end
 end
 
-end # module TimeManager
+end # module CallbackManager
