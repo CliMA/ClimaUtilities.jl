@@ -144,19 +144,34 @@ function TimeVaryingInputs.TimeVaryingInput(
     varnames::Union{AbstractString, AbstractArray{<:AbstractString}},
     target_space::ClimaCore.Spaces.AbstractSpace;
     method = LinearInterpolation(),
-    reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
-    t_start::AbstractFloat = 0.0,
+    start_date::Union{Dates.DateTime, Dates.Date} = Dates.DateTime(1979, 1, 1),
     regridder_type = nothing,
     regridder_kwargs = (),
     file_reader_kwargs = (),
     compose_function = identity,
+    ########### DEPRECATED ###############
+    reference_date = nothing,
+    t_start = nothing,
+    ########### DEPRECATED ###############
 )
+    ########### DEPRECATED ###############
+    if !isnothing(reference_date)
+        start_date = reference_date
+        Base.depwarn(
+            "The keyword argument `reference_date` is deprecated. Use `start_date` instead.",
+            :TimeVaryingInput,
+        )
+    end
+    if !isnothing(t_start)
+        Base.depwarn("`t_start` was removed will be ignored", :TimeVaryingInput)
+    end
+    ########### DEPRECATED ###############
+
     data_handler = DataHandling.DataHandler(
         file_paths,
         varnames,
         target_space;
-        reference_date,
-        t_start,
+        start_date,
         regridder_type,
         regridder_kwargs,
         file_reader_kwargs,

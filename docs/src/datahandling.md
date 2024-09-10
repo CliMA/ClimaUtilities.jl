@@ -88,12 +88,12 @@ unit_conversion_func = (data) -> 1000 * data
 data_handler = DataHandling.DataHandler("era5_example.nc",
                                         "u",
                                         target_space,
-                                        reference_date = Dates.DateTime(2000, 1, 1),
+                                        start_date = Dates.DateTime(2000, 1, 1),
                                         regridder_type = :InterpolationsRegridder,
                                         file_reader_kwargs = (; preprocess_func = unit_conversion_func))
 
 function linear_interpolation(data_handler, time)
-    # Time is assumed to be "simulation time", ie seconds starting from reference_date
+    # Time is assumed to be "simulation time", ie seconds starting from start_date
 
     time_of_prev_snapshot = DataHandling.previous_time(data_handler, time)
     time_of_next_snapshot = DataHandling.next_time(data_handler, time)
@@ -125,7 +125,7 @@ compose_function = (x, y) -> x + y
 data_handler = DataHandling.DataHandler("era5_example.nc",
                                         ["u", "v"],
                                         target_space,
-                                        reference_date = Dates.DateTime(2000, 1, 1),
+                                        start_date = Dates.DateTime(2000, 1, 1),
                                         regridder_type = :InterpolationsRegridder,
                                         file_reader_kwargs = (; preprocess_func = unit_conversion_func),
                                         compose_function)

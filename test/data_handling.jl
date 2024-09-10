@@ -243,15 +243,14 @@ end
                 data_handler = DataHandling.DataHandler(
                     PATH,
                     varname,
-                    target_space,
-                    reference_date = Dates.DateTime(2000, 1, 1),
-                    t_start = 0.0;
+                    target_space;
+                    start_date = Dates.DateTime(2000, 1, 1),
                     regridder_type,
                 )
 
                 @test DataHandling.available_dates(data_handler) ==
                       data_handler.file_readers[varname].available_dates
-                @test data_handler.reference_date .+
+                @test data_handler.start_date .+
                       Second.(DataHandling.available_times(data_handler)) ==
                       DataHandling.available_dates(data_handler)
 
@@ -262,17 +261,17 @@ end
                       available_times[2] - available_times[1]
 
                 @test DataHandling.time_to_date(data_handler, 0.0) ==
-                      data_handler.reference_date
+                      data_handler.start_date
                 @test DataHandling.time_to_date(data_handler, 1.0) ==
-                      data_handler.reference_date + Second(1)
+                      data_handler.start_date + Second(1)
 
                 @test DataHandling.date_to_time(
                     data_handler,
-                    data_handler.reference_date,
-                ) == data_handler.t_start
+                    data_handler.start_date,
+                ) == 0.0
                 @test DataHandling.date_to_time(
                     data_handler,
-                    data_handler.reference_date + Second(1),
+                    data_handler.start_date + Second(1),
                 ) == 1.0
 
                 # Previous time with time

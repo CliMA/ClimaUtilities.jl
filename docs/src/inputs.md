@@ -79,13 +79,13 @@ unit_conversion_func = (data) -> 1000 * data
 data_handler = TimeVaryingInputs.TimeVaryingInput("era5_example.nc",
                                         ["u", "v"],
                                         target_space,
-                                        reference_date = Dates.DateTime(2000, 1, 1),
+                                        start_date = Dates.DateTime(2000, 1, 1),
                                         regridder_type = :InterpolationsRegridder,
                                         file_reader_kwargs = (; preprocess_func = unit_conversion_func),
                                         compose_function)
 ```
 
-The same arguments (excluding `reference_date`) could be passed to a
+The same arguments (excluding `start_date`) could be passed to a
 `SpaceVaryingInput` to compose multiple input variables with that type.
 
 ### Extrapolation boundary conditions
@@ -165,10 +165,10 @@ albedo_tv_an = TimeVaryingInput((t) -> 0.5)
 
 # If the albedo comes from data
 
-# reference_date is the calendar date at the beginning of our simulation
-reference_date = Dates.DateTime(2000, 1, 1)
+# start_date is the calendar date at the beginning of our simulation
+start_date = Dates.DateTime(2000, 1, 1)
 albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_space;
-                                               reference_date, regridder_kwargs = (; regrid_dir = "/tmp"))
+                                               start_date, regridder_kwargs = (; regrid_dir = "/tmp"))
 # When using data from files, the data is automatically interpolated to the correct
 # time
 
@@ -182,7 +182,7 @@ to other constructors. This often used to preprocess files that are being read
 by a factor of 100, we would change `albedo_tv` with
 ```julia
 albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_space;
-                                               reference_date, regridder_kwargs = (; regrid_dir = "/tmp"),
+                                               start_date, regridder_kwargs = (; regrid_dir = "/tmp"),
                                                file_reader_kwargs = (; preprocess_func = (x) -> 100x))
 ```
 
