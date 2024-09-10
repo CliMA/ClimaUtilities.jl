@@ -3,30 +3,40 @@ ClimaUtilities.jl Release Notes
 
 main
 -------
-- [Feature] Add support for composing input variables.
-  PR [#105](https://github.com/CliMA/ClimaUtilities.jl/pull/105/)
 
-  This allows a list of `varnames` (and possibly `file_paths`) to be
-  passed to `TimeVaryingInput` or `SpaceVaryingInput`, along with a
-  `compose_function` to compose them, as so:
+### Features
 
-  ```julia
-  # Define the pointwise composing function we want, a simple sum in this case
-  compose_function = (x, y) -> x + y
-  # Define pre-processing function to convert units of input
-  unit_conversion_func = (data) -> 1000 * data
+Added support for composing input variables. PR
+[#105](https://github.com/CliMA/ClimaUtilities.jl/pull/105/)
 
-  data_handler = TimeVaryingInputs.TimeVaryingInput("era5_example.nc",
-                                          ["u", "v"],
-                                          target_space,
-                                          reference_date = Dates.DateTime(2000, 1, 1),
-                                          regridder_type = :InterpolationsRegridder,
-                                          file_reader_kwargs = (; preprocess_func = unit_conversion_func),
-                                          compose_function)
-  ```
+This allows a list of `varnames` (and possibly `file_paths`) to be passed to
+`TimeVaryingInput` or `SpaceVaryingInput`, along with a `compose_function` to
+compose them, as so:
 
-  See the `TimeVaryingInput` or `DataHandler` docs "NetCDF file input"
-  sections for more details.
+```julia
+# Define the pointwise composing function we want, a simple sum in this case
+compose_function = (x, y) -> x + y
+# Define pre-processing function to convert units of input
+unit_conversion_func = (data) -> 1000 * data
+
+data_handler = TimeVaryingInputs.TimeVaryingInput("era5_example.nc",
+                                        ["u", "v"],
+                                        target_space,
+                                        start_date = Dates.DateTime(2000, 1, 1),
+                                        regridder_type = :InterpolationsRegridder,
+                                        file_reader_kwargs = (; preprocess_func = unit_conversion_func),
+                                        compose_function)
+```
+
+See the `TimeVaryingInput` or `DataHandler` docs "NetCDF file input" sections
+for more details.
+
+### Deprecations
+
+`reference_date` was renamed to `start_date` and `t_start` was dropped from
+the constructors for `DataHandler` and `TimeVaryingInput`.
+
+These changes are due to the fact that these arguments should not be needed.
 
 v0.1.14
 -------

@@ -89,13 +89,9 @@ include("TestTools.jl")
             DateTime(1995, 1, 6),
             DateTime(1995, 12, 11),
         ]
-        reference_date = DateTime(1985, 1, 1)
-        t_start = 0.0
+        start_date = DateTime(1985, 1, 1)
 
-        times = map(
-            d -> period_to_seconds_float(d - reference_date) - t_start,
-            dates,
-        )
+        times = map(d -> period_to_seconds_float(d - start_date), dates)
 
         ones_array = ones(Float64, (3, 3))
 
@@ -124,8 +120,7 @@ include("TestTools.jl")
             data_path,
             "data",
             target_space;
-            reference_date,
-            t_start,
+            start_date,
             regridder_type,
         )
 

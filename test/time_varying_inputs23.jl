@@ -46,8 +46,7 @@ include("TestTools.jl")
                     PATH,
                     "u10n",
                     target_space;
-                    reference_date = Dates.DateTime(2021, 1, 1, 1),
-                    t_start = 0.0,
+                    start_date = Dates.DateTime(2021, 1, 1, 1),
                     regridder_type,
                 )
 
@@ -58,7 +57,7 @@ include("TestTools.jl")
                     PATH,
                     ["u10n", "t2m"],
                     target_space;
-                    reference_date = Dates.DateTime(2021, 1, 1, 1),
+                    start_date = Dates.DateTime(2021, 1, 1, 1),
                     t_start = 0.0,
                     regridder_type = regridder_type_interp,
                     compose_function,
@@ -68,8 +67,7 @@ include("TestTools.jl")
                     PATH,
                     "u10n",
                     target_space;
-                    reference_date = Dates.DateTime(2021, 1, 1, 1),
-                    t_start = 0.0,
+                    start_date = Dates.DateTime(2021, 1, 1, 1),
                     regridder_type,
                     method = TimeVaryingInputs.NearestNeighbor(),
                 )
@@ -78,8 +76,7 @@ include("TestTools.jl")
                     PATH,
                     "u10n",
                     target_space;
-                    reference_date = Dates.DateTime(2021, 1, 1, 1),
-                    t_start = 0.0,
+                    start_date = Dates.DateTime(2021, 1, 1, 1),
                     regridder_type,
                     method = TimeVaryingInputs.NearestNeighbor(
                         TimeVaryingInputs.Flat(),
@@ -91,8 +88,7 @@ include("TestTools.jl")
                         PATH,
                         "u10n",
                         target_space;
-                        reference_date = Dates.DateTime(2021, 1, 1, 1),
-                        t_start = 0.0,
+                        start_date = Dates.DateTime(2021, 1, 1, 1),
                         regridder_type,
                         method = TimeVaryingInputs.NearestNeighbor(
                             TimeVaryingInputs.PeriodicCalendar(),
@@ -104,8 +100,7 @@ include("TestTools.jl")
                         PATH,
                         "u10n",
                         target_space;
-                        reference_date = Dates.DateTime(2021, 1, 1, 1),
-                        t_start = 0.0,
+                        start_date = Dates.DateTime(2021, 1, 1, 1),
                         regridder_type,
                         method = TimeVaryingInputs.LinearInterpolation(
                             TimeVaryingInputs.PeriodicCalendar(),
@@ -123,8 +118,7 @@ include("TestTools.jl")
                         PATH,
                         "u10n",
                         target_space;
-                        reference_date = Dates.DateTime(2021, 1, 1, 1),
-                        t_start = 0.0,
+                        start_date = Dates.DateTime(2021, 1, 1, 1),
                         regridder_type,
                         method = TimeVaryingInputs.NearestNeighbor(
                             TimeVaryingInputs.PeriodicCalendar(
@@ -139,8 +133,7 @@ include("TestTools.jl")
                         PATH,
                         "u10n",
                         target_space;
-                        reference_date = Dates.DateTime(2021, 1, 1, 1),
-                        t_start = 0.0,
+                        start_date = Dates.DateTime(2021, 1, 1, 1),
                         regridder_type,
                         method = TimeVaryingInputs.LinearInterpolation(
                             TimeVaryingInputs.PeriodicCalendar(

@@ -19,11 +19,11 @@ import Interpolations
 # Loading ClimaCore, NCDatasets, Interpolations loads the extensions we need
 
 # target_space is defined somewhere and is our computational grid
-# reference_date is the simulation date
+# start_date is the simulation date
 
 distance_tv = TimeVaryingInputs.TimeVaryingInput("distances.nc",
                                                   "distance",
                                                   target_space;
-                                                  reference_date,
+                                                  start_date,
                                                   file_reader_kwargs = (; preprocess_func = x -> 10x))
 ```

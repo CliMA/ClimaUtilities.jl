@@ -20,7 +20,6 @@ import ClimaUtilities.DataHandling
          FR <: AbstractDict{<:AbstractString, <:AbstractFileReader},
          REG <: AbstractRegridder,
          SPACE <: ClimaCore.Spaces.AbstractSpace,
-         TSTART <: AbstractFloat,
          DATES <: AbstractArray{Dates.DateTime},
          DIMS,
          TIMES <: AbstractArray{<:AbstractFloat},
@@ -52,7 +51,6 @@ struct DataHandler{
     FR <: AbstractDict{<:AbstractString, <:AbstractFileReader},
     REG <: AbstractRegridder,
     SPACE <: ClimaCore.Spaces.AbstractSpace,
-    TSTART <: AbstractFloat,
     DATES <: AbstractArray{Dates.DateTime},
     DIMS,
     TIMES <: AbstractArray{<:AbstractFloat},
@@ -75,12 +73,8 @@ struct DataHandler{
     """Calendar dates over which the data is defined"""
     available_dates::DATES
 
-    """Simulation time at the beginning of the simulation in seconds (typically 0, but
-    could be different, e.g., for restarted simulations)"""
-    t_start::TSTART
-
     """Reference calendar date at the beginning of the simulation."""
-    reference_date::Dates.DateTime
+    start_date::Dates.DateTime
 
     """Timesteps over which the data is defined (in seconds)"""
     available_times::TIMES
@@ -99,8 +93,7 @@ end
     DataHandler(file_paths::Union{AbstractString, AbstractArray{<:AbstractString}},
                 varnames::Union{AbstractString, AbstractArray{<:AbstractString}},
                 target_space::ClimaCore.Spaces.AbstractSpace;
-                reference_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
-                t_start::AbstractFloat = 0.0,
+                start_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
                 regridder_type = nothing,
                 cache_max_size::Int = 128,
                 regridder_kwargs = (),
@@ -125,9 +118,7 @@ Keyword arguments
 Time/date information will be ignored for static input files. (They are still set to make
 everything more type stable.)
 
-- `reference_date`: Calendar date corresponding to the start of the simulation.
-- `t_start`: Simulation time at the beginning of the simulation. Typically this is 0
-             (seconds), but if might be different if the simulation was restarted.
+- `start_date`: Calendar date corresponding to the start of the simulation.
 - `regridder_type`: What type of regridding to perform. Currently, the ones implemented are
                     `:TempestRegridder` (using `TempestRemap`) and
                     `:InterpolationsRegridder` (using `Interpolations.jl`). `TempestRemap`
@@ -149,18 +140,33 @@ function DataHandling.DataHandler(
     file_paths::Union{AbstractString, AbstractArray{<:AbstractString}},
     varnames::Union{AbstractString, AbstractArray{<:AbstractString}},
     target_space::ClimaCore.Spaces.AbstractSpace;
-    reference_date::Union{Dates.DateTime, Dates.Date} = Dates.DateTime(
-        1979,
-        1,
-        1,
-    ),
-    t_start::AbstractFloat = 0.0,
+    start_date::Union{Dates.DateTime, Dates.Date} = Dates.DateTime(1979, 1, 1),
     regridder_type = nothing,
     cache_max_size::Int = 128,
     regridder_kwargs = (),
     file_reader_kwargs = (),
     compose_function = identity,
+    ########### DEPRECATED ###############
+    reference_date = nothing,
+    t_start = nothing,
+    ########### DEPRECATED ###############
 )
+    ########### DEPRECATED ###############
+    if !isnothing(reference_date)
+        start_date = reference_date
+        Base.depwarn(
+            "The keyword argument `reference_date` is deprecated. Use `start_date` instead.",
+            :DataHandler,
+        )
+    end
+    if !isnothing(t_start)
+        Base.depwarn(
+            "`t_start` is deprecated and will be ignored",
+            :DataHandler,
+        )
+    end
+    ########### DEPRECATED ###############
+
     # Convert `file_paths` and `varnames` to arrays if they are not already
     # After this point, we assume that `file_paths` and `varnames` are arrays, possibly with only one element
     if file_paths isa AbstractString
@@ -255,8 +261,7 @@ function DataHandling.DataHandler(
     # Note: using one arbitrary element of `file_readers` assumes
     #  that all input variables have the same time development
     available_dates = first(values(file_readers)).available_dates
-    times_s = period_to_seconds_float.(available_dates .- reference_date)
-    available_times = times_s .- t_start
+    available_times = period_to_seconds_float.(available_dates .- start_date)
     dimensions = first(values(file_readers)).dimensions
 
     return DataHandler(
@@ -265,8 +270,7 @@ function DataHandling.DataHandler(
         target_space,
         dimensions,
         available_dates,
-        t_start,
-        Dates.DateTime(reference_date),
+        Dates.DateTime(start_date),
         available_times,
         _cached_regridded_fields,
         compose_function,
@@ -324,7 +328,7 @@ end
 Convert the given time to a calendar date.
 
 ```
-date = reference_date + t_start + time
+date = start_date + time
 ```
 """
 function DataHandling.time_to_date(
@@ -336,8 +340,8 @@ function DataHandling.time_to_date(
     # difference between two DateTimes. In addition to this, we add a round to account for
     # floating point errors. If the floating point error is small enough, round will correct
     # it.
-    time_ms = Dates.Millisecond(round(1_000 * (data_handler.t_start + time)))
-    return data_handler.reference_date + time_ms
+    time_ms = Dates.Millisecond(round(1_000 * time))
+    return data_handler.start_date + time_ms
 end
 
 """
@@ -346,15 +350,14 @@ end
 Convert the given calendar date to a time (in seconds).
 
 ```
-date = reference_date + t_start + time
+date = start_date + time
 ```
 """
 function DataHandling.date_to_time(
     data_handler::DataHandler,
     date::Dates.DateTime,
 )
-    return period_to_seconds_float(date - data_handler.reference_date) -
-           data_handler.t_start
+    return period_to_seconds_float(date - data_handler.start_date)
 end
 
 """
