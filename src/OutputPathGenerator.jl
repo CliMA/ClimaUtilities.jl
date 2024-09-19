@@ -19,7 +19,6 @@ abstract type OutputPathGeneratorStyle end
                           sleep_time = 0.1,
                           max_attempts = 10)
 
-
 Distributed filesystems might need some time to catch up a file/folder is created/removed.
 
 This function watches the given `path` with `check_func` and returns when `check_func(path)`
@@ -201,21 +200,13 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
             )
         end
     else
-        # The link does not exist, but maybe there are already output folders. We can try to
-        # guess what was the last one by first filtering the folders that match the name,
-        # and then taking the first one when sorted in reverse alphabetical order.
-        existing_outputs =
-            filter(x -> !isnothing(match(name_rx, x)), readdir(output_path))
-        if length(existing_outputs) > 0
+        # The link does not exist, but maybe there are already output folders. We can find
+        # the most recent counter by scanning the names and finding the last one that
+        # matches the regular expression in alphabetical order, if any.
+        next_counter = most_recent_counter(output_path; name_rx) + 1
+        if next_counter != 0
             @warn "$output_path already contains some output data, but no active link"
-            latest_output = first(sort(existing_outputs, rev = true))
-            counter_str = match(name_rx, latest_output)
-            counter = parse(Int, counter_str[1])
-            next_counter = counter + 1
             @warn "Restarting counter from $next_counter"
-        else
-            # This is our first counter
-            next_counter = 0
         end
     end
     # For MPI runs, we have to make sure we are synced
@@ -250,6 +241,30 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
     end
     maybe_wait_filesystem(context, new_output_folder)
     return new_output_folder
+end
+
+"""
+    most_recent_counter(output_path; name_rx)
+
+Find the most recent counter in the folders produced by the
+[`ClimaUtilities.OutputPathGenerator.ActiveLinkStyle`](@ref).
+
+The value is return as an integer and `-1` is returned when there is no other pre-existing
+output. (So that `most_recent_counter + 1` is always the next counter.)
+"""
+function most_recent_counter(output_path; name_rx)
+    # We find the most recent counter by filtering the folders that match the name, and then
+    # taking the first one when sorted in reverse alphabetical order.
+    existing_outputs =
+        filter(x -> !isnothing(match(name_rx, x)), readdir(output_path))
+    if isempty(existing_outputs)
+        return -1
+    else
+        latest_output = first(sort(existing_outputs, rev = true))
+        counter_str = match(name_rx, latest_output)
+        counter = parse(Int, counter_str[1])
+        return counter
+    end
 end
 
 end

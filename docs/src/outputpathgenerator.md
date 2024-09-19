@@ -38,6 +38,10 @@ also creates a symbolic link named `output_active` that points to the current
 active subfolder. This allows you to easily access the latest simulation
 results.
 
+The [`ClimaUtilities.OutputPathGenerator.most_recent_counter`](@ref) function
+can be used to find the number associated to the most recent folder produced by
+this style.
+
 #### `Example`
 
 Let's assume your `output_path` is set to `data`.
@@ -66,4 +70,5 @@ system. If you are using Windows, please have a look at docstring on the
 ClimaUtilities.OutputPathGenerator.generate_output_path
 ClimaUtilities.OutputPathGenerator.RemovePreexistingStyle
 ClimaUtilities.OutputPathGenerator.ActiveLinkStyle
+ClimaUtilities.OutputPathGenerator.most_recent_counter
 ```

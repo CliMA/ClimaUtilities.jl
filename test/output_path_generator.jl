@@ -1,5 +1,8 @@
 import ClimaUtilities.OutputPathGenerator:
-    generate_output_path, RemovePreexistingStyle, ActiveLinkStyle
+    generate_output_path,
+    RemovePreexistingStyle,
+    ActiveLinkStyle,
+    most_recent_counter
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Base: rm
@@ -74,6 +77,11 @@ end
 
     expected_output = joinpath(output_path, "output_0000")
 
+    name_rx = r"output_(\d\d\d\d)"
+
+    # No outputs
+    @test most_recent_counter(base_output_path; name_rx) == -1
+
     @test expected_output ==
           generate_output_path(output_path, context = context)
 
@@ -86,11 +94,15 @@ end
     # # Check link points to folder
     @test readlink(output_link) == "output_0000"
 
+    @test most_recent_counter(output_path; name_rx) == 0
+
     # Now the folder exists, let us see if the rotation works
     expected_output = joinpath(output_path, "output_0001")
 
     @test expected_output ==
           generate_output_path(output_path, context = context)
+
+    @test most_recent_counter(output_path; name_rx) == 1
 
     # Check folder was created
     @test isdir(joinpath(output_path, "output_0001"))
