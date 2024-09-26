@@ -12,6 +12,7 @@ struct InterpolationsRegridder{
     SPACE <: ClimaCore.Spaces.AbstractSpace,
     FIELD <: ClimaCore.Fields.Field,
     BC,
+    FC <: Tuple
 } <: Regridders.AbstractRegridder
 
     """ClimaCore.Space where the output Field will be defined"""
@@ -22,12 +23,19 @@ struct InterpolationsRegridder{
 
     """Tuple of extrapolation conditions as accepted by Interpolations.jl"""
     extrapolation_bc::BC
+
+    """Ordered tuple of coordinates that should be kept fixed during interpolation in
+    addition to the coordinate of the target_space. This is going to be splatted in front of
+    the coordinates of the space. For example, if the target space is a vertical space, but
+    the input file is a 3D one, this can be a tuple with two elements: target long and
+    lat."""
+    fixed_coordinates::FC
 end
 
-# Note, we swap Lat and Long! This is because according to the CF conventions longitude
-# should be first, so files will have longitude as first dimension.
+# Note, we swap Lat and Long!
 totuple(pt::ClimaCore.Geometry.LatLongZPoint) = pt.long, pt.lat, pt.z
 totuple(pt::ClimaCore.Geometry.LatLongPoint) = pt.long, pt.lat
+totuple(pt::ClimaCore.Geometry.Point) = pt.z
 
 """
     InterpolationsRegridder(target_space::ClimaCore.Spaces.AbstractSpace
@@ -50,11 +58,13 @@ Keyword arguments
 The optional keyword argument `extrapolation_bc` controls what should be done when the
 interpolation point is not in the domain of definition. This has to be a tuple of N
 elements, where N is the number of spatial dimensions. For 3D spaces, the default is
-`(Interpolations.Periodic(), Interpolations.Flat(), Interpolations.Throw())`.
+`(Interpolations.Periodic(), Interpolations.Flat(), Interpolations.Throw())`. For 1D spaces,
+the default is `Interpolations.Throw()`.
 """
 function Regridders.InterpolationsRegridder(
     target_space::ClimaCore.Spaces.AbstractSpace;
     extrapolation_bc::Union{Nothing, Tuple} = nothing,
+    fixed_coordinates = (),
 )
     coordinates = ClimaCore.Fields.coordinate_field(target_space)
 
@@ -64,12 +74,14 @@ function Regridders.InterpolationsRegridder(
             extrapolation_bc = (Intp.Periodic(), Intp.Flat())
         elseif eltype(coordinates) <: ClimaCore.Geometry.LatLongZPoint
             extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Throw())
+        elseif eltype(coordinates) <: ClimaCore.Geometry.ZPoint
+            extrapolation_bc = (Intp.Throw(), )
         else
-            error("Only lat-long, lat-long-z spaces are supported")
+            error("Only z, lat-long, lat-long-z spaces are supported")
         end
     end
 
-    return InterpolationsRegridder(target_space, coordinates, extrapolation_bc)
+    return InterpolationsRegridder(target_space, coordinates, extrapolation_bc, fixed_coordinates)
 end
 
 """
@@ -93,7 +105,7 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
     gpuitp = Adapt.adapt(ClimaComms.array_type(regridder.target_space), itp)
 
     return map(regridder.coordinates) do coord
-        gpuitp(totuple(coord)...)
+        gpuitp(regridder.fixed_coordinates..., totuple(coord)...)
     end
 end
 
