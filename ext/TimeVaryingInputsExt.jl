@@ -219,9 +219,6 @@ function _time_range_dt_dt_e(
     itp::InterpolatingTimeVaryingInput23D,
     extrapolation_bc::PeriodicCalendar{Nothing},
 )
-    isequispaced(DataHandling.available_times(itp.data_handler)) || error(
-        "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
-    )     # Here for good measure
     dt = DataHandling.dt(itp.data_handler)
     return itp.range[begin], itp.range[end], dt, dt / 2
 end

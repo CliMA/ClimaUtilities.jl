@@ -4,6 +4,13 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+main
+-------
+
+### Bug fixes
+
+`Utils.isequispaced` is now more efficient: it fails fast and does not allocate
+as much. More redundant allocations due to `Utils.isequispaced` were fixed.
 
 v0.1.15
 -------

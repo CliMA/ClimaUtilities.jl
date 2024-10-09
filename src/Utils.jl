@@ -97,8 +97,13 @@ function isequispaced(
     tol = eltype(v) <: AbstractFloat ? sqrt(eps(eltype(v))) : eps(),
 )
     length(v) < 2 && return true
-    diffs = diff(v)
-    return all(abs(d - diffs[begin]) < tol for d in diffs)
+    dv = v[begin + 1] - v[begin]
+    @inbounds for i in 2:length(v)
+        if abs(v[i] - v[i - 1] - dv) > tol
+            return false
+        end
+    end
+    return true
 end
 
 """
