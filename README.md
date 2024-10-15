@@ -26,7 +26,7 @@ ClimaUtilities.jl
   to process input data and remap it onto the simulation grid.
 - [`OutputPathGenerator`](https://clima.github.io/ClimaUtilities.jl/dev/outputpathgenerator/)
   to prepare the output directory structure of a simulation.
-- [`TimeManager`](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/) to
+- [`CallbackManager`](https://clima.github.io/ClimaUtilities.jl/dev/callbackmanager/) to
   handle dates.
 
 ## ClimaUtilities.jl Developer Guidelines
@@ -178,6 +178,5 @@ two commits when the second just fixes the first).
 
 The `Space` and `TimeVaryingInputs` modules were initially developed in the
 context of [`ClimaLand`](https://github.com/CliMA/ClimaLand.jl), the
-`TempestRegridder` and `TimeManager` ones were initially developed in
+`TempestRegridder` and `CallbackManager` ones were initially developed in
 [`ClimaCoupler`](https://github.com/CliMA/ClimaCoupler.jl).
-

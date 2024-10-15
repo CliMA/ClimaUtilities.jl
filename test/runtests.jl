@@ -28,8 +28,8 @@ end
     include("output_path_generator.jl")
 end
 
-@safetestset "TimeManager tests" begin
-    include("timemanager.jl")
+@safetestset "CallbackManager tests" begin
+    include("callbackmanager.jl")
 end
 
 @safetestset "DataStructures tests" begin
