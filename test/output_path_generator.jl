@@ -1,5 +1,8 @@
 import ClimaUtilities.OutputPathGenerator:
-    generate_output_path, RemovePreexistingStyle, ActiveLinkStyle
+    generate_output_path,
+    RemovePreexistingStyle,
+    ActiveLinkStyle,
+    detect_restart_file
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 import Base: rm
@@ -138,4 +141,84 @@ end
     end
     ClimaComms.barrier(context)
     let_filesystem_catch_up()
+end
+
+@testset "detect_restart_file" begin
+    # Test with non-ActiveLinkStyle
+    @test_throws ErrorException detect_restart_file(
+        RemovePreexistingStyle(),
+        ".",
+    )
+
+    # Test with non-existent base directory
+    base_output_dir = "non_existent_dir"
+    restart_file = detect_restart_file(ActiveLinkStyle(), base_output_dir)
+    @test isnothing(restart_file)
+
+    # Test with empty base directory
+    mktempdir() do base_output_dir
+        restart_file = detect_restart_file(ActiveLinkStyle(), base_output_dir)
+        @test isnothing(restart_file)
+    end
+
+    # Test with a single output directory and no restart files
+    mktempdir() do base_output_dir
+        mkdir(joinpath(base_output_dir, "output_0001"))
+        restart_file = detect_restart_file(ActiveLinkStyle(), base_output_dir)
+        @test isnothing(restart_file)
+    end
+
+    # Test with a single output directory and a single restart file
+    mktempdir() do base_output_dir
+        output_dir = joinpath(base_output_dir, "output_0001")
+        mkdir(output_dir)
+        touch(joinpath(output_dir, "day0001.1234.hdf5"))
+        restart_file = detect_restart_file(ActiveLinkStyle(), base_output_dir)
+        @test restart_file == joinpath(output_dir, "day0001.1234.hdf5")
+    end
+
+    # Test with multiple output directories and restart files
+    mktempdir() do base_output_dir
+        output_dir1 = joinpath(base_output_dir, "output_0001")
+        output_dir2 = joinpath(base_output_dir, "output_0002")
+        mkdir(output_dir1)
+        mkdir(output_dir2)
+        touch(joinpath(output_dir1, "day0001.1234.hdf5"))
+        sleep(0.1)
+        touch(joinpath(output_dir2, "day0002.5678.hdf5"))
+        restart_file = detect_restart_file(ActiveLinkStyle(), base_output_dir)
+        @test restart_file == joinpath(output_dir2, "day0002.5678.hdf5")
+    end
+
+    # Test with a custom restart file regular expression
+    mktempdir() do base_output_dir
+        output_dir = joinpath(base_output_dir, "output_0001")
+        mkdir(output_dir)
+        touch(joinpath(output_dir, "restart_0001.h5"))
+        restart_file = detect_restart_file(
+            ActiveLinkStyle(),
+            base_output_dir;
+            restart_file_rx = r"restart_\d+\.h5",
+        )
+        @test restart_file == joinpath(output_dir, "restart_0001.h5")
+    end
+
+    # Test with a custom sorting function (e.g., sort by reverse modification time)
+    mktempdir() do base_output_dir
+        output_dir = joinpath(base_output_dir, "output_0001")
+        mkdir(output_dir)
+        touch(joinpath(output_dir, "day0001.1234.hdf5"))
+        sleep(0.1)
+        touch(joinpath(output_dir, "day0002.5678.hdf5"))
+        restart_file = detect_restart_file(
+            ActiveLinkStyle(),
+            base_output_dir,
+            sort_func = x -> sort(
+                x,
+                by = f -> stat(joinpath(output_dir, f)).mtime,
+                rev = true,
+            ),
+        )
+        @test restart_file == joinpath(output_dir, "day0001.1234.hdf5")
+    end
 end
