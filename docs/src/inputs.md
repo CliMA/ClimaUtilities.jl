@@ -238,7 +238,7 @@ import ClimaCoreTempestRemap
 # Albedo as an analytic function of lat and lon
 albedo_latlon_fun = (coord) -> 0.5 * coord.long * coord.lat
 
-albedo = SpaceVaryingInputs.SpaceVaryingInput(albedo_latlon_fun)
+albedo = SpaceVaryingInputs.SpaceVaryingInput(albedo_latlon_fun, target_space)
 
 albedo_from_file = SpaceVaryingInputs.SpaceVaryingInput("cesm_albedo.nc", "alb", target_space, regridder_kwargs = (; regrid_dir = "/tmp"))
 ```
