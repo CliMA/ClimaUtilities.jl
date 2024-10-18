@@ -11,7 +11,8 @@ import ClimaUtilities.Utils:
     endofperiod,
     bounding_dates,
     period_to_seconds_float,
-    unique_periods
+    unique_periods,
+    sort_by_creation_time
 
 @testset "searchsortednearest" begin
     A = 10 * collect(range(1, 10))
@@ -140,4 +141,21 @@ end
         DateTime(2023, 5, 5),
         DateTime(2024, 10, 10),
     ]
+end
+
+@testset "sort_by_creation_time" begin
+    mktempdir() do basedir
+        files = map(
+            f -> joinpath(basedir, f),
+            ["file3.txt", "file1.txt", "file2.txt"];
+        )
+        touch(files[2])
+        sleep(0.1)
+        touch(files[3])
+        sleep(0.1)
+        touch(files[1])
+
+        sorted_files = sort_by_creation_time(files)
+        @test sorted_files == [files[2], files[3], files[1]]
+    end
 end
