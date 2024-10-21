@@ -100,7 +100,7 @@ have to refer to directories and they have to be absolute paths. As a result, on
 that do not allow unprivileged users to create symbolic links, moving the base output folder
 results in breaking the `output_active` link.
 """
-struct ActiveLinkStyle end
+struct ActiveLinkStyle <: OutputPathGeneratorStyle end
 
 """
     generate_output_path(output_path,
