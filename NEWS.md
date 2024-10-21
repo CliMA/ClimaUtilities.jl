@@ -1,7 +1,7 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
-main
+v0.1.16
 ------
 
 ### Bug fixes
