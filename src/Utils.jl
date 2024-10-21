@@ -387,4 +387,27 @@ function unique_periods(dates, period::DatePeriod)
     return map(d -> beginningofperiod(d, period), dates) |> unique |> sort
 end
 
+"""
+    sort_by_creation_time(files)
+
+Sorts a list of `files` by their creation time, from oldest to newest.
+
+# Example
+```julia
+julia> basedir = mktempdir();
+julia> files = map(f -> joinpath(basedir, f), ["file3.txt", "file1.txt", "file2.txt"];)
+julia> touch(files[2]);
+julia> touch(files[3]);
+julia> touch(files[1]);
+julia> sort_by_creation_time(files);
+3-element Vector{String}:
+ "/tmp/jl_vzneHc/file1.txt"
+ "/tmp/jl_vzneHc/file2.txt"
+ "/tmp/jl_vzneHc/file3.txt"
+```
+"""
+function sort_by_creation_time(files)
+    return sort(files, by = x -> stat(x).ctime)
+end
+
 end

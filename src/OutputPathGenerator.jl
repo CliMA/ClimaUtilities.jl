@@ -5,6 +5,8 @@ et cetera.
 """
 module OutputPathGenerator
 
+import ..Utils: sort_by_creation_time
+
 import ..MPIUtils: root_or_singleton, maybe_wait
 
 import Base: rm
@@ -128,7 +130,7 @@ How the output should be structured (in terms of directory tree) is determined b
 function generate_output_path(
     output_path;
     context = nothing,
-    style = ActiveLinkStyle(),
+    style::OutputPathGeneratorStyle = ActiveLinkStyle(),
 )
     output_path == "" && error("output_path cannot be empty")
     return generate_output_path(style, output_path; context)
@@ -162,9 +164,6 @@ end
 Documentation for this function is in the `ActiveLinkStyle` struct.
 """
 function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
-    # TODO: At the moment we hard code the name to be something like output_0000. We could make
-    # this customizable as an attribute in ActiveLinkStyle.
-
     # Ensure path ends with a trailing slash for consistency
     path_separator_str = Base.Filesystem.path_separator
     # We need the path_separator as a char to use it in rstrip
@@ -250,6 +249,94 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
     end
     maybe_wait_filesystem(context, new_output_folder)
     return new_output_folder
+end
+
+
+function detect_restart_file(
+    style::OutputPathGeneratorStyle,
+    base_output_dir;
+    restart_file_rx = r"day\d+\.\w+\.hdf5",
+    sort_func = sort_by_creation_time,
+)
+    error("detect_restart_file works only with ActiveLinkStyle")
+end
+
+"""
+    detect_restart_file(output_dir_style::ActiveLinkStyle,
+                        base_output_dir;
+                        restart_file_rx = r"day\\d+\\.\\w+\\.hdf5",
+                        sort_func = sort_by_creation_time
+                        )
+
+Detects and returns the path to the most recent restart file within the directory structure
+specified by `base_output_dir`.
+
+Returns `nothing` if no suitable restart file is found.
+
+This function searches for restart files within the directory structure organized according
+to the provided `ActiveLinkStyle`. It identifies potential output directories based on the
+style and then looks for files matching the `restart_file_rx` regular expression within
+these directories.
+
+By default, the function assumes restart files have names like "dayDDDD.SSSSS.hdf5", where
+DDDD represents the day number and SSSSS represents the number of seconds.
+
+If multiple restart files are found, the function uses the `sort_func` to determine the most
+recent one. The default sorting function, `sort_by_creation_time`, sorts files based on
+their creation timestamps, returning the file with the latest creation time. Users can
+provide custom sorting functions to prioritize files based on other criteria, such as the
+simulation time stored within the HDF5 file.
+
+**Return Value:**
+
+- If a suitable restart file is found, the function returns its full path as a string.
+- If no output directory matching the `ActiveLinkStyle` or no restart file
+  matching the `restart_file_rx` is found, the function returns `nothing`. This
+  indicates that automatic restart is not possible.
+
+**Arguments:**
+
+- `output_dir_style`: An `ActiveLinkStyle` object defining the structure of output
+  directories.
+- `base_output_dir`: The base directory where the output directory structure is located.
+- `restart_file_rx`: A regular expression used to identify restart files within output
+  directories. Defaults to `r"day\\d+\\.\\w+\\.hdf5"`.
+- `sort_func`: A function used to sort restart files and select the most recent one.
+  Defaults to `sort_by_creation_time`.
+"""
+function detect_restart_file(
+    output_dir_style::ActiveLinkStyle,
+    base_output_dir;
+    restart_file_rx = r"day\d+\.\w+\.hdf5",
+    sort_func = sort_by_creation_time,
+)
+    # if base_output_dir does not exist, we return restart_file = nothing because there is
+    # no restart file to be detected
+    isdir(base_output_dir) || return nothing
+
+    # output_dir will be something like ABC/DEF/output_1234
+    name_rx = r"output_(\d\d\d\d)"
+    restart_file = nothing
+
+    existing_outputs =
+        filter(x -> !isnothing(match(name_rx, x)), readdir(base_output_dir))
+
+    isempty(existing_outputs) && return nothing
+
+    latest_output = first(sort(existing_outputs, rev = true))
+    previous_folder = joinpath(base_output_dir, latest_output)
+    possible_restart_files =
+        filter(f -> occursin(restart_file_rx, f), readdir(previous_folder))
+
+    if isempty(possible_restart_files)
+        @warn "Detected folder $(previous_folder), but no restart file was found"
+        return nothing
+    end
+
+    restart_file_name = last(sort_func(possible_restart_files))
+    restart_file = joinpath(previous_folder, restart_file_name)
+
+    return restart_file
 end
 
 end
