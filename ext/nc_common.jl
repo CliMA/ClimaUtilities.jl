@@ -10,8 +10,25 @@ function read_available_dates(ds::NCDatasets.NCDataset)
             reinterpret.(Ref(NCDatasets.DateTimeStandard), ds["time"][:])
         )
     elseif "date" in keys(ds.dim)
-        return strdate_to_datetime.(string.(ds["date"][:]))
+        return yyyymmdd_to_datetime.(string.(ds["date"][:]))
     else
         return Dates.DateTime[]
     end
+end
+
+"""
+    strdate_to_datetime(strdate::String)
+
+Convert from String ("YYYYMMDD") to Date format.
+
+# Arguments
+- `yyyymmdd`: [String] to be converted to Date type
+"""
+function yyyymmdd_to_datetime(strdate::String)
+    length(strdate) == 8 || error("$strdate does not have the YYYYMMDD format")
+    return Dates.DateTime(
+        parse(Int, strdate[1:4]),
+        parse(Int, strdate[5:6]),
+        parse(Int, strdate[7:8]),
+    )
 end

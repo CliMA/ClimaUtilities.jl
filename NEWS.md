@@ -14,6 +14,13 @@ downstream packages where `ActiveLinkStyle` had to be imported just to call
 
 The old signature was deprecated.
 
+### Bug fixes
+
+#### Fixed parsing of `date`s in NetCDF files. PR [#122](https://github.com/CliMA/ClimaUtilities.jl/pull/122)
+
+This release fixes an issue with reading NetCDF files that have `date` as a time
+dimension. Only the YYYYMMDD format is currently supported.
+
 v0.1.16
 ------
 
