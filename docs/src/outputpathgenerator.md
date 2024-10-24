@@ -73,11 +73,12 @@ checkpoint. It works with the `ActiveLinkStyle` described above.
 To find the most recent restart file, just call
 
 ```julia
-restart_file = detect_restart_file(style, output_path)
+restart_file = detect_restart_file(output_path; style)
 ```
 where style has to be `ActiveLinkStyle` object and `output_path` is the base
 directory where your simulation output is stored (the same one you passed to
-`generate_output_path`).
+`generate_output_path`). Passing the `style` is optional, if no `style` is passed,
+``
 
 The function will scan the subfolders within output_path (e.g.,
 `output_path/output_0001`, `output_path/output_0002`, etc.) and return the path

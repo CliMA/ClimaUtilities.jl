@@ -146,25 +146,33 @@ end
 @testset "detect_restart_file" begin
     # Test with non-ActiveLinkStyle
     @test_throws ErrorException detect_restart_file(
-        RemovePreexistingStyle(),
         ".",
+        style = RemovePreexistingStyle(),
     )
 
     # Test with non-existent base directory
     base_output_dir = "non_existent_dir"
-    restart_file = detect_restart_file(ActiveLinkStyle(), base_output_dir)
+    restart_file = detect_restart_file(base_output_dir)
     @test isnothing(restart_file)
 
     # Test with empty base directory
     mktempdir() do base_output_dir
-        restart_file = detect_restart_file(ActiveLinkStyle(), base_output_dir)
+        restart_file = detect_restart_file(base_output_dir)
         @test isnothing(restart_file)
     end
 
     # Test with a single output directory and no restart files
     mktempdir() do base_output_dir
         mkdir(joinpath(base_output_dir, "output_0001"))
-        restart_file = detect_restart_file(ActiveLinkStyle(), base_output_dir)
+        restart_file = detect_restart_file(base_output_dir)
+        @test isnothing(restart_file)
+    end
+
+    # Test two output directories and no restart files
+    mktempdir() do base_output_dir
+        mkdir(joinpath(base_output_dir, "output_0001"))
+        mkdir(joinpath(base_output_dir, "output_0002"))
+        restart_file = detect_restart_file(base_output_dir)
         @test isnothing(restart_file)
     end
 
@@ -173,7 +181,7 @@ end
         output_dir = joinpath(base_output_dir, "output_0001")
         mkdir(output_dir)
         touch(joinpath(output_dir, "day0001.1234.hdf5"))
-        restart_file = detect_restart_file(ActiveLinkStyle(), base_output_dir)
+        restart_file = detect_restart_file(base_output_dir)
         @test restart_file == joinpath(output_dir, "day0001.1234.hdf5")
     end
 
@@ -186,8 +194,19 @@ end
         touch(joinpath(output_dir1, "day0001.1234.hdf5"))
         sleep(0.1)
         touch(joinpath(output_dir2, "day0002.5678.hdf5"))
-        restart_file = detect_restart_file(ActiveLinkStyle(), base_output_dir)
+        restart_file = detect_restart_file(base_output_dir)
         @test restart_file == joinpath(output_dir2, "day0002.5678.hdf5")
+    end
+
+    # Test with multiple output directories and restart files only in the first
+    mktempdir() do base_output_dir
+        output_dir1 = joinpath(base_output_dir, "output_0001")
+        output_dir2 = joinpath(base_output_dir, "output_0002")
+        mkdir(output_dir1)
+        mkdir(output_dir2)
+        touch(joinpath(output_dir1, "day0001.1234.hdf5"))
+        restart_file = detect_restart_file(base_output_dir)
+        @test restart_file == joinpath(output_dir1, "day0001.1234.hdf5")
     end
 
     # Test with a custom restart file regular expression

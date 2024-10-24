@@ -252,24 +252,17 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
 end
 
 
-function detect_restart_file(
-    style::OutputPathGeneratorStyle,
-    base_output_dir;
-    restart_file_rx = r"day\d+\.\w+\.hdf5",
-    sort_func = sort_by_creation_time,
-)
-    error("detect_restart_file works only with ActiveLinkStyle")
-end
 
 """
-    detect_restart_file(output_dir_style::ActiveLinkStyle,
-                        base_output_dir;
+    detect_restart_file(base_output_dir;
                         restart_file_rx = r"day\\d+\\.\\w+\\.hdf5",
-                        sort_func = sort_by_creation_time
+                        sort_func = sort_by_creation_time,
+                        style = ActiveLinkStyle()
                         )
 
 Detects and returns the path to the most recent restart file within the directory structure
 specified by `base_output_dir`.
+
 
 Returns `nothing` if no suitable restart file is found.
 
@@ -305,11 +298,14 @@ simulation time stored within the HDF5 file.
   Defaults to `sort_by_creation_time`.
 """
 function detect_restart_file(
-    output_dir_style::ActiveLinkStyle,
     base_output_dir;
     restart_file_rx = r"day\d+\.\w+\.hdf5",
     sort_func = sort_by_creation_time,
+    style = ActiveLinkStyle(),
 )
+    style isa ActiveLinkStyle ||
+        error("detect_restart_file works only with ActiveLinkStyle")
+
     # if base_output_dir does not exist, we return restart_file = nothing because there is
     # no restart file to be detected
     isdir(base_output_dir) || return nothing
@@ -323,20 +319,42 @@ function detect_restart_file(
 
     isempty(existing_outputs) && return nothing
 
-    latest_output = first(sort(existing_outputs, rev = true))
-    previous_folder = joinpath(base_output_dir, latest_output)
-    possible_restart_files =
-        filter(f -> occursin(restart_file_rx, f), readdir(previous_folder))
+    # Walk directories backwards looking for restart files
+    for output_folder in sort(existing_outputs, rev = true)
+        previous_folder = joinpath(base_output_dir, output_folder)
+        possible_restart_files =
+            filter(f -> occursin(restart_file_rx, f), readdir(previous_folder))
 
-    if isempty(possible_restart_files)
-        @warn "Detected folder $(previous_folder), but no restart file was found"
-        return nothing
+        if !isempty(possible_restart_files)
+            restart_file_name = last(sort_func(possible_restart_files))
+            restart_file = joinpath(previous_folder, restart_file_name)
+            return restart_file
+        end
     end
-
-    restart_file_name = last(sort_func(possible_restart_files))
-    restart_file = joinpath(previous_folder, restart_file_name)
-
-    return restart_file
+    # Nothing was found
+    return nothing
 end
+
+##############
+# DEPRECATED #
+##############
+function detect_restart_file(
+    style,
+    base_output_dir;
+    restart_file_rx = r"day\d+\.\w+\.hdf5",
+    sort_func = sort_by_creation_time,
+)
+    Base.depwarn(
+        "`style` as first argument was moved to a keyword argument",
+        :detect_restart_file,
+    )
+    return detect_restart_file(
+        base_output_dir;
+        restart_file_rx,
+        sort_func,
+        style,
+    )
+end
+
 
 end
