@@ -1,6 +1,13 @@
 ClimaUtilities.jl Release Notes
 ===============================
 
+main
+------
+
+### Bug fixes
+
+- Fixed `@clima_artifact` for Julia 1.12. PR [#123](https://github.com/CliMA/ClimaUtilities.jl/pull/123)
+
 v0.1.17
 ------
 
