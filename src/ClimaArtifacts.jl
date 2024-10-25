@@ -105,6 +105,12 @@ macro clima_artifact(name, context = nothing)
         # If artifact_name is not a string (e.g., it is a variable), we have to do all the
         # work at runtime
         return quote
+            if VERSION >= v"1.12.0-DEV.1163"
+                local LazyArtifacts = Val($(lazyartifacts))
+            else
+                local LazyArtifacts = $(lazyartifacts)
+            end
+
             local platform = $(esc(platform))
             local artifact_name, artifact_path_tail, hash =
                 JuliaArtifacts.artifact_slash_lookup(
@@ -126,7 +132,7 @@ macro clima_artifact(name, context = nothing)
                     $(artifact_dict),
                     $(hash),
                     $(platform),
-                    $(lazyartifacts),
+                    LazyArtifacts,
                 )::String
             end
             push!(ACCESSED_ARTIFACTS, artifact_name)
@@ -139,13 +145,19 @@ macro clima_artifact(name, context = nothing)
                 $(artifact_dict),
                 $(hash),
                 $(platform),
-                $(lazyartifacts),
+                LazyArtifacts,
             )::String
         end
     else
         # If artifact_name is not a string (e.g., it is a variable), we have to do all the
         # work at runtime
         return quote
+            if VERSION >= v"1.12.0-DEV.1163"
+                local LazyArtifacts = Val($(lazyartifacts))
+            else
+                local LazyArtifacts = $(lazyartifacts)
+            end
+
             local platform = $(esc(platform))
             local artifact_name, artifact_path_tail, hash =
                 JuliaArtifacts.artifact_slash_lookup(
@@ -179,7 +191,7 @@ macro clima_artifact(name, context = nothing)
                     $(artifact_dict),
                     hash,
                     platform,
-                    $(lazyartifacts),
+                    LazyArtifacts,
                 )::String
             end
             push!(ACCESSED_ARTIFACTS, artifact_name)
@@ -193,7 +205,7 @@ macro clima_artifact(name, context = nothing)
                 $(artifact_dict),
                 hash,
                 platform,
-                $(lazyartifacts),
+                LazyArtifacts,
             )::String
         end
     end
