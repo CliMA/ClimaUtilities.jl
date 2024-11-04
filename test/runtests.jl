@@ -29,7 +29,8 @@ end
 end
 
 @safetestset "TimeManager tests" begin
-    include("timemanager.jl")
+    # include("timemanager.jl")
+    include("itime.jl")
 end
 
 @safetestset "DataStructures tests" begin
