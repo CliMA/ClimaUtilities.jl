@@ -3,6 +3,29 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+v0.1.21
+------
+
+#### New integer time type, `TimeManager.ITime`. PR [#124](https://github.com/CliMA/ClimaUtilities.jl/pull/124)
+
+`ClimaUtilities` now comes with a new type that represent times and date,
+`ITime`. `ITime` stands for "integer time" and is a time type that does not
+incur in floating point errors. `ITime`s also encode dates and support
+arithmetic operations and fractions (to be used in timestepping loops).
+
+```julia-repl
+julia> using ClimaUtilities.TimeManager, Dates;
+julia> time1 = ITime(5; period = Hour(20), start_date = DateTime(2012, 12, 21))
+100 hours (2012-12-25T04:00:00) [counter = 5, period = 20 hours, start_date = 2012-12-21T00:00:00]
+julia> seconds(time1)
+360000.0
+julia> date(time1)
+2012-12-25T04:00:00
+```
+
+The [documentation](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/)
+provides further information about this new type and has a section dedicated to
+helping developers port their codes to `ITime`s.
 
 v0.1.21
 ------
