@@ -4,9 +4,16 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+v0.1.18
+------
+
 ### Bug fixes
 
 - Fixed `@clima_artifact` for Julia 1.12. PR [#123](https://github.com/CliMA/ClimaUtilities.jl/pull/123)
+- Increased sleep time across attempts in checking for synced filesystems. This
+  should give the distributed filesystems more time to sync and reduce the
+  occurrence of the "Path not properly synced" error. PR
+  [#125](https://github.com/CliMA/ClimaUtilities.jl/pull/125)
 
 v0.1.17
 ------
