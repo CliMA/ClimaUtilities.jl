@@ -26,7 +26,7 @@ Distributed filesystems might need some time to catch up a file/folder is create
 
 This function watches the given `path` with `check_func` and returns when `check_func(path)`
 returns true. This is done by trying up to `max_attempt` times and sleeping `sleep_time`
-seconds in between.
+seconds in between. `sleep_time` is increased by 50 % after each attempt.
 
 Example: when creating a file, we want to check that all the MPI processes see that new
 file. In this case, `check_func` could be `ispath`. Another example is with removing files
@@ -45,8 +45,11 @@ function maybe_wait_filesystem(
         check_func(path) && return nothing
         sleep(sleep_time)
         attempt = attempt + 1
+        sleep_time = 1.5sleep_time
     end
-    error("Path $path not properly synced")
+    error(
+        "Path $path not properly synced. On distributed systems, this is typically due to the slow response of the filesystem.",
+    )
     return nothing
 end
 
@@ -177,12 +180,12 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
     # For MPI runs, we have to make sure we are synced
     maybe_wait_filesystem(context, output_path)
 
+    name_rx = r"output_(\d\d\d\d)"
+
     # Look for a output_active link
     active_link = joinpath(output_path, "output_active")
 
     link_exists = islink(active_link)
-
-    name_rx = r"output_(\d\d\d\d)"
 
     if link_exists
         target = readlink(active_link)
