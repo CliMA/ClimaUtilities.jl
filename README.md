@@ -9,12 +9,15 @@ ClimaUtilities.jl
 
 </h1>
 
-`ClimaUtilities` is collection of general-purpose tools for CliMA packages.
+`ClimaUtilities` is collection of general-purpose tools and types for CliMA packages.
 
 `ClimaUtilities.jl` contains:
 - [`ClimaArtifacts`](https://clima.github.io/ClimaUtilities.jl/dev/climaartifacts/),
   a module that provides an MPI-safe way to lazily download artifacts and to tag
   artifacts that are being accessed in a given simulation.
+- [`TimeManager`](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/) to
+  handle time and dates. `TimeManager` implements `ITime`, the time type used in
+  CliMA simulations.
 - [`SpaceVaryingInputs` and
   `TimeVaryingInputs`](https://clima.github.io/ClimaUtilities.jl/dev/inputs/) to
   work with external input data.
@@ -26,8 +29,6 @@ ClimaUtilities.jl
   to process input data and remap it onto the simulation grid.
 - [`OutputPathGenerator`](https://clima.github.io/ClimaUtilities.jl/dev/outputpathgenerator/)
   to prepare the output directory structure of a simulation.
-- [`TimeManager`](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/) to
-  handle dates.
 
 ## ClimaUtilities.jl Developer Guidelines
 
