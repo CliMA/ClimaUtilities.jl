@@ -3,7 +3,7 @@ module ClimaArtifacts
 import Base.BinaryPlatforms: HostPlatform
 import Artifacts as JuliaArtifacts
 
-import ..MPIUtils: root_or_singleton, maybe_wait
+import ClimaComms: iamroot, barrier
 
 export @clima_artifact
 
@@ -122,7 +122,8 @@ macro clima_artifact(name, context = nothing)
             # We call JuliaArtifacts._artifact_str twice, the first time only with the root
             # process (to avoid race conditions), the second time to ensure that all the
             # processes have the artifact string
-            if Base.invokelatest(root_or_singleton, $(esc(context)))
+            if isnothing($(esc(context))) ||
+               Base.invokelatest(iamroot, $(esc(context)))
                 artifact_path = Base.invokelatest(
                     JuliaArtifacts._artifact_str,
                     $(__module__),
@@ -181,7 +182,8 @@ macro clima_artifact(name, context = nothing)
             # We call JuliaArtifacts._artifact_str twice, the first time only with the root
             # process (to avoid race conditions), the second time to ensure that all the
             # processes have the artifact string
-            if Base.invokelatest(root_or_singleton, $(esc(context)))
+            if isnothing($(esc(context))) ||
+               Base.invokelatest(iamroot, $(esc(context)))
                 artifact_path = Base.invokelatest(
                     JuliaArtifacts._artifact_str,
                     $(__module__),
@@ -195,7 +197,8 @@ macro clima_artifact(name, context = nothing)
                 )::String
             end
             push!(ACCESSED_ARTIFACTS, artifact_name)
-            Base.invokelatest(maybe_wait, $(esc(context)))
+            isnothing($(esc(context))) ||
+                Base.invokelatest(barrier, $(esc(context)))
             Base.invokelatest(
                 JuliaArtifacts._artifact_str,
                 $(__module__),

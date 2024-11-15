@@ -13,8 +13,8 @@ ClimaUtilities.jl
 
 `ClimaUtilities.jl` contains:
 - [`ClimaArtifacts`](https://clima.github.io/ClimaUtilities.jl/dev/climaartifacts/),
-  a module that provides an MPI-safe way to lazily download artifacts and to tag
-  artifacts that are being accessed in a given simulation.
+  a module that provides an MPI-safe (with `ClimaComms`) way to lazily download
+  artifacts and to tag artifacts that are being accessed in a given simulation.
 - [`SpaceVaryingInputs` and
   `TimeVaryingInputs`](https://clima.github.io/ClimaUtilities.jl/dev/inputs/) to
   work with external input data.
@@ -40,9 +40,9 @@ some differences.
 
 `ClimaUtilities.jl` is meant to be a foundational package, so it should have
 near-zero-cost for features that are not explicitly requested. This means that
-it should not depend on any package outside of the standard library and should
-have negligible import costs. To accomplish this, everything is implemented in
-Julia extensions.
+it should not depend on any package outside of the standard library and
+`ClimaComms` and should have negligible import costs. To accomplish this,
+everything is implemented in Julia extensions.
 
 Extensions are organized in the following way. The extensions defined in the
 `Project.toml` are defined in terms of the packages they require to be loaded.

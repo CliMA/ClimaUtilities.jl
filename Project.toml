@@ -5,12 +5,12 @@ version = "0.1.18"
 
 [deps]
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+ClimaComms = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 
 [weakdeps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-ClimaComms = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
 ClimaCore = "d414da3d-4745-48bb-8d80-42e94e092884"
 ClimaCoreTempestRemap = "d934ef94-cdd4-4710-83d6-720549644b70"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
@@ -21,8 +21,7 @@ ClimaUtilitiesClimaCoreExt = "ClimaCore"
 ClimaUtilitiesClimaCoreInterpolationsExt = ["ClimaCore", "Interpolations"]
 ClimaUtilitiesClimaCoreNCDatasetsExt = ["ClimaCore", "NCDatasets"]
 ClimaUtilitiesNCDatasetsExt = "NCDatasets"
-ClimaUtilitiesClimaCommsCUDAExt = ["ClimaComms", "CUDA"]
-ClimaUtilitiesClimaCommsExt = "ClimaComms"
+ClimaUtilitiesCUDAExt = "CUDA"
 ClimaUtilitiesClimaCoreTempestRemapExt = "ClimaCoreTempestRemap"
 
 [compat]
