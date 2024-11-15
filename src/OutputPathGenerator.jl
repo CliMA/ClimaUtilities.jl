@@ -222,7 +222,7 @@ function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
         end
     end
     # For MPI runs, we have to make sure we are synced
-    maybe_wait_filesystem(context, active_link, check_func = (f) -> !ispath(f))
+    maybe_wait_filesystem(context, active_link, check_func = !ispath)
 
     # Ensure that there are four digits
     next_counter_str = lpad(next_counter, 4, "0")
