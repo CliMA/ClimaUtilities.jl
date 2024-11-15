@@ -4,6 +4,13 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+#### `ClimaComms` is now a required dependency. PR [#127](https://github.com/CliMA/ClimaUtilities.jl/pull/127)
+
+`ClimaComms` used to be an optional dependency and was turned into a required
+one. The reason for this change is to improve robustness in MPI settings.
+
+The new version should also further reduce the "Path not properly synced" error.
+
 v0.1.18
 ------
 

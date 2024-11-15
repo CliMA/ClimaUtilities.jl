@@ -1,4 +1,4 @@
-module ClimaUtilitiesClimaCommsCUDAExt
+module ClimaUtilitiesCUDAExt
 
 import ClimaComms
 import ClimaUtilities

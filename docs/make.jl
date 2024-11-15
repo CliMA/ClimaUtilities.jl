@@ -62,7 +62,10 @@ makedocs(
             :ClimaUtilitiesClimaCoreNCDatasetsExt,
         ),
         Base.get_extension(ClimaUtilities, :ClimaUtilitiesNCDatasetsExt),
-        Base.get_extension(ClimaUtilities, :ClimaUtilitiesClimaCommsExt),
+        Base.get_extension(
+            ClimaUtilities,
+            :ClimaUtilitiesClimaCoreTempestRemapExt,
+        ),
     ],
 )
 

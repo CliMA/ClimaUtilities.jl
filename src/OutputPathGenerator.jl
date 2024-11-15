@@ -5,9 +5,9 @@ et cetera.
 """
 module OutputPathGenerator
 
+import ClimaComms
+import ClimaComms: barrier, iamroot, bcast
 import ..Utils: sort_by_creation_time
-
-import ..MPIUtils: root_or_singleton, maybe_wait
 
 import Base: rm
 
@@ -39,7 +39,7 @@ function maybe_wait_filesystem(
     sleep_time = 0.1,
     max_attempts = 10,
 )
-    maybe_wait(context)
+    barrier(context)
     attempt = 1
     while attempt < max_attempts
         check_func(path) && return nothing
@@ -133,7 +133,7 @@ How the output should be structured (in terms of directory tree) is determined b
 """
 function generate_output_path(
     output_path;
-    context = nothing,
+    context = ClimaComms.context(),
     style::OutputPathGeneratorStyle = ActiveLinkStyle(),
 )
     output_path == "" && error("output_path cannot be empty")
@@ -148,9 +148,9 @@ Documentation for this function is in the `RemovePreexistingStyle` struct.
 function generate_output_path(
     ::RemovePreexistingStyle,
     output_path;
-    context = nothing,
+    context = ClimaComms.context(),
 )
-    if root_or_singleton(context)
+    if iamroot(context)
         if isdir(output_path)
             @warn "Removing $output_path"
             rm(output_path, recursive = true)
@@ -168,93 +168,111 @@ end
 Documentation for this function is in the `ActiveLinkStyle` struct.
 """
 function generate_output_path(::ActiveLinkStyle, output_path; context = nothing)
-    # Ensure path ends with a trailing slash for consistency
-    path_separator_str = Base.Filesystem.path_separator
-    # We need the path_separator as a char to use it in rstrip
-    path_separator_char = path_separator_str[1]
-    output_path = rstrip(output_path, path_separator_char) * path_separator_char
+    # Only root needs to do file-system operations, we will broadcast the result
+    # to the other MPI processes to the new_output_folder variable after
+    # everything is done.
 
-    # Create folder if it does not exist
-    if root_or_singleton(context)
+
+    # We have to be a little careful with errors: the block below is executed
+    # only by root, but would like to throw errors. We cannot throw errors in
+    # such a block because it is only executed by root, and the other MPI
+    # processes would hang waiting for the barrier. So, we return an
+    # error_message and broadcast it to the other processes
+
+    # Filled below this block with a ClimaComms.bcast
+    new_output_folder = ""
+    error_message = ""
+
+    if iamroot(context)
+        # Ensure path ends with a trailing slash for consistency
+        path_separator_str = Base.Filesystem.path_separator
+        # We need the path_separator as a char to use it in rstrip
+        path_separator_char = path_separator_str[1]
+        output_path =
+            rstrip(output_path, path_separator_char) * path_separator_char
+
+        # Create folder if it does not exist
         isdir(output_path) || mkpath(output_path)
-    end
-    # For MPI runs, we have to make sure we are synced
-    maybe_wait_filesystem(context, output_path)
 
-    name_rx = r"output_(\d\d\d\d)"
+        name_rx = r"output_(\d\d\d\d)"
 
-    # Look for a output_active link
-    active_link = joinpath(output_path, "output_active")
+        # Look for a output_active link
+        active_link = joinpath(output_path, "output_active")
 
-    link_exists = islink(active_link)
+        link_exists = islink(active_link)
 
-    if link_exists
-        target = readlink(active_link)
-        counter_str = match(name_rx, target)
-        if !isnothing(counter_str)
-            # counter_str is the only capturing group
-            counter = parse(Int, counter_str[1])
-            next_counter = counter + 1
+        if link_exists
+            target = readlink(active_link)
+            counter_str = match(name_rx, target)
+            if !isnothing(counter_str)
+                # counter_str is the only capturing group
+                counter = parse(Int, counter_str[1])
+                next_counter = counter + 1
 
-            # Remove old link
-            root_or_singleton(context) && rm(active_link)
-        else
-            error(
-                "Link $target points to a folder with a name we do not handle",
-            )
-        end
-    else
-        # The link does not exist, but maybe there are already output folders. We can try to
-        # guess what was the last one by first filtering the folders that match the name,
-        # and then taking the first one when sorted in reverse alphabetical order.
-        existing_outputs =
-            filter(x -> !isnothing(match(name_rx, x)), readdir(output_path))
-        if length(existing_outputs) > 0
-            @warn "$output_path already contains some output data, but no active link"
-            latest_output = first(sort(existing_outputs, rev = true))
-            counter_str = match(name_rx, latest_output)
-            counter = parse(Int, counter_str[1])
-            next_counter = counter + 1
-            @warn "Restarting counter from $next_counter"
-        else
-            # This is our first counter
-            next_counter = 0
-        end
-    end
-    # For MPI runs, we have to make sure we are synced
-    maybe_wait_filesystem(context, active_link, check_func = !ispath)
-
-    # Ensure that there are four digits
-    next_counter_str = lpad(next_counter, 4, "0")
-
-    # Create the next folder
-    new_output_folder = joinpath(output_path, "output_$next_counter_str")
-
-    # Make new folder
-    if root_or_singleton(context)
-        mkpath(new_output_folder)
-        # On Windows, creating symlinks might require admin privileges. This depends on the
-        # version of Windows and some of its settings (e.g., if "Developer Mode" is enabled).
-        # So, we first try creating a symlink. If this fails, we resort to creating a NTFS
-        # junction. This is almost the same as a symlink, except it requires absolute paths.
-        # In general, relative paths would be preferable because they make the output
-        # completely relocatable (whereas absolute paths are not).
-        try
-            symlink("output_$next_counter_str", active_link, dir_target = true)
-        catch e
-            if e isa Base.IOError && Base.uverrorname(e.code) == "EPERM"
-                active_link = abspath(active_link)
-                dest_active_link = abspath("output_$next_counter_str")
-                symlink(dest_active_link, active_link, dir_target = true)
+                # Remove old link
+                rm(active_link)
             else
-                rethrow(e)
+                error_message = "Link $target points to a folder with a name we do not handle"
+            end
+        else
+            # The link does not exist, but maybe there are already output folders. We can try to
+            # guess what was the last one by first filtering the folders that match the name,
+            # and then taking the first one when sorted in reverse alphabetical order.
+            existing_outputs =
+                filter(x -> !isnothing(match(name_rx, x)), readdir(output_path))
+            if length(existing_outputs) > 0
+                @warn "$output_path already contains some output data, but no active link"
+                latest_output = first(sort(existing_outputs, rev = true))
+                counter_str = match(name_rx, latest_output)
+                counter = parse(Int, counter_str[1])
+                next_counter = counter + 1
+                @warn "Restarting counter from $next_counter"
+            else
+                # This is our first output folder, initialize counter
+                next_counter = 0
+            end
+        end
+
+        if isempty(error_message)
+            # Ensure that there are four digits
+            next_counter_str = lpad(next_counter, 4, "0")
+
+            # Create the next folder
+            new_output_folder =
+                joinpath(output_path, "output_$next_counter_str")
+
+            # Make new folder
+            mkpath(new_output_folder)
+
+            # On Windows, creating symlinks might require admin privileges. This depends on the
+            # version of Windows and some of its settings (e.g., if "Developer Mode" is enabled).
+            # So, we first try creating a symlink. If this fails, we resort to creating a NTFS
+            # junction. This is almost the same as a symlink, except it requires absolute paths.
+            # In general, relative paths would be preferable because they make the output
+            # completely relocatable (whereas absolute paths are not).
+            try
+                symlink(
+                    "output_$next_counter_str",
+                    active_link,
+                    dir_target = true,
+                )
+            catch e
+                if e isa Base.IOError && Base.uverrorname(e.code) == "EPERM"
+                    active_link = abspath(active_link)
+                    dest_active_link = abspath("output_$next_counter_str")
+                    symlink(dest_active_link, active_link, dir_target = true)
+                else
+                    error_message = string(e)
+                end
             end
         end
     end
+    error_message = bcast(context, error_message)
+    isempty(error_message) || error(error_message)
+    new_output_folder = bcast(context, new_output_folder)
     maybe_wait_filesystem(context, new_output_folder)
     return new_output_folder
 end
-
 
 
 """
