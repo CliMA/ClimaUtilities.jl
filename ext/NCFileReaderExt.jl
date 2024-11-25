@@ -10,11 +10,12 @@ include("nc_common.jl")
 
 # We allow multiple NCFileReader to share the same underlying NCDataset. For this, we put
 # all the NCDataset into a dictionary where we keep track of them. OPEN_NCFILES is
-# dictionary that maps file paths to a Tuple with the first element being the NCDataset and
-# the second element being a Set of Strings, the variables that are being read from that
-# file. Every time a NCFileReader is created, this Set is modified by adding or removing a
-# varname.
-const OPEN_NCFILES = Dict{String, Tuple{NCDatasets.NCDataset, Set{String}}}()
+# dictionary that maps Vector of file paths (or a single string) to a Tuple with the first
+# element being the NCDataset and the second element being a Set of Strings, the variables
+# that are being read from that file. Every time a NCFileReader is created, this Set is
+# modified by adding or removing a varname.
+const OPEN_NCFILES =
+    Dict{Union{String, Vector{String}}, Tuple{NetCDFDataset, Set{String}}}()
 
 """
     NCFileReader
@@ -22,31 +23,32 @@ const OPEN_NCFILES = Dict{String, Tuple{NCDatasets.NCDataset, Set{String}}}()
 A struct to read and process NetCDF files.
 
 NCFileReader wants to be smart, e.g., caching reads, or spinning the I/O off to a different
-thread (not implemented yet).
+thread (not implemented yet). Multiple NetCDF files can be read at the same time as long as
+they can be aggregated along the time dimension.
 """
 struct NCFileReader{
-    STR1 <: AbstractString,
+    VSTR <: Vector{STR} where {STR <: AbstractString},
     STR2 <: AbstractString,
     DIMS <: Tuple,
-    NC <: NCDatasets.NCDataset,
+    NC <: NetCDFDataset,
     DATES <: AbstractArray{Dates.DateTime},
     PREP <: Function,
     CACHE <: DataStructures.LRUCache{Dates.DateTime, <:AbstractArray},
 } <: FileReaders.AbstractFileReader
-    """Path of the NetCDF file"""
-    file_path::STR1
+    """Path of the NetCDF file(s)"""
+    file_paths::VSTR
 
-    """Name of the dataset in the NetCDF file"""
+    """Name of the dataset in the NetCDF files"""
     varname::STR2
 
     """A tuple of arrays with the various physical dimensions where the data is defined
     (e.g., lon/lat)"""
     dimensions::DIMS
 
-    """A vector of DateTime collecting all the available dates in the file"""
+    """A vector of DateTime collecting all the available dates in the files"""
     available_dates::DATES
 
-    """NetCDF file opened by NCDataset. Don't forget to close the reader!"""
+    """NetCDF dataset opened by NCDataset. Don't forget to close the reader!"""
     dataset::NC
 
     """Optional function that is applied to the read dataset. Useful to do unit-conversion
@@ -64,27 +66,66 @@ end
 
 """
     FileReaders.NCFileReader(
-        file_path::AbstractString,
+        file_paths,
         varname::AbstractString;
         preprocess_func = identity,
         cache_max_size:Int = 128,
     )
 
 A struct to efficiently read and process NetCDF files.
+
+When more than one file is passed, the files should contain the time development of one or
+multiple variables. Files are joined along the time dimension.
+
+## Argument
+
+`file_paths` can be a string, or a collection of paths to files that contain the
+same variables but at different times.
+
 """
 function FileReaders.NCFileReader(
-    file_path::AbstractString,
+    file_paths,
     varname::AbstractString;
     preprocess_func = identity,
     cache_max_size::Int = 128,
 )
+    # file_paths could be a vector/tuple or a string. Let's start by standarizing to a
+    # vector
+    file_paths isa AbstractString && (file_paths = [file_paths])
+    only_one_file = length(file_paths) == 1
 
-    # Get dataset from global dictionary. If not available, open new file and add entry to
-    # global dictionary
+    # If we have more than one file, we have to aggregate them
+    aggtime_kwarg = ()
+    if !only_one_file
+        # Let's first try to identify the time dimension, if it exists. To do that, we open the
+        # first dataset. We need this to aggregate multiple datasets, if data is split across
+        # multiple files
+        NCDatasets.NCDataset(first(file_paths)) do first_dataset
+            is_time = x -> x == "time" || x == "date" || x == "t"
+            time_dims = filter(is_time, NCDatasets.dimnames(first_dataset))
+            if !isempty(time_dims)
+                aggtime_kwarg = (:aggdim => first(time_dims),)
+            else
+                error(
+                    "Multiple files given, but no temporal dimension found. Combining multiple files is only possible along the temporal dimension.",
+                )
+            end
+        end
+    end
+
+    # When we have only no time data, we have to pass this as a string
+    file_path_to_ncdataset =
+        isempty(aggtime_kwarg) ? first(file_paths) : file_paths
+
+    # Get dataset from global dictionary. If not available, open the new dataset and add
+    # entry to global dictionary
     dataset, open_varnames = get!(
         OPEN_NCFILES,
-        file_path,
-        (NCDatasets.NCDataset(file_path), Set([varname])),
+        file_paths,  # We map the collection of files to the dataset
+        (
+            NCDatasets.NCDataset(file_path_to_ncdataset; aggtime_kwarg...),
+            Set([varname]),
+        ),
     )
     # push! will do nothing when file is opened for the first time
     push!(open_varnames, varname)
@@ -124,7 +165,7 @@ function FileReaders.NCFileReader(
     )
 
     return NCFileReader(
-        file_path,
+        file_paths,
         varname,
         dimensions,
         available_dates,
@@ -143,14 +184,14 @@ Close `NCFileReader`. If no other `NCFileReader` is using the same file, close t
 function Base.close(file_reader::NCFileReader)
     # If we don't have the key, we don't have to do anything (we already closed
     # the file)
-    file_is_not_open = !haskey(OPEN_NCFILES, file_reader.file_path)
-    file_is_not_open && return nothing
+    files_are_not_open = !haskey(OPEN_NCFILES, file_reader.file_paths)
+    files_are_not_open && return nothing
 
-    open_variables = OPEN_NCFILES[file_reader.file_path][end]
+    open_variables = OPEN_NCFILES[file_reader.file_paths][end]
     pop!(open_variables, file_reader.varname)
     if isempty(open_variables)
         NCDatasets.close(file_reader.dataset)
-        delete!(OPEN_NCFILES, file_reader.file_path)
+        delete!(OPEN_NCFILES, file_reader.file_paths)
     end
     return nothing
 end

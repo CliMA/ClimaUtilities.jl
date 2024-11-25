@@ -455,9 +455,9 @@ function DataHandling.regridded_snapshot(
 
     # Dates.DateTime(0) is the cache key for static maps
     if date != Dates.DateTime(0)
-        file_path = data_handler.file_readers[first(varnames)].file_path
+        file_paths = data_handler.file_readers[first(varnames)].file_paths
         date in data_handler.available_dates ||
-            error("Date $date not available in file $(file_path)")
+            error("Date $date not available in files $(file_paths)")
     end
 
     regridder_type = nameof(typeof(data_handler.regridder))

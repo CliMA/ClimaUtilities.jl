@@ -55,6 +55,17 @@ using NCDatasets
         close(ncreader_u)
         @test isempty(open_ncfiles)
     end
+
+    # Test times split across multiple files
+    PATHS = [
+        joinpath(@__DIR__, "test_data", "era5_1979_1.0x1.0_lai.nc"),
+        joinpath(@__DIR__, "test_data", "era5_1980_1.0x1.0_lai.nc"),
+    ]
+    NCDataset(PATHS, aggdim = "time") do nc
+        ncreader_agg = FileReaders.NCFileReader(PATHS, "lai_lv")
+        FileReaders.available_dates(ncreader_agg) == nc["time"][:]
+        length(FileReaders.available_dates(ncreader_agg)) == 104
+    end
 end
 
 @testset "NCFileReader without time" begin
