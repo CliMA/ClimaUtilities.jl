@@ -4,7 +4,17 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
-#### `ClimaComms` is now a required dependency. PR [#127](https://github.com/CliMA/ClimaUtilities.jl/pull/127)
+#### Support reading time data across multiple files. PR [#127](https://github.com/CliMA/ClimaUtilities.jl/pull/127)
+
+`NCFileReader`s can now read multiple files at the same time. The files have to
+contain temporal data for the given variable and they are aggregated along the
+time dimension. To use this feature, just pass a vector of file paths to the
+constructor.
+
+v0.1.19
+------
+
+#### `ClimaComms` is now a required dependency. PR [#128](https://github.com/CliMA/ClimaUtilities.jl/pull/128)
 
 `ClimaComms` used to be an optional dependency and was turned into a required
 one. The reason for this change is to improve robustness in MPI settings.

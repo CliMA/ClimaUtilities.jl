@@ -92,8 +92,8 @@ ClimaComms.init(context)
                 )
             else
                 # For more than one variable, check that both point to the same file path
-                @test data_handler.file_readers[varnames[1]].file_path ==
-                      data_handler.file_readers[varnames[2]].file_path
+                @test data_handler.file_readers[varnames[1]].file_paths ==
+                      data_handler.file_readers[varnames[2]].file_paths
                 # For more than one variable, check that the compose function was applied correctly
                 @test data_handler.compose_function == compose_function
 
