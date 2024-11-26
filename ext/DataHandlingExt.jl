@@ -93,9 +93,40 @@ struct DataHandler{
     preallocated_read_data::PR
 end
 
+
 """
-    DataHandler(file_paths::Union{AbstractString, AbstractArray{<:AbstractString}},
-                varnames::Union{AbstractString, AbstractArray{<:AbstractString}},
+    _check_file_paths_varnames(file_paths, varnames, regridder_type, compose_function)
+
+Check consistency of `file_paths`, `varnames`, `regridder_type`, and `compose_function` for
+our current `DataHandler`.
+"""
+function _check_file_paths_varnames(
+    file_paths,
+    varnames,
+    regridder_type,
+    compose_function,
+)
+    # Verify that the number of file paths and variable names are consistent
+    if length(varnames) == 1
+        # Multiple files are not not supported by TempestRegridder
+        (length(file_paths) > 1 && regridder_type == :TempestRegridder) &&
+            error("TempestRegridder does not support multiple input files")
+    else
+        # We have multiple variables
+        # This is not supported by TempestRegridder
+        regridder_type == :TempestRegridder &&
+            error("TempestRegridder does not support multiple input variables")
+
+        # We need a compose_function when passed multiple variables
+        compose_function == identity && error(
+            "`compose_function` must be specified when using multiple input variables",
+        )
+    end
+end
+
+"""
+    DataHandler(file_paths,
+                varnames,
                 target_space::ClimaCore.Spaces.AbstractSpace;
                 start_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
                 regridder_type = nothing,
@@ -104,8 +135,14 @@ end
                 file_reader_kwargs = ())
 
 Create a `DataHandler` to read `varnames` from `file_paths` and remap them to `target_space`.
-`file_paths` may contain either one path for all variables or one path for each variable.
-In the latter case, the entries of `file_paths` and `varnames` are expected to match based on position.
+
+This function supports reading across multiple files and composing variables that are in
+different files.
+
+
+`file_paths` may contain either one path for all variables or one path for each variable. In
+the latter case, the entries of `file_paths` and `varnames` are expected to match based on
+position.
 
 The DataHandler maintains an LRU cache of Fields that were previously computed.
 
@@ -114,7 +151,21 @@ Creating this object results in the file being accessed (to preallocate some mem
 Positional arguments
 =====================
 
-- `file_paths`: Paths of the NetCDF file(s) that contain the input data.
+- `file_paths`: Paths of the NetCDF file(s) that contain the input data. `file_paths` should
+  be as "do-what-I-mean" as possible, meaning that it should behave as you expect.
+
+  To be specific, there are three options for `file_paths`:
+  - It is a string that points to a single NetCDF file.
+  - It is a list that points to multiple NetCDF files. In this case, we support two modes:
+    1. if `varnames` is a vector with the number of entries as `file_paths`, we assume that
+       each file contains a different variable.
+    2. otherwise, we assume that each file contains all the variables and is temporal chunk.
+  - It is a list of lists of paths to NetCDF files, where the inner list identifies temporal
+    chunks of a given variable, and the outer list identifies different variables
+    (supporting the mode where different variables live in different files and their time
+    development is split across multiple files). In other words, `file_paths[i]` is the list
+    of files that define the temporal evolution of `varnames[i]`
+
 - `varnames`: Names of the datasets in the NetCDF that have to be read and processed.
 - `target_space`: Space where the simulation is run, where the data has to be regridded to.
 
@@ -138,13 +189,16 @@ everything more type stable.)
                       It can be a NamedTuple, or a Dictionary that maps Symbols to values.
 - `file_reader_kwargs`: Additional keywords to be passed to the constructor of the file reader.
                         It can be a NamedTuple, or a Dictionary that maps Symbols to values.
-- `compose_function`: Function to combine multiple input variables into a single data variable.
-                    The default, to be used in the case of one input variable, is the identity.
-                    Note that the order of `varnames` must match the argument order of `compose_function`.
+- `compose_function`: Function to combine multiple input variables into a single data
+                      variable. The default, to be used in the case of one input variable,
+                      is the identity. The compose function has to take N arguments, where
+                      N is the number of variables in `varnames`, and return a scalar.
+                      The order of the arguments in `compose_function` has to match the order
+                      of `varnames`. This function will be broadcasted to data read from file.
 """
 function DataHandling.DataHandler(
-    file_paths::Union{AbstractString, AbstractArray{<:AbstractString}},
-    varnames::Union{AbstractString, AbstractArray{<:AbstractString}},
+    file_paths,
+    varnames,
     target_space::ClimaCore.Spaces.AbstractSpace;
     start_date::Union{Dates.DateTime, Dates.Date} = Dates.DateTime(1979, 1, 1),
     regridder_type = nothing,
@@ -182,38 +236,51 @@ function DataHandling.DataHandler(
         varnames = [varnames]
     end
 
-    # Verify that the number of file paths and variable names match
-    (length(file_paths) > 1 && length(file_paths) != length(varnames)) && error(
-        "Number of file paths ($(length(file_paths))) and variable names ($(length(varnames))) do not match.",
-    )
-
-    # Verify that `compose_function` is specified when using multiple input variables
-    (length(varnames) > 1 && compose_function == identity) && error(
-        "`compose_function` must be specified when using multiple input variables",
-    )
-
-    # Verify that `compose_function` is identity when using a single input variable
-    (length(varnames) == 1 && compose_function != identity) && error(
-        "`compose_function` must be identity when using a single input variable",
-    )
-
-    # TempestRegridder does not support multiple input variables
-    (length(varnames) > 1 && regridder_type == :TempestRegridder) &&
-        error("TempestRegridder does not support multiple input variables")
-
     # Determine which regridder to use if not already specified
     regridder_type =
         isnothing(regridder_type) ? Regridders.default_regridder_type() :
         regridder_type
 
-    # Construct a file reader, which deals with ingesting data and is possibly buffered/cached, for each input file
-    file_readers = Dict{String, AbstractFileReader}()
-    all_vars_in_same_file = length(file_paths) == 1
-    for (i, varname) in enumerate(varnames)
-        file_path = all_vars_in_same_file ? first(file_paths) : file_paths[i]
-        file_readers[varname] =
-            NCFileReader(file_path, varname; file_reader_kwargs...)
+    _check_file_paths_varnames(
+        file_paths,
+        varnames,
+        regridder_type,
+        compose_function,
+    )
+
+    # We have to deal with the case with have 1 FileReader (with possibly multiple files),
+    # or with N FileReaders (for when variables are split across files, and with possibly
+    # multiple files). To accommodate all these cases, we cast everything into the format
+    # where we have a list of lists, where the outer list is along variable names, and the
+    # inner list is along times. This is the most general input we expect from this
+    # constructor.
+
+    is_file_paths_list_of_lists = !(first(file_paths) isa AbstractString)
+
+    if !is_file_paths_list_of_lists
+        # If is_file_paths_list_of_lists not already a list of lists, we have two options:
+        # 1. file_paths identifies the temporal development of the variables
+        # 2. file_paths identifies different variables
+
+        # We use as heuristic that when the number of files provided is the same as the
+        # number of variables, that means that the files include different variables
+        if length(file_paths) == length(varnames)
+            # One file per variable
+            file_paths = [[f] for f in file_paths]
+        else
+            # Every file per every variable
+            file_paths = [copy(file_paths) for _ in varnames]
+        end
     end
+    # Now, we have a list of lists, where file_paths[i] is the list of files that define the
+    # temporal evolution of varnames[i]
+
+    # Construct the file readers, which deals with ingesting data and is possibly
+    # buffered/cached, for each variable
+    file_readers = Dict(
+        varname => NCFileReader(paths, varname; file_reader_kwargs...) for
+        (paths, varname) in zip(file_paths, varnames)
+    )
 
     # Verify that the spatial dimensions are the same for each variable
     @assert length(
@@ -248,9 +315,11 @@ function DataHandling.DataHandler(
             regridder_kwargs = merge((; regrid_dir), regridder_kwargs)
         end
 
-        # Note: using one arbitrary element of `varnames` and of `file_paths` assumes
-        #  that all input variables will use the same regridding
-        regridder_args = (target_space, first(varnames), first(file_paths))
+        # Note: using one arbitrary element of `varnames` and of `file_paths`
+        # assumes that all input variables will use the same regridding (there
+        # are two firsts in file_paths because we now have a list of lists)
+        regridder_args =
+            (target_space, first(varnames), first(first(file_paths)))
     elseif regridder_type == :InterpolationsRegridder
         regridder_args = (target_space,)
     end

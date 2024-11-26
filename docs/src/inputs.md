@@ -76,7 +76,7 @@ compose_function = (x, y) -> x + y
 # Define pre-processing function to convert units of input
 unit_conversion_func = (data) -> 1000 * data
 
-data_handler = TimeVaryingInputs.TimeVaryingInput("era5_example.nc",
+timevaryinginput = TimeVaryingInputs.TimeVaryingInput("era5_example.nc",
                                         ["u", "v"],
                                         target_space,
                                         start_date = Dates.DateTime(2000, 1, 1),
@@ -87,6 +87,29 @@ data_handler = TimeVaryingInputs.TimeVaryingInput("era5_example.nc",
 
 The same arguments (excluding `start_date`) could be passed to a
 `SpaceVaryingInput` to compose multiple input variables with that type.
+
+#### Example: Data split across multiple NetCDF files
+
+Often, large datasets come chunked, meaning that the data is split across
+multiple files with each file containing only a subset of the time interval.
+`TimeVaryingInput`s know to combine data across multiple files as it were
+provided in a single file. To do use this feature, just pass the list of file
+paths. While it is not required for the files to be in order, it is good
+practice to pass them in ascending order by time.
+
+For example:
+```julia
+timevaryinginput = TimeVaryingInputs.TimeVaryingInput(["era5_1980.nc", "era5_1981.nc"],
+                                                       "u",
+                                                       target_space,
+                                                       start_date = Dates.DateTime(1980, 1, 1),
+                                                       regridder_type = :InterpolationsRegridder
+                                                       )
+```
+
+This capability is only available for the `InterpolationsRegridder`.
+
+Read more about this feature in the page about [`DataHandler`](@ref).
 
 ### Extrapolation boundary conditions
 

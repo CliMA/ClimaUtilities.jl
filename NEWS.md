@@ -4,12 +4,44 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
-#### Support reading time data across multiple files. PR [#127](https://github.com/CliMA/ClimaUtilities.jl/pull/127)
+v0.1.20
+------
+
+#### Support reading time data across multiple files. PRs [#127](https://github.com/CliMA/ClimaUtilities.jl/pull/127), [#132](https://github.com/CliMA/ClimaUtilities.jl/pull/132)
 
 `NCFileReader`s can now read multiple files at the same time. The files have to
 contain temporal data for the given variable and they are aggregated along the
 time dimension. To use this feature, just pass a vector of file paths to the
 constructor.
+
+This capability is also available to `DataHandler`s and `TimeVaryingInput`s. To
+use this feature, just pass the list of files that contain your variable of
+interested, for example
+```julia
+timevaryinginput = TimeVaryingInputs.TimeVaryingInput(["era5_1980.nc", "era5_1981.nc"],
+                                                      "u",
+                                                      target_space,
+                                                      start_date = Dates.DateTime(1980, 1, 1),
+                                                      regridder_type = :InterpolationsRegridder)
+```
+You can also compose variables
+```julia
+timevaryinginput = TimeVaryingInputs.TimeVaryingInput(["era5_1980.nc", "era5_1981.nc", "era5_1982.nc"],
+                                                      ["u", "v"],
+                                                      target_space,
+                                                      start_date = Dates.DateTime(1980, 1, 1),
+                                                      regridder_type = :InterpolationsRegridder,
+                                                      compose_function = (x, y) -> sqrt(x^2 + y^2))
+```
+
+When you compose variables, pay attention that `TimeVaryingInput` implements
+some heuristics to disambiguate the case where the passed list of files is split
+along the time or the variable dimension. You can always pass a list of lists to
+be explicit in your intentions. Read the
+[documentation](https://clima.github.io/ClimaUtilities.jl/dev/datahandling.html#Heuristics-to-do-what-you-mean)
+to learn more about this.
+
+This capability is only available for the `InterpolationsRegridder`.
 
 v0.1.19
 ------
