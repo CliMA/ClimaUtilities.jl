@@ -9,7 +9,7 @@ This is no trivial task. Among the challenges:
 - IO can be very expensive,
 - CPU/GPU communication can be a bottleneck.
 
-The `DataHandling` takes the divide and conquer approach: the various core tasks
+The `DataHandling` takes the divide-and-conquer approach: the various core tasks
 and features and split into other independent modules (chiefly
 [`FileReaders`](@ref), and [`Regridders`](@ref)). Such modules can be developed,
 tested, and extended independently (as long as they maintain a consistent
@@ -17,9 +17,10 @@ interface). For instance, if need arises, the `DataHandler` can be used (almost)
 directly to process files with a different format from NetCDF.
 
 The key struct in `DataHandling` is the `DataHandler`. The `DataHandler`
-contains one or more `FileReader`(s), a `Regridder`, and other metadata necessary to perform
-its operations (e.g., target `ClimaCore.Space`). The `DataHandler` can be used
-for static or temporal data, and exposes the following key functions:
+contains one or more `FileReader`(s), a `Regridder`, and other metadata
+necessary to perform its operations (e.g., target `ClimaCore.Space`). The
+`DataHandler` can be used for static or temporal data, and exposes the following
+key functions:
 - `regridded_snapshot(time)`: to obtain the regridded field at the given `time`.
                     `time` has to be available in the data.
 - `available_times` (`available_dates`): to list all the `times` (`dates`) over
@@ -66,6 +67,50 @@ are composed.
 Composing multiple input variables is currently only supported with the
 `InterpolationsRegridder`, not with `TempestRegridder`.
 
+Sometimes, the time development of a variable is split across multiple NetCDF
+files. `DataHandler` knows how to combine them and treat multiple files as if
+they were a single one. To use this feature, just pass the list of NetCDF files
+(while the file don't have to be sorted, it is good practice to pass them sorted
+in ascending order by time). 
+
+#### Heuristics to do-what-you-mean
+
+`DataHandler` tries to interpret the files provided and identify if they are
+split across variables or along the time dimension. The heuristics implement are
+the following:
+- When just a file is passed, it is assumed that it contains everything 
+- When multiple files are passed, `DataHandler` will assume that the files are
+  split along variables if the number of files is the same the number of
+  variables, otherwise, it will assume that each file contains all the variables
+  for a portion of the total time.
+- When the above assumption is incorrect, you can pass a list of list of files
+  that fully specifies variables and times.
+
+For example, 
+```julia
+data_handler = DataHandling.DataHandler(
+    ["era1980.nc", "era1981.nc"],
+    ["lai_hv", "lai_lv"],
+    target_space;
+    compose_function = (x, y) -> x + y,
+)
+```
+
+In this case, `DataHandler` will incorrectly assume that `lai_hv` is contained
+in `era1980.nc`, and `lai_lv` is in `era1980.nc`. Instead, construct the
+`data_handler` by passing a list of lists 
+```julia
+files = ["era1980.nc", "era1981.nc"] 
+data_handler = DataHandling.DataHandler(
+    [files, files],
+    ["lai_hv", "lai_lv"],
+    target_space;
+    compose_function = (x, y) -> x + y,
+)
+```
+where each element of the list is the collection of files that contain the time
+evolution of that variable.
+
 ## Example: Linear interpolation of a single data variable
 
 As an example, let us implement a simple linear interpolation for a variable `u`
@@ -107,6 +152,11 @@ function linear_interpolation(data_handler, time)
         (time - time_of_prev_snapshot) / (time_of_next_snapshot - time_of_prev_snapshot)
 end
 ```
+
+If, for example, the data was split across multiple files named `era5_1980.nc`,
+`era5_1981.nc`, ... (e.g., each file containing one year), we could directly
+pass the list to the constructor for `DataHandler` (instead of just passing one
+file path), which knows how to combine them.
 
 ### Example appendix: Using multiple input data variables
 

@@ -122,7 +122,6 @@ ClimaComms.init(context)
                     ),
                 )
             end
-
             close(data_handler)
         end
     end
@@ -184,30 +183,12 @@ end
     regridder_type = :InterpolationsRegridder
     compose_function = (x, y) -> x + y
 
-    # Test that multiple paths and multiple variables with different quantities are not allowed
-    @test_throws ErrorException data_handler = DataHandling.DataHandler(
-        [path1, path2],
-        [var1, var2, var3],
-        target_space;
-        regridder_type,
-        compose_function,
-    )
-
     # Providing multiple variables without a compose function is not allowed
     @test_throws ErrorException DataHandling.DataHandler(
         path1,
         [var1, var2],
         target_space;
         regridder_type,
-    )
-
-    # Providing a compose function with a single variable is not allowed
-    @test_throws ErrorException DataHandling.DataHandler(
-        path1,
-        var1,
-        target_space;
-        regridder_type,
-        compose_function,
     )
 
     # TempestRegridder does not support multiple input variables
@@ -219,9 +200,19 @@ end
         regridder_type = regridder_type_tr,
         compose_function,
     )
+
+    # TempestRegridder does not support multiple input files
+    regridder_type_tr = :TempestRegridder
+    @test_throws ErrorException DataHandling.DataHandler(
+        [path1, path2],
+        var1,
+        target_space;
+        regridder_type = regridder_type_tr,
+        compose_function,
+    )
 end
 
-@testset "DataHandler, TempestRegridder, time data" begin
+@testset "DataHandler, time data" begin
     if !Sys.iswindows()
         PATH = joinpath(artifact"era5_example", "era5_t2m_sp_u10n_20210101.nc")
         varname = "sp"
@@ -391,5 +382,65 @@ end
                 close(data_handler)
             end
         end
+
+
+
+        # Testing the logic on handling multiple files/variables. We don't test
+        # the numeric values here because we assume that they are correctly
+        # tested above.
+
+        radius = 6731e3
+        helem = 40
+        Nq = 4
+
+        horzdomain = ClimaCore.Domains.SphereDomain(radius)
+        horzmesh = ClimaCore.Meshes.EquiangularCubedSphere(horzdomain, helem)
+        horztopology = ClimaCore.Topologies.Topology2D(context, horzmesh)
+        quad = ClimaCore.Spaces.Quadratures.GLL{Nq}()
+        target_space =
+            ClimaCore.Spaces.SpectralElementSpace2D(horztopology, quad)
+
+        # Test reading one variable with time split across multiple files
+
+        # TODO: Move this to test/Artifacts.toml
+        file_paths = [
+            joinpath(@__DIR__, "test_data", "era5_1979_1.0x1.0_lai.nc"),
+            joinpath(@__DIR__, "test_data", "era5_1980_1.0x1.0_lai.nc"),
+        ]
+
+        data_handler_time = DataHandling.DataHandler(
+            file_paths,
+            "lai_hv",
+            target_space;
+            regridder_type = :InterpolationsRegridder,
+        )
+        @test length(data_handler_time.available_dates) == 104
+
+        # Test reading three variables with time split across multiple files
+        data_handler_three = DataHandling.DataHandler(
+            file_paths,
+            ["lai_hv", "lai_lv", "lai_hv"],
+            target_space;
+            regridder_type = :InterpolationsRegridder,
+            compose_function = (x, y, z) -> x + y + z,
+        )
+
+        # Test the list-of-list constructor
+        data_handler_lol = DataHandling.DataHandler(
+            [file_paths, file_paths, file_paths],
+            ["lai_hv", "lai_lv", "lai_hv"],
+            target_space;
+            regridder_type = :InterpolationsRegridder,
+            compose_function = (x, y, z) -> x + y + z,
+        )
+
+        @test DataHandling.regridded_snapshot(
+            data_handler_lol,
+            first(DataHandling.available_times(data_handler_lol)),
+        ) == DataHandling.regridded_snapshot(
+            data_handler_three,
+            first(DataHandling.available_times(data_handler_three)),
+        )
+
     end
 end
