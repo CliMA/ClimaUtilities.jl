@@ -32,7 +32,7 @@ cache = DataStructures.LRUCache{Int, Int}(; max_size = 128)
 ```
 
 Once we have the `cache`, we can access and insert elements with `get!`.
-`get!` retrieves the value associated to the key if avaialble, otherwise
+`get!` retrieves the value associated to the key if available, otherwise
 it inserts a new key with a provided default. The default can be passed as
 third argument or can be the return statement of a function provided as
 first (as typically done in `do` blocks). Continuing the example above
