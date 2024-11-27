@@ -17,6 +17,7 @@ DocMeta.setdocmeta!(
 
 pages = [
     "Overview" => "index.md",
+    "Data Structures" => "datastructures.md",
     "ClimaArtifacts" => "climaartifacts.md",
     "Space and Time Inputs" => "inputs.md",
     "FileReaders" => "filereaders.md",

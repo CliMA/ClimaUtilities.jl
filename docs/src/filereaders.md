@@ -45,8 +45,10 @@ It is good practice to always close the `NCFileReader`s when they are no longer
 needed. The function `close_all_ncfiles` closes all the ones that are currently
 open.
 
-> :note: Currently, the order does not matter when passing multiple files. However,
-> it is good practice to pass them in order.
+!!! note
+
+    Currently, the order does not matter when passing multiple files. However, it
+    is good practice to pass them in order.
 
 ### Example
 

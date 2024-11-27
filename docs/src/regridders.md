@@ -15,11 +15,13 @@ Currently, `Regridders` comes with two implementations:
    perform non-conservative linear interpolation onto lat-long(-z) grids.
    `InterpolationsRegridder` works directly with data.
 
-> ⚠️ Note: While the `Regridders` can be used independently, most users will find
-> their needs are immediately met by the [`SpaceVaryingInputs` and
-> `TimeVaryingInputs`](@ref) interfaces. These higher-level objects implement
-> everything that is needed to read a file to the model grid (internally using
-> the `Regridders`).
+!!! note
+
+    While the `Regridders` can be used independently, most users will find their
+    needs are immediately met by the [`SpaceVaryingInputs` and
+    `TimeVaryingInputs`](@ref) interfaces. These higher-level objects implement
+    everything that is needed to read a file to the model grid (internally using the
+    `Regridders`).
 
 If a regridder type is not specified by the user, and multiple are available,
 the `InterpolationsRegridder` will be used by default. At least one regridder
@@ -66,7 +68,9 @@ along each direction) and returns a `ClimaCore` `Field` defined on the
 Currently, `InterpolationsRegridder` only supports spherical shells and extruded
 spherical shells (but it could be easily extended to other domains).
 
-> Note: it is easy to change the spatial interpolation type if needed.
+!!!note
+
+    It is easy to change the spatial interpolation type if needed.
 
 `InterpolationsRegridder` are created once, they are tied to a `target_space`,
 but can be used with any input data. With MPI runs, every process computes the

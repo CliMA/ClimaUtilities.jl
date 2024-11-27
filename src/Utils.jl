@@ -111,8 +111,10 @@ end
 
 Return `time` assuming periodicity so that `t_init <= time < t_end`.
 
-> Note: pay attention to the floating point representation! Sometimes it will lead to
-  unexpected results.
+!!! note
+
+    Pay attention to the floating point representation! Sometimes it will lead
+    to unexpected results.
 
 Examples
 ========

@@ -115,9 +115,11 @@ requires the data to be uniformly spaced in time. To enable this boundary
 condition, pass `LinearInterpolation(PeriodicCalendar())` to the
 `TimeVaryingInput` (or `NearestNeighbor(PeriodicCalendar())`).
 
-> Note: this `PeriodicCalendar` is different from what you might be used to, where the
-> identification is `t1 = t0`. Here, we identify `t1 + dt = t0`. This is so that
-> we can use it to repeat calendar data.
+!!! note
+
+    This `PeriodicCalendar` is different from what you might be used to,
+    where the identification is `t1 = t0`. Here, we identify `t1 + dt = t0`.
+    This is so that we can use it to repeat calendar data.
 
 ### `LinearPeriodFillingInterpolation`
 
@@ -186,9 +188,11 @@ albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_
                                                file_reader_kwargs = (; preprocess_func = (x) -> 100x))
 ```
 
-!!! note In this example we used the [`TempestRegridder`](@ref). This is not the
-    best choice in most cases because the [`TempestRegridder`](@ref) is slower,
-    and not well-compatible with MPI and GPUs (`ClimaUtilities` implements
+!!! note
+
+    In this example we used the [`TempestRegridder`](@ref). This is not the best
+    choice in most cases because the [`TempestRegridder`](@ref) is slower, and
+    not well-compatible with MPI and GPUs (`ClimaUtilities` implements
     workarounds for this, so the code would still work).
     [`InterpolationsRegridder`](@ref) should be preferred, unless there is a
     strict requirement of conservation: while [`TempestRegridder`](@ref) is
