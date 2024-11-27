@@ -16,8 +16,10 @@ a maximum cache size: every time adding an element to the cache would
 lead its size to grow larger thant the maximum allowed, the element that was
 accessed the least recently is deleted first.
 
-> Note: all the methods supported by dictionaries are currently implemented.
-If you need one that is not implemented, please open an issue or a pull request.
+!!! note
+
+    All the methods supported by dictionaries are currently implemented.
+    If you need one that is not implemented, please open an issue or a pull request.
 
 ### Example
 In many ways, `LRUCache`s behave like Julia dictionaries. To use one, we

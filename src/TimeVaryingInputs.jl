@@ -89,8 +89,10 @@ This is the period of time that is repeated. For example, if `period = Dates.Mon
 `repeat_date = Dates.Date(1993, 11)`, November 1993 is repeated (if available in the input
 data).
 
-> Note: Passing a period is not supported by all the interpolators (e.g., when reading from
-  1D files).
+!!! note
+
+    Passing a period is not supported by all the interpolators (e.g., when reading from 1D
+    files).
 
 Second, if no period is provided, when interpolating outside of range, restart from the beginning.
 

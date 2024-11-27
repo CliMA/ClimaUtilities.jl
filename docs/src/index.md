@@ -55,8 +55,10 @@ non-conservative linear interpolation onto lat-long(-z) grids.
 [TempestRemap](https://github.com/ClimateGlobalChange/tempestremap) to perform
 conservative interpolation onto lat-long grids.
 
-> ⚠️ Note: At the moment, `TempestRegridder` *does not* support MPI/GPUs and can
-> only perform interpolation onto lat-long grids (not on z).
+!!!note
+
+    At the moment, `TempestRegridder` *does not* support MPI/GPUs and can
+    only perform interpolation onto lat-long grids (not on z).
 
 ### `OutputPathGenerator`
 
