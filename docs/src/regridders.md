@@ -68,7 +68,7 @@ along each direction) and returns a `ClimaCore` `Field` defined on the
 Currently, `InterpolationsRegridder` only supports spherical shells and extruded
 spherical shells (but it could be easily extended to other domains).
 
-!!!note
+!!! note
 
     It is easy to change the spatial interpolation type if needed.
 
