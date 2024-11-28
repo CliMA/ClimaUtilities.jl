@@ -21,8 +21,8 @@ developers:
 
 Also, keep in mind that
 
-!!!note
-    
+!!! note
+
     Julia artifacts are always entire folders, never single files!
 
 ### Julia artifacts and MPI
@@ -77,7 +77,7 @@ The `@clima_artifact` macro is executed at parse time when the argument is a
 literal string (e.g., `@clima_artifact("socrates")`), and at runtime when it is
 a variable `@clima_artifact(artifact_name)`.
 
-!!!note
+!!! note
 
     `context` is a positional argument, not a keyword one. Calling
     `@clima_artifact("socrates"; context)` will fail. (This is due to how Julia
