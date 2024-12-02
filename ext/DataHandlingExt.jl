@@ -130,7 +130,7 @@ end
                 target_space::ClimaCore.Spaces.AbstractSpace;
                 start_date::Dates.DateTime = Dates.DateTime(1979, 1, 1),
                 regridder_type = nothing,
-                cache_max_size::Int = 128,
+                cache_max_size::Int = 2,
                 regridder_kwargs = (),
                 file_reader_kwargs = ())
 
@@ -144,7 +144,9 @@ different files.
 the latter case, the entries of `file_paths` and `varnames` are expected to match based on
 position.
 
-The DataHandler maintains an LRU cache of Fields that were previously computed.
+The DataHandler maintains an LRU cache of Fields that were previously computed. The default
+size for the cache is only two fields, so if you expect to re-use the same fields often,
+increasing the cache size can lead to improved performances.
 
 Creating this object results in the file being accessed (to preallocate some memory).
 
@@ -202,7 +204,7 @@ function DataHandling.DataHandler(
     target_space::ClimaCore.Spaces.AbstractSpace;
     start_date::Union{Dates.DateTime, Dates.Date} = Dates.DateTime(1979, 1, 1),
     regridder_type = nothing,
-    cache_max_size::Int = 128,
+    cache_max_size::Int = 2,
     regridder_kwargs = (),
     file_reader_kwargs = (),
     compose_function = identity,
