@@ -11,7 +11,7 @@ import ClimaComms
 import Interpolations as Intp
 import ClimaCoreTempestRemap
 using NCDatasets
-
+include("TestTools.jl")
 const context = ClimaComms.context()
 ClimaComms.init(context)
 
@@ -153,6 +153,53 @@ ClimaComms.init(context)
           (Intp.Flat(), Intp.Flat(), Intp.Flat())
     field = DataHandling.regridded_snapshot(data_handler)
     @test extrema(field) == (0.0, 0.0)
+end
+
+@testset "Datahandler incorrect dims" begin
+    target_space = make_spherical_space(Float64; context)
+    # netcdf file with dimensions as expected
+    sorted_dims_path = joinpath(@__DIR__, "test_data", "sorted_dims.nc")
+    # netcdf file with descending z and reverse lat
+    reversed_dims_path = joinpath(@__DIR__, "test_data", "reversed_dims.nc")
+    data_handler_sorted = DataHandling.DataHandler(
+        sorted_dims_path,
+        ["test_var"],
+        target_space.hybrid;
+        regridder_type = :InterpolationsRegridder,
+        regridder_kwargs = (;
+            extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+        ),
+    )
+    data_handler_reversed = DataHandling.DataHandler(
+        reversed_dims_path,
+        ["test_var"],
+        target_space.hybrid;
+        regridder_type = :InterpolationsRegridder,
+        regridder_kwargs = (;
+            extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+        ),
+    )
+    # check that the dimension transforms are correct
+    @test data_handler_reversed.regridder.dim_increasing == (true, false, false)
+    @test data_handler_sorted.regridder.dim_increasing == (true, true, true)
+    regridded_reversed = DataHandling.regridded_snapshot(data_handler_reversed)
+    regridded_sorted = DataHandling.regridded_snapshot(data_handler_sorted)
+    @test regridded_reversed == regridded_sorted
+    close(data_handler_reversed)
+    close(data_handler_sorted)
+    # netcdf file not easily correctable lon dimension (swapped two points in lon)
+    incorrect_lon_path = joinpath(@__DIR__, "test_data", "incorrect_dims.nc")
+    # test that informative error is thrown when lon is not monotonically increasing or decreasing
+    @test_throws AssertionError DataHandling.DataHandler(
+        incorrect_lon_path,
+        ["test_var"],
+        target_space.hybrid;
+        regridder_type = :InterpolationsRegridder,
+        regridder_kwargs = (;
+            extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+        ),
+    )
+
 end
 
 @testset "DataHandler errors" begin
