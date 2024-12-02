@@ -45,6 +45,9 @@ struct NCFileReader{
     (e.g., lon/lat)"""
     dimensions::DIMS
 
+    """A tuple with the names of the physcial dimensions, in the same order as `dimensions`"""
+    dim_names::Tuple
+
     """A vector of DateTime collecting all the available dates in the files"""
     available_dates::DATES
 
@@ -168,6 +171,7 @@ function FileReaders.NCFileReader(
         file_paths,
         varname,
         dimensions,
+        dim_names,
         available_dates,
         dataset,
         preprocess_func,

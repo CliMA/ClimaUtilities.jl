@@ -299,6 +299,12 @@ function DataHandling.DataHandler(
         Set(file_reader.time_index for file_reader in values(file_readers)),
     ) == 1
 
+    # Note: using one arbitrary element of `file_readers` assumes
+    #  that all input variables have the same time development
+    available_dates = first(values(file_readers)).available_dates
+    available_times = period_to_seconds_float.(available_dates .- start_date)
+    dimensions = first(values(file_readers)).dimensions
+    dim_names = first(values(file_readers)).dim_names
     regridder_args = ()
 
     if regridder_type == :TempestRegridder
@@ -323,7 +329,15 @@ function DataHandling.DataHandler(
         regridder_args =
             (target_space, first(varnames), first(first(file_paths)))
     elseif regridder_type == :InterpolationsRegridder
+        # Check if the dimensions are monotonically increasing or decreasing
+        # if monotonically decreasing, we need to reverse the data before regridding
+        # Ideally, this should be done when the data is preprocessed
+        dim_increasing = map(dimensions, dim_names) do dim, dim_name
+            @assert issorted(dim) || issorted(dim, rev = true) "dimension $dim_name is neither monotonically increasing nor decreasing"
+            issorted(dim) ? true : false
+        end
         regridder_args = (target_space,)
+        regridder_kwargs = merge((; dim_increasing), regridder_kwargs)
     end
 
     RegridderConstructor = getfield(Regridders, regridder_type)
@@ -335,11 +349,6 @@ function DataHandling.DataHandler(
             max_size = cache_max_size,
         )
 
-    # Note: using one arbitrary element of `file_readers` assumes
-    #  that all input variables have the same time development
-    available_dates = first(values(file_readers)).available_dates
-    available_times = period_to_seconds_float.(available_dates .- start_date)
-    dimensions = first(values(file_readers)).dimensions
 
     # Preallocate space for each variable to be read
     one_date = isempty(available_dates) ? () : (first(available_dates),)
