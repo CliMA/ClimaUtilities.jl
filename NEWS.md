@@ -43,6 +43,12 @@ to learn more about this.
 
 This capability is only available for the `InterpolationsRegridder`.
 
+#### Reduced default size of cache in `DataHandler`. PR [#133](https://github.com/CliMA/ClimaUtilities.jl/pull/133)
+
+The default cache size for regridded fields in `DataHandler` was reduced from
+128 to 2, reducing the memory footprint. You can pass the `cache_max_size`
+keyword argument to control this value.
+
 v0.1.19
 ------
 
