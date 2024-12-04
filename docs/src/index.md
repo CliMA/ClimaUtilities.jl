@@ -60,6 +60,11 @@ conservative interpolation onto lat-long grids.
     At the moment, `TempestRegridder` *does not* support MPI/GPUs and can
     only perform interpolation onto lat-long grids (not on z).
 
+### `OnlineLogging`
+
+`OnlineLogging` provides tools to produce informative messages while a
+simulation is running (e.g., current/average timing information).
+
 ### `OutputPathGenerator`
 
 `OutputPathGenerator` handles the directory structure for the output of a

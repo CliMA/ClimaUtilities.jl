@@ -12,6 +12,7 @@ include("TimeVaryingInputs.jl")
 
 include("ClimaArtifacts.jl")
 
+include("OnlineLogging.jl")
 include("OutputPathGenerator.jl")
 
 end # module ClimaUtilities

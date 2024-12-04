@@ -24,6 +24,8 @@ ClimaUtilities.jl
   [`DataHandling`](https://clima.github.io/ClimaUtilities.jl/dev/datahandling/),
   and [`Regridders`](https://clima.github.io/ClimaUtilities.jl/dev/regridders/)
   to process input data and remap it onto the simulation grid.
+- [`OnlineLogging`](https://clima.github.io/ClimaUtilities.jl/dev/onlinelogging/)
+  to add output information while a simulation is running.
 - [`OutputPathGenerator`](https://clima.github.io/ClimaUtilities.jl/dev/outputpathgenerator/)
   to prepare the output directory structure of a simulation.
 - [`TimeManager`](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/) to

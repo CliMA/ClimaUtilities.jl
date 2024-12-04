@@ -7,6 +7,30 @@ main
 v0.1.20
 ------
 
+#### New module `OnlineLogging`. PR [#137](https://github.com/CliMA/ClimaUtilities.jl/pull/137)
+
+A new module, `OnlineLogging`, provides tools to report messages while a
+simulation is running. Currently, the only feature implemented is
+`WallTimeInfo`, to report on timing information.
+
+With `WallTimeInfo`, one can add reports like the following to their simulations
+```
+┌ Info: Progress
+│   simulation_time = "2 seconds"
+│   n_steps_completed = 20
+│   wall_time_per_step = "10 milliseconds, 100 microseconds"
+│   wall_time_total = "1 second, 10 milliseconds"
+│   wall_time_remaining = "808 milliseconds, 35 microseconds"
+│   wall_time_spent = "202 milliseconds, 8 microseconds"
+│   percent_complete = "20.0%"
+│   estimated_sypd = "0.027"
+│   date_now = 2024-12-03T16:01:13.660
+└   estimated_finish_date = 2024-12-03T16:01:14.660
+```
+
+Find more information in the
+[documentation](https://clima.github.io/ClimaUtilities.jl/dev/onlinelogging.html).
+
 #### Support reading time data across multiple files. PRs [#127](https://github.com/CliMA/ClimaUtilities.jl/pull/127), [#132](https://github.com/CliMA/ClimaUtilities.jl/pull/132)
 
 `NCFileReader`s can now read multiple files at the same time. The files have to
