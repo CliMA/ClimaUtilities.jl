@@ -23,6 +23,7 @@ pages = [
     "FileReaders" => "filereaders.md",
     "DataHandling" => "datahandling.md",
     "Regridders" => "regridders.md",
+    "OnlineLogging" => "onlinelogging.md",
     "OutputPathGenerator" => "outputpathgenerator.md",
     "TimeManager" => "timemanager.md",
     "Frequently Asked Questions" => "faqs.md",
