@@ -20,7 +20,7 @@ let_filesystem_catch_up() = context isa ClimaComms.MPICommsContext && sleep(0.2)
         style = RemovePreexistingStyle(),
     )
 
-    base_output_path = ClimaComms.iamroot(context) ? mktempdir() : ""
+    base_output_path = ClimaComms.iamroot(context) ? mktempdir(pwd()) : ""
     base_output_path = ClimaComms.bcast(context, base_output_path)
     ClimaComms.barrier(context)
     let_filesystem_catch_up()
@@ -56,7 +56,11 @@ let_filesystem_catch_up() = context isa ClimaComms.MPICommsContext && sleep(0.2)
 
     @test !isfile(joinpath(output_path, "something"))
 
-    Base.rm(base_output_path, force = true, recursive = true)
+    if ClimaComms.iamroot(context)
+        Base.rm(base_output_path, force = true, recursive = true)
+    end
+
+    ClimaComms.barrier(context)
 
     let_filesystem_catch_up()
 end
@@ -65,7 +69,7 @@ end
     # Test empty output_path
     @test_throws ErrorException generate_output_path("")
 
-    base_output_path = ClimaComms.iamroot(context) ? mktempdir() : ""
+    base_output_path = ClimaComms.iamroot(context) ? mktempdir(pwd()) : ""
     base_output_path = ClimaComms.bcast(context, base_output_path)
     ClimaComms.barrier(context)
     let_filesystem_catch_up()
@@ -156,20 +160,20 @@ end
     @test isnothing(restart_file)
 
     # Test with empty base directory
-    mktempdir() do base_output_dir
+    mktempdir(pwd()) do base_output_dir
         restart_file = detect_restart_file(base_output_dir)
         @test isnothing(restart_file)
     end
 
     # Test with a single output directory and no restart files
-    mktempdir() do base_output_dir
+    mktempdir(pwd()) do base_output_dir
         mkdir(joinpath(base_output_dir, "output_0001"))
         restart_file = detect_restart_file(base_output_dir)
         @test isnothing(restart_file)
     end
 
     # Test two output directories and no restart files
-    mktempdir() do base_output_dir
+    mktempdir(pwd()) do base_output_dir
         mkdir(joinpath(base_output_dir, "output_0001"))
         mkdir(joinpath(base_output_dir, "output_0002"))
         restart_file = detect_restart_file(base_output_dir)
@@ -177,7 +181,7 @@ end
     end
 
     # Test with a single output directory and a single restart file
-    mktempdir() do base_output_dir
+    mktempdir(pwd()) do base_output_dir
         output_dir = joinpath(base_output_dir, "output_0001")
         mkdir(output_dir)
         touch(joinpath(output_dir, "day0001.1234.hdf5"))
@@ -186,7 +190,7 @@ end
     end
 
     # Test with multiple output directories and restart files
-    mktempdir() do base_output_dir
+    mktempdir(pwd()) do base_output_dir
         output_dir1 = joinpath(base_output_dir, "output_0001")
         output_dir2 = joinpath(base_output_dir, "output_0002")
         mkdir(output_dir1)
@@ -199,7 +203,7 @@ end
     end
 
     # Test with multiple output directories and restart files only in the first
-    mktempdir() do base_output_dir
+    mktempdir(pwd()) do base_output_dir
         output_dir1 = joinpath(base_output_dir, "output_0001")
         output_dir2 = joinpath(base_output_dir, "output_0002")
         mkdir(output_dir1)
@@ -210,7 +214,7 @@ end
     end
 
     # Test with a custom restart file regular expression
-    mktempdir() do base_output_dir
+    mktempdir(pwd()) do base_output_dir
         output_dir = joinpath(base_output_dir, "output_0001")
         mkdir(output_dir)
         touch(joinpath(output_dir, "restart_0001.h5"))
@@ -223,7 +227,7 @@ end
     end
 
     # Test with a custom sorting function (e.g., sort by reverse modification time)
-    mktempdir() do base_output_dir
+    mktempdir(pwd()) do base_output_dir
         output_dir = joinpath(base_output_dir, "output_0001")
         mkdir(output_dir)
         touch(joinpath(output_dir, "day0001.1234.hdf5"))
