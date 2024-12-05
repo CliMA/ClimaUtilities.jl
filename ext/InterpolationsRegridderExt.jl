@@ -108,27 +108,32 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
         FT.(transform(dim))
     end
     # apply the specified transformation to each dimension of the data
+    data_transformed = similar(data)
     if length(dimensions) == 2
         for i in 1:length(dimensions_FT[1])
-            data[i, :] .= regridder.dim_transforms[2](data[i, :])
+            data_transformed[i, :] .= regridder.dim_transforms[2](data[i, :])
         end
         for i in 1:length(dimensions_FT[2])
-            data[:, i] .= regridder.dim_transforms[1](data[:, i])
+            data_transformed[:, i] .=
+                regridder.dim_transforms[1](data_transformed[:, i])
         end
     elseif length(dimensions) == 3
         for i in 1:length(dimensions_FT[1])
             for j in 1:length(dimensions_FT[2])
-                data[i, j, :] .= regridder.dim_transforms[3](data[i, j, :])
+                data_transformed[i, j, :] .=
+                    regridder.dim_transforms[3](data[i, j, :])
             end
         end
         for i in 1:length(dimensions_FT[1])
             for j in 1:length(dimensions_FT[3])
-                data[i, :, j] .= regridder.dim_transforms[2](data[i, :, j])
+                data_transformed[i, :, j] .=
+                    regridder.dim_transforms[2](data_transformed[i, :, j])
             end
         end
         for i in 1:length(dimensions_FT[2])
             for j in 1:length(dimensions_FT[3])
-                data[:, i, j] .= regridder.dim_transforms[1](data[:, i, j])
+                data_transformed[:, i, j] .=
+                    regridder.dim_transforms[1](data_transformed[:, i, j])
             end
         end
     else
@@ -136,7 +141,11 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
     end
     # Make a linear spline
     itp = Intp.extrapolate(
-        Intp.interpolate(dimensions_FT, FT.(data), Intp.Gridded(Intp.Linear())),
+        Intp.interpolate(
+            dimensions_FT,
+            FT.(data_transformed),
+            Intp.Gridded(Intp.Linear()),
+        ),
         regridder.extrapolation_bc,
     )
 
