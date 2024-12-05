@@ -137,6 +137,8 @@ function generate_output_path(
     style::OutputPathGeneratorStyle = ActiveLinkStyle(),
 )
     output_path == "" && error("output_path cannot be empty")
+    # Let's make sure we are synced before we do any filesystem operation
+    ClimaComms.barrier(context)
     return generate_output_path(style, output_path; context)
 end
 
