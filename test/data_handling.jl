@@ -144,13 +144,10 @@ ClimaComms.init(context)
         target_space;
         regridder_type = :InterpolationsRegridder,
         file_reader_kwargs = (; preprocess_func = (data) -> 0.0 * data),
-        regridder_kwargs = (;
-            extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Flat())
-        ),
+        regridder_kwargs = (; extrapolation_bc = (Intp.Flat(), Intp.Flat())),
     )
 
-    @test data_handler.regridder.extrapolation_bc ==
-          (Intp.Flat(), Intp.Flat(), Intp.Flat())
+    @test data_handler.regridder.extrapolation_bc == (Intp.Flat(), Intp.Flat())
     field = DataHandling.regridded_snapshot(data_handler)
     @test extrema(field) == (0.0, 0.0)
 end

@@ -97,6 +97,17 @@ end
             extrapolation_bc,
         )
 
+        # Test num_dimensions != length(extrapolation_bc)
+        @test_throws ErrorException Regridders.InterpolationsRegridder(
+            hv_center_space;
+            extrapolation_bc = (
+                Interpolations.Periodic(),
+                Interpolations.Flat(),
+                Interpolations.Flat(),
+                Interpolations.Flat(),
+            ),
+        )
+
         regridded_lat = Regridders.regrid(reg_hv, data_lat3D, dimensions3D)
         regridded_lon = Regridders.regrid(reg_hv, data_lon3D, dimensions3D)
         regridded_z = Regridders.regrid(reg_hv, data_z3D, dimensions3D)
