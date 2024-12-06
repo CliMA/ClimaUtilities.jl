@@ -55,4 +55,34 @@ function default_regridder_type()
     return regridder_type
 end
 
+extension_fns = [
+    :ClimaCoreTempestRemap => [:TempestRegridder, :regrid],
+    :ClimaCore => [:InterpolationsRegridder, :regrid],
+    :Interpolations => [:InterpolationsRegridder, :regrid],
+]
+
+"""
+    is_pkg_loaded(pkg::Symbol)
+
+Check if `pkg` is loaded or not.
+"""
+function is_pkg_loaded(pkg::Symbol)
+    return any(k -> Symbol(k.name) == pkg, keys(Base.loaded_modules))
+end
+
+function __init__()
+    # Register error hint if a package is not loaded
+    if isdefined(Base.Experimental, :register_error_hint)
+        Base.Experimental.register_error_hint(
+            MethodError,
+        ) do io, exc, _argtypes, _kwargs
+            for (pkg, fns) in extension_fns
+                if Symbol(exc.f) in fns && !is_pkg_loaded(pkg)
+                    print(io, "\nImport $pkg to enable `$(exc.f)`.";)
+                end
+            end
+        end
+    end
+end
+
 end

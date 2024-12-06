@@ -312,4 +312,44 @@ struct LinearPeriodFillingInterpolation{
     end
 end
 
+extension_fns = [
+    :ClimaCore => [:TimeVaryingInput, :evaluate!],
+    :NCDatasets => [:TimeVaryingInput, :evaluate!],
+    :CUDA => [:TimeVaryingInput, :evaluate!],
+]
+
+"""
+    is_pkg_loaded(pkg::Symbol)
+
+Check if `pkg` is loaded or not.
+"""
+function is_pkg_loaded(pkg::Symbol)
+    return any(k -> Symbol(k.name) == pkg, keys(Base.loaded_modules))
+end
+
+function __init__()
+    # Register error hint if a package is not loaded
+    if isdefined(Base.Experimental, :register_error_hint)
+        Base.Experimental.register_error_hint(
+            MethodError,
+        ) do io, exc, _argtypes, _kwargs
+            for (pkg, fns) in extension_fns
+                if Symbol(exc.f) in fns && !is_pkg_loaded(pkg)
+                    if pkg == :CUDA
+                        print(io, "\nIf you are using a GPU, import CUDA.")
+                    else
+                        print(io, "\nImport $pkg to enable `$(exc.f)`.";)
+                    end
+                end
+            end
+            if Symbol(exc.f) == :TimeVaryingInput
+                print(
+                    io,
+                    "\nYou might also need a regridder to use `$(exc.f)`.";
+                )
+            end
+        end
+    end
+end
+
 end
