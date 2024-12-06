@@ -73,6 +73,11 @@ The default cache size for regridded fields in `DataHandler` was reduced from
 128 to 2, reducing the memory footprint. You can pass the `cache_max_size`
 keyword argument to control this value.
 
+#### Error hints
+
+When using a function that depends on loading another package, the error now tells the user
+which package should be loaded if the package has not been loaded already.
+
 v0.1.19
 ------
 
