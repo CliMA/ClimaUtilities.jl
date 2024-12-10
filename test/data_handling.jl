@@ -11,7 +11,7 @@ import ClimaComms
 import Interpolations as Intp
 import ClimaCoreTempestRemap
 using NCDatasets
-
+include("TestTools.jl")
 const context = ClimaComms.context()
 ClimaComms.init(context)
 
@@ -153,6 +153,81 @@ ClimaComms.init(context)
           (Intp.Flat(), Intp.Flat(), Intp.Flat())
     field = DataHandling.regridded_snapshot(data_handler)
     @test extrema(field) == (0.0, 0.0)
+end
+
+@testset "Datahandler incorrect dims" begin
+    function create_test_netcdf(lat, lon, z, file_name = "test.nc")
+        output_path = joinpath(tempdir(), file_name)
+        if isfile(output_path)
+            Base.rm(output_path)
+        end
+        NCDataset(output_path, "c") do ds
+            defDim(ds, "lon", length(lon))
+            defDim(ds, "lat", length(lat))
+            defDim(ds, "z", length(z))
+            defVar(ds, "lon", lon, ("lon",))
+            defVar(ds, "lat", lat, ("lat",))
+            defVar(ds, "z", z, ("z",))
+            test_var = defVar(ds, "test_var", Float64, ("lon", "lat", "z"))
+            test_var .= 0.0
+        end
+        ds = NCDataset(output_path)
+        return output_path
+    end
+    target_space = make_spherical_space(Float64; context)
+    # create cetcdf file with dimensions as expected
+    z = collect(0.0:10.0:100.0)
+    lat = collect(-90.0:10.0:90)
+    lon = collect(0.0:10.0:360)
+    sorted_dims_path = create_test_netcdf(lat, lon, z, "sorted.nc")
+    # create test netcdf file with descending z and reverse lat
+    reversed_dims_path =
+        create_test_netcdf(reverse(lat), lon, reverse(z), "reversed.nc")
+    data_handler_sorted = DataHandling.DataHandler(
+        sorted_dims_path,
+        ["test_var"],
+        target_space.hybrid;
+        regridder_type = :InterpolationsRegridder,
+        regridder_kwargs = (;
+            extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+        ),
+    )
+    data_handler_reversed = DataHandling.DataHandler(
+        reversed_dims_path,
+        ["test_var"],
+        target_space.hybrid;
+        regridder_type = :InterpolationsRegridder,
+        regridder_kwargs = (;
+            extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+        ),
+    )
+    # check that the dimension transforms are correct
+    @test data_handler_reversed.regridder.dim_transforms ==
+          (identity, reverse, reverse)
+    @test data_handler_sorted.regridder.dim_transforms ==
+          (identity, identity, identity)
+    regridded_reversed = DataHandling.regridded_snapshot(data_handler_reversed)
+    regridded_sorted = DataHandling.regridded_snapshot(data_handler_sorted)
+    @test regridded_reversed == regridded_sorted
+    close(data_handler_reversed)
+    close(data_handler_sorted)
+    Base.rm(reversed_dims_path)
+    Base.rm(sorted_dims_path)
+    # create test netcdf file not easily correctable lon dimension (swap two points in lon)
+    lon[2] = 50.0
+    lon[6] = 10.0
+    incorrect_lon_path = create_test_netcdf(lat, lon, reverse(z))
+    # test that informative error is thrown when lon is not monotonically increasing or decreasing
+    @test_throws "dimension lon is not monotonically increasing or decreasing" DataHandling.DataHandler(
+        incorrect_lon_path,
+        ["test_var"],
+        target_space.hybrid;
+        regridder_type = :InterpolationsRegridder,
+        regridder_kwargs = (;
+            extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+        ),
+    )
+    Base.rm(incorrect_lon_path)
 end
 
 @testset "DataHandler errors" begin
