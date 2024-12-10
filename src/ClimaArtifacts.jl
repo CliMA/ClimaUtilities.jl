@@ -124,7 +124,31 @@ macro clima_artifact(name, context = nothing)
             # processes have the artifact string
             if isnothing($(esc(context))) ||
                Base.invokelatest(iamroot, $(esc(context)))
-                artifact_path = Base.invokelatest(
+                try
+                    artifact_path = Base.invokelatest(
+                        JuliaArtifacts._artifact_str,
+                        $(__module__),
+                        $(artifacts_toml),
+                        $(artifact_name),
+                        $(artifact_path_tail),
+                        $(artifact_dict),
+                        $(hash),
+                        $(platform),
+                        LazyArtifacts,
+                    )::String
+                catch e
+                    if e isa ErrorException
+                        msg = "\nThe artifact may also be too large to be downloaded automatically. If this is the case, download the artifact directly and indicate where the artifact lives in Overrides.toml (see ClimaArtifacts documentation for how to do this)."
+                        new_err = ErrorException(e.msg * msg)
+                        rethrow(new_err)
+                    else
+                        rethrow(e)
+                    end
+                end
+            end
+            push!(ACCESSED_ARTIFACTS, artifact_name)
+            try
+                Base.invokelatest(
                     JuliaArtifacts._artifact_str,
                     $(__module__),
                     $(artifacts_toml),
@@ -135,19 +159,15 @@ macro clima_artifact(name, context = nothing)
                     $(platform),
                     LazyArtifacts,
                 )::String
+            catch e
+                if e isa ErrorException
+                    msg = "\nThe artifact may also be too large to be downloaded automatically. If this is the case, download the artifact directly and indicate where the artifact lives in Overrides.toml (see ClimaArtifacts documentation for how to do this)."
+                    new_err = ErrorException(e.msg * msg)
+                    rethrow(new_err)
+                else
+                    rethrow(e)
+                end
             end
-            push!(ACCESSED_ARTIFACTS, artifact_name)
-            Base.invokelatest(
-                JuliaArtifacts._artifact_str,
-                $(__module__),
-                $(artifacts_toml),
-                $(artifact_name),
-                $(artifact_path_tail),
-                $(artifact_dict),
-                $(hash),
-                $(platform),
-                LazyArtifacts,
-            )::String
         end
     else
         # If artifact_name is not a string (e.g., it is a variable), we have to do all the
@@ -184,7 +204,33 @@ macro clima_artifact(name, context = nothing)
             # processes have the artifact string
             if isnothing($(esc(context))) ||
                Base.invokelatest(iamroot, $(esc(context)))
-                artifact_path = Base.invokelatest(
+                try
+                    artifact_path = Base.invokelatest(
+                        JuliaArtifacts._artifact_str,
+                        $(__module__),
+                        $(artifacts_toml),
+                        artifact_name,
+                        artifact_path_tail,
+                        $(artifact_dict),
+                        hash,
+                        platform,
+                        LazyArtifacts,
+                    )::String
+                catch e
+                    if e isa ErrorException
+                        msg = "\nThe artifact may also be too large to be downloaded automatically. If this is the case, download the artifact directly and indicate where the artifact lives in Overrides.toml (see ClimaArtifacts documentation for how to do this)."
+                        new_err = ErrorException(e.msg * msg)
+                        rethrow(new_err)
+                    else
+                        rethrow(e)
+                    end
+                end
+            end
+            push!(ACCESSED_ARTIFACTS, artifact_name)
+            isnothing($(esc(context))) ||
+                Base.invokelatest(barrier, $(esc(context)))
+            try
+                Base.invokelatest(
                     JuliaArtifacts._artifact_str,
                     $(__module__),
                     $(artifacts_toml),
@@ -195,21 +241,15 @@ macro clima_artifact(name, context = nothing)
                     platform,
                     LazyArtifacts,
                 )::String
+            catch e
+                if e isa ErrorException
+                    msg = "\nThe artifact may also be too large to be downloaded automatically. If this is the case, download the artifact directly and indicate where the artifact lives in Overrides.toml (see ClimaArtifacts documentation for how to do this)."
+                    new_err = ErrorException(e.msg * msg)
+                    rethrow(new_err)
+                else
+                    rethrow(e)
+                end
             end
-            push!(ACCESSED_ARTIFACTS, artifact_name)
-            isnothing($(esc(context))) ||
-                Base.invokelatest(barrier, $(esc(context)))
-            Base.invokelatest(
-                JuliaArtifacts._artifact_str,
-                $(__module__),
-                $(artifacts_toml),
-                artifact_name,
-                artifact_path_tail,
-                $(artifact_dict),
-                hash,
-                platform,
-                LazyArtifacts,
-            )::String
         end
     end
 end
