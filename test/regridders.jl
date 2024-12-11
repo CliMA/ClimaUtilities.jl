@@ -2,7 +2,7 @@ using Test
 
 import ClimaUtilities
 import ClimaUtilities: Regridders
-
+import NCDatasets
 import ClimaCore
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
@@ -212,5 +212,35 @@ end
         @test maximum(err_lat) < 1e-5
         @test maximum(err_lon) < 1e-4
         @test maximum(err_z) < 1e-5
+    end
+end
+
+@testset "TempestRegridder" begin
+    for FT in (Float32, Float64)
+        data_path = joinpath(@__DIR__, "test_data", "era5_1979_1.0x1.0_lai.nc")
+        ds = NCDatasets.NCDataset(data_path, "r")
+        original_max = maximum(ds["lai_lv"][:, :, 1])
+        original_min = minimum(ds["lai_lv"][:, :, 1])
+        test_time = ds["time"][1]
+        close(ds)
+        test_space = make_spherical_space(FT; context).horizontal
+        regrid_dir = nothing
+        if ClimaComms.iamroot(context)
+            regrid_dir = mktempdir()
+        end
+        regrid_dir = ClimaComms.bcast(context, regrid_dir)
+        ClimaComms.barrier(context)
+        regridder = Regridders.TempestRegridder(
+            test_space,
+            "lai_lv",
+            data_path;
+            regrid_dir,
+        )
+        ClimaComms.barrier(context)
+        regridded_field = Regridders.regrid(regridder, test_time)
+        regridded_max = maximum(regridded_field)
+        regridded_min = minimum(regridded_field)
+        @test original_max >= regridded_max
+        @test original_min <= regridded_min
     end
 end
