@@ -33,12 +33,10 @@ struct TempestRegridder{
     SPACE <: ClimaCore.Spaces.AbstractSpace,
     STR1 <: AbstractString,
     STR2 <: AbstractString,
-    STR3 <: AbstractString,
 } <: Regridders.AbstractRegridder
     target_space::SPACE
     regrid_dir::STR1
-    outfile_root::STR2
-    varname::STR3
+    varname::STR2
     mono::Bool
 end
 
@@ -75,7 +73,6 @@ function Regridders.TempestRegridder(
 )
     space = target_space
     comms_ctx = ClimaComms.context(space)
-    outfile_root = varname
 
     if ClimaComms.iamroot(comms_ctx)
         @info "Saving TempestRegrid files to $regrid_dir"
@@ -88,8 +85,7 @@ function Regridders.TempestRegridder(
             regrid_dir,
             input_file,
             varnames,
-            target_space,
-            outfile_root;
+            target_space;
             mono,
         )
     end
@@ -100,12 +96,10 @@ function Regridders.TempestRegridder(
     return TempestRegridder{
         typeof(target_space),
         typeof(regrid_dir),
-        typeof(outfile_root),
         typeof(varname),
     }(
         target_space,
         regrid_dir,
-        outfile_root,
         varname,
         mono,
     )
@@ -119,7 +113,6 @@ Return the field associated to the `regridder` at the given `date`.
 function Regridders.regrid(regridder::TempestRegridder, date::Dates.DateTime)
     return read_from_hdf5(
         regridder.regrid_dir,
-        regridder.outfile_root,
         date,
         regridder.varname,
         regridder.target_space,
@@ -190,7 +183,7 @@ function swap_space(field, new_space)
 end
 
 """
-    read_from_hdf5(REGIRD_DIR, hd_outfile_root, time, varname,
+    read_from_hdf5(REGIRD_DIR, time, varname,
         space)
 
 Read in a variable `varname` from an HDF5 file onto the provided space.
@@ -201,24 +194,20 @@ Code taken from ClimaCoupler.Regridder.
 
 # Arguments
 - `REGRID_DIR`: [String] directory to save output files in.
-- `hd_outfile_root`: [String] root of the output file name.
 - `time`: [Dates.DateTime] the timestamp of the data being written.
 - `varname`: [String] variable name of data.
 - `space`: [ClimaCore.Spaces.AbstractSpace] to read the HDF5 file onto.
 # Returns
 - Field or FieldVector
 """
-function read_from_hdf5(REGRID_DIR, hd_outfile_root, time, varname, space)
+function read_from_hdf5(REGRID_DIR, time, varname, space)
     comms_ctx = ClimaComms.context(space)
     # Include time component in HDF5 reader name if it's a valid date
     if !(time == Dates.DateTime(0))
-        hdfreader_path = joinpath(
-            REGRID_DIR,
-            hd_outfile_root * "_" * varname * "_" * string(time) * ".hdf5",
-        )
-    else
         hdfreader_path =
-            joinpath(REGRID_DIR, hd_outfile_root * "_" * varname * ".hdf5")
+            joinpath(REGRID_DIR, varname * "_" * string(time) * ".hdf5")
+    else
+        hdfreader_path = joinpath(REGRID_DIR, varname * ".hdf5")
     end
     hdfreader = ClimaCore.InputOutput.HDF5Reader(hdfreader_path, comms_ctx)
 
@@ -238,7 +227,7 @@ function read_from_hdf5(REGRID_DIR, hd_outfile_root, time, varname, space)
 end
 
 """
-    write_to_hdf5(REGRID_DIR, hd_outfile_root, time, field, varname,
+    write_to_hdf5(REGRID_DIR, time, field, varname,
         comms_ctx = ClimaComms.SingletonCommsContext())
 Function to save individual HDF5 files after remapping.
 If a CommsContext other than SingletonCommsContext is used for `comms_ctx`,
@@ -249,7 +238,6 @@ Code taken from ClimaCoupler.Regridder.
 
 # Arguments
 - `REGRID_DIR`: [String] directory to save output files in.
-- `hd_outfile_root`: [String] root of the output file name.
 - `time`: [Dates.DateTime] the timestamp of the data being written.
 - `field`: [Fields.Field] object to be written.
 - `varname`: [String] variable name of data.
@@ -257,7 +245,6 @@ Code taken from ClimaCoupler.Regridder.
 """
 function write_to_hdf5(
     REGRID_DIR,
-    hd_outfile_root,
     time,
     field,
     varname,
@@ -266,10 +253,7 @@ function write_to_hdf5(
     # Include time component in HDF5 writer name, and write time to file if it's a valid date
     if !(time == Dates.DateTime(0))
         hdfwriter = ClimaCore.InputOutput.HDF5Writer(
-            joinpath(
-                REGRID_DIR,
-                hd_outfile_root * "_" * varname * "_" * string(time) * ".hdf5",
-            ),
+            joinpath(REGRID_DIR, varname * "_" * string(time) * ".hdf5"),
             comms_ctx,
         )
 
@@ -281,7 +265,7 @@ function write_to_hdf5(
         ) # TODO: a better way to write metadata, CMIP convention
     else
         hdfwriter = ClimaCore.InputOutput.HDF5Writer(
-            joinpath(REGRID_DIR, hd_outfile_root * "_" * varname * ".hdf5"),
+            joinpath(REGRID_DIR, varname * ".hdf5"),
             comms_ctx,
         )
     end
@@ -335,7 +319,6 @@ end
         datafile_rll,
         varnames,
         space,
-        outfile_root;
         mono = false,
     )
 Reads and regrids data of all `varnames` variables from an input NetCDF file and
@@ -357,7 +340,6 @@ Code taken from ClimaCoupler.Regridder.
 - `datafile_rll`: [String] filename of RLL dataset to be mapped to CGLL.
 - `varnames`: [Vector{String}] the name of the variable to be remapped.
 - `space`: [ClimaCore.Spaces.AbstractSpace] the space to which we are mapping.
-- `outfile_root`: [String] root of the output file name.
 - `mono`: [Bool] flag to specify monotone remapping.
 """
 function hdwrite_regridfile_rll_to_cgll(
@@ -365,17 +347,16 @@ function hdwrite_regridfile_rll_to_cgll(
     REGRID_DIR,
     datafile_rll,
     varnames::Vector{String},
-    space,
-    outfile_root;
+    space;
     mono = false,
 )
     out_type = "cgll"
 
-    datafile_cgll = joinpath(REGRID_DIR, outfile_root * ".g")
-    meshfile_rll = joinpath(REGRID_DIR, outfile_root * "_mesh_rll.g")
-    meshfile_cgll = joinpath(REGRID_DIR, outfile_root * "_mesh_cgll.g")
-    meshfile_overlap = joinpath(REGRID_DIR, outfile_root * "_mesh_overlap.g")
-    weightfile = joinpath(REGRID_DIR, outfile_root * "_remap_weights.nc")
+    datafile_cgll = joinpath(REGRID_DIR, "datafile.g")
+    meshfile_rll = joinpath(REGRID_DIR, "mesh_rll.g")
+    meshfile_cgll = joinpath(REGRID_DIR, "mesh_cgll.g")
+    meshfile_overlap = joinpath(REGRID_DIR, "mesh_overlap.g")
+    weightfile = joinpath(REGRID_DIR, "remap_weights.nc")
 
     # If doesn't make sense to regrid with GPUs/MPI processes
     space_singleton = construct_singleton_space(space)
@@ -490,7 +471,6 @@ function hdwrite_regridfile_rll_to_cgll(
         map(
             x -> write_to_hdf5(
                 REGRID_DIR,
-                outfile_root,
                 times[x],
                 offline_fields[x],
                 varname,
