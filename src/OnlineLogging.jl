@@ -139,10 +139,9 @@ TODO: Discuss/link `Schedules` when we move them to `ClimaUtilities`.
 """
 function report_walltime(wt, integrator)
     _update!(wt)
-
-    t_start, t_end = integrator.sol.prob.tspan
-    dt = integrator.dt
-    t = integrator.t
+    t_start, t_end = float.(integrator.sol.prob.tspan)
+    dt = float(integrator.dt)
+    t = float(integrator.t)
 
     n_steps_total = ceil(Int, (t_end - t_start) / dt)
     n_steps = ceil(Int, (t - t_start) / dt)
@@ -156,7 +155,7 @@ function report_walltime(wt, integrator)
     wall_time_total =
         _time_and_units_str(wall_time_ave_per_step * n_steps_total)
     wall_time_spent = _time_and_units_str(wt.∑Δt_wall[])
-    simulation_time = _time_and_units_str(Float64(t))
+    simulation_time = _time_and_units_str(float(t))
 
     simulated_seconds_per_second = (t - t_start) / wt.∑Δt_wall[]
     simulated_seconds_per_day = simulated_seconds_per_second * 86400
