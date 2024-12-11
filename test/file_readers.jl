@@ -107,3 +107,25 @@ end
         @test isempty(open_ncfiles)
     end
 end
+
+@testset "read_available_dates" begin
+    read_dates_func =
+        Base.get_extension(
+            ClimaUtilities,
+            :ClimaUtilitiesNCDatasetsExt,
+        ).NCFileReaderExt.read_available_dates
+
+    data_dir = mktempdir()
+    NCDataset(joinpath(data_dir, "test_time_1.nc"), "c") do nc
+        defDim(nc, "time", 2)
+        times = [DateTime(2022), DateTime(2023)]
+        defVar(nc, "time", times, ("time",))
+        @test read_dates_func(nc) == times
+    end
+    NCDataset(joinpath(data_dir, "test_date_1.nc"), "c") do nc
+        defDim(nc, "date", 2)
+        times = [20220101, 20230101]
+        defVar(nc, "date", times, ("date",))
+        @test read_dates_func(nc) == DateTime.(string.(times), "yyyymmdd")
+    end
+end
