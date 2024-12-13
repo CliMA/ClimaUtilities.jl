@@ -1,4 +1,4 @@
-# Regridders
+# [`Regridders`](@id regridder_module)
 
 Simulations often need to import external data directly onto the computational
 grid. The `Regridders` module implements different schemes to accomplish this
@@ -27,7 +27,7 @@ If a regridder type is not specified by the user, and multiple are available,
 the `InterpolationsRegridder` will be used by default. At least one regridder
 extension must be loaded to be able to use regridding.
 
-## `TempestRegridder`
+## [`TempestRegridder`](@id tempest_regridder)
 
 > This extension is loaded when loading `ClimaCoreTempestRemap`
 
@@ -57,7 +57,7 @@ reg = Regridders.TempestRegridder(target_space, "regrid_output", "u", "era5_exam
 regridded_u = Regridders.regrid(reg, target_date)
 ```
 
-## `InterpolationsRegridder`
+## [`InterpolationsRegridder`](@id interp_regridder)
 
 > This extension is loaded when loading `ClimaCore` and `Interpolations`
 

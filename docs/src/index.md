@@ -38,7 +38,7 @@ is mostly and interface barrier to provide a path for future improvements.
 ### `Regridders`
 
 `ClimaUtilities` comes with two modules to map rectangular grids two (extruded)
-finite spectral elements, `InterpolationsRegridder` and `TempestRegridder`.
+finite spectral elements, `InterpolationsRegridder` and [`TempestRegridder`](@ref tempest_regridder).
 These modules are primarily used to ingest data and resample it onto the
 computational grid.
 

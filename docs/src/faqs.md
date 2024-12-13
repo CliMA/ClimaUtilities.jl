@@ -2,9 +2,9 @@
 
 ## Is it possible to preprocess the data in `TimeVaryingInput` or `SpaceVaryingInput`, for instance, to remove NaNs or change units?
 
-Yes, [`TimeVaryingInput`](@ref) and [`SpaceVaryingInput`](@ref) support this
-feature. [`TimeVaryingInput`](@ref) and [`SpaceVaryingInput`](@ref) that read
-NetCDF files use [`NCFileReader`](@ref) under the hood. `NCFileReader`s can be
+Yes, [`TimeVaryingInput`](@ref timevaryinginput) and [`SpaceVaryingInput`](@ref spacevaryinginput) support this
+feature. [`TimeVaryingInput`](@ref timevaryinginput) and [`SpaceVaryingInput`](@ref spacevaryinginput) that read
+NetCDF files use [`NCFileReader`](@ref ncfilereaders) under the hood. `NCFileReader`s can be
 constructed with an optional keyword argument `preprocess_func`, a pointwise
 function that transforms the data read into something else. `Input`s can be
 constructed to pass down this keyword argument. Let us have a look at an

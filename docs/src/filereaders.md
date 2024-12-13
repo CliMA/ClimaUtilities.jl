@@ -1,4 +1,4 @@
-# `FileReaders`
+# [`FileReaders`](@id file_reader_module)
 
 Reading files is a common need for most scientific projects. This can come with
 a series of problems that have to be solved, from performance (accessing can be
@@ -14,7 +14,7 @@ Future extensions might include:
 - doing chunked reads;
 - async reads.
 
-## `NCFileReaders`
+## [`NCFileReaders`](@id ncfilereaders)
 
 > This extension is loaded when loading `NCDatasets`
 

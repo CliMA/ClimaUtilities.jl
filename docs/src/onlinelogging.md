@@ -24,7 +24,7 @@ about current step, simulation time, and average performance. With
 
 `WallTimeInfo` is a struct that holds information about wall time (the time you
 see on your watch, not the simulation time) and that can be used to report
-timing information with [`report_walltime`](@ref).
+timing information with [`report_walltime`](@ref ClimaUtilities.OnlineLogging.report_walltime).
 
 `WallTimeInfo` keeps track and accumulates how much time has elapsed since the
 last time it was updated. In this, `WallTimeInfo` tries to automatically remove

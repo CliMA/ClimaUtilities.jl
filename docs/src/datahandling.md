@@ -1,4 +1,4 @@
-# `DataHandling`
+# [`DataHandling`](@id datahandling_module)
 
 The `DataHandling` module is responsible for reading data from files and
 resampling it onto the simulation grid.
@@ -11,7 +11,7 @@ This is no trivial task. Among the challenges:
 
 The `DataHandling` takes the divide-and-conquer approach: the various core tasks
 and features and split into other independent modules (chiefly
-[`FileReaders`](@ref), and [`Regridders`](@ref)). Such modules can be developed,
+[`FileReaders`](@ref file_reader_module), and [`Regridders`](@ref regridder_module) regridder_module). Such modules can be developed,
 tested, and extended independently (as long as they maintain a consistent
 interface). For instance, if need arises, the `DataHandler` can be used (almost)
 directly to process files with a different format from NetCDF.
@@ -47,7 +47,7 @@ the `NCFileReader`.
 
 > This extension is loaded when loading `ClimaCore` and `NCDatasets` are loaded.
 > In addition to this, a `Regridder` is needed (which might require importing
-> additional packages) - see [`Regridders`](@ref) for more information.
+> additional packages) - see [`Regridders`](@ref regridder_module) for more information.
 
 It is possible to pass down keyword arguments to underlying constructors in
 `DataHandler` with the `regridder_kwargs` and `file_reader_kwargs`. These have
@@ -65,20 +65,20 @@ Note that, if a non-identity pre-processing function is provided as part of
 `file_reader_kwargs`, it will be applied to each input variable before they
 are composed.
 Composing multiple input variables is currently only supported with the
-`InterpolationsRegridder`, not with `TempestRegridder`.
+[`InterpolationsRegridder`](@ref interp_regridder), not with [`TempestRegridder`](@ref tempest_regridder).
 
 Sometimes, the time development of a variable is split across multiple NetCDF
 files. `DataHandler` knows how to combine them and treat multiple files as if
 they were a single one. To use this feature, just pass the list of NetCDF files
 (while the file don't have to be sorted, it is good practice to pass them sorted
-in ascending order by time). 
+in ascending order by time).
 
 #### Heuristics to do-what-you-mean
 
 `DataHandler` tries to interpret the files provided and identify if they are
 split across variables or along the time dimension. The heuristics implement are
 the following:
-- When just a file is passed, it is assumed that it contains everything 
+- When just a file is passed, it is assumed that it contains everything
 - When multiple files are passed, `DataHandler` will assume that the files are
   split along variables if the number of files is the same the number of
   variables, otherwise, it will assume that each file contains all the variables
@@ -86,7 +86,7 @@ the following:
 - When the above assumption is incorrect, you can pass a list of list of files
   that fully specifies variables and times.
 
-For example, 
+For example,
 ```julia
 data_handler = DataHandling.DataHandler(
     ["era1980.nc", "era1981.nc"],
@@ -98,9 +98,9 @@ data_handler = DataHandling.DataHandler(
 
 In this case, `DataHandler` will incorrectly assume that `lai_hv` is contained
 in `era1980.nc`, and `lai_lv` is in `era1980.nc`. Instead, construct the
-`data_handler` by passing a list of lists 
+`data_handler` by passing a list of lists
 ```julia
-files = ["era1980.nc", "era1981.nc"] 
+files = ["era1980.nc", "era1981.nc"]
 data_handler = DataHandling.DataHandler(
     [files, files],
     ["lai_hv", "lai_lv"],
@@ -163,7 +163,7 @@ file path), which knows how to combine them.
 Suppose that the input NetCDF file `era5_example.nc` contains two variables `u`
 and `v`, and we care about their sum `u + v` but not their individual values.
 We can provide a pointwise composing function to perform the sum, along with
-the `InterpolationsRegridder` to produce the data we want, `u + v`.
+the [`InterpolationsRegridder`](@ref interp_regridder) to produce the data we want, `u + v`.
 The `preprocess_func` passed in `file_reader_kwargs` will be applied to `u`
 and to `v` individually, before the composing function is applied. The regridding
 is applied after the composing function. `u` and `v` could also come from separate
