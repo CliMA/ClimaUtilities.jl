@@ -6,7 +6,7 @@ describes the types of plants on the surface of the globe. The
 `SpaceVaringInputs` and `TimeVaryingInputs` modules provide a unified
 infrastructure to handle all these cases.
 
-## `TimeVaryingInputs`
+## [`TimeVaryingInputs`](@id timevaryinginput)
 
 > This extension is loaded when loading `ClimaCore` is loaded. In addition to
 > this, if NetCDF files are used, `NCDatasets` has to be loaded too. Finally, a
@@ -21,9 +21,9 @@ developers to update their `Field`s.
 This example shows that `TimeVaryingInput` can take different types of inputs
 and be used with a single interface (`evaluate!`). In all of this,
 `TimeVaryingInput`s internally handle all the complexity related to reading
-files (using [`FileReaders`](@ref)), dealing with parallelism and GPUs,
-regridding onto the computational domains (using [`Regridders`](@ref) and
-[`DataHandling`](@ref)), and so on.
+files (using [`FileReaders`](@ref file_reader_module)), dealing with parallelism and GPUs,
+regridding onto the computational domains (using [`Regridders`](@ref regridder_module) and
+[`DataHandling`](@ref datahandling_module)), and so on.
 
 `TimeVaryingInputs` support:
 - analytic functions of time;
@@ -53,7 +53,7 @@ All input variables to be composed together must have the same spatial and
 temporal dimensions.
 
 Composing multiple input variables is currently only supported with the
-`InterpolationsRegridder`, not with `TempestRegridder`. The regridding
+[`InterpolationsRegridder`](@ref interp_regridder), not with [`TempestRegridder`](@ref tempest_regridder). The regridding
 is applied after the pre-processing and composing.
 
 Composing multiple input variables in one `Input` is also possible with
@@ -64,7 +64,7 @@ a `SpaceVaryingInput`, and everything mentioned here applies in that case.
 Suppose that the input NetCDF file `era5_example.nc` contains two variables `u`
 and `v`, and we care about their sum `u + v` but not their individual values.
 We can provide a pointwise composing function to perform the sum, along with
-the `InterpolationsRegridder` to produce the data we want, `u + v`.
+the [`InterpolationsRegridder`](@ref interp_regridder) to produce the data we want, `u + v`.
 The `preprocess_func` passed in `file_reader_kwargs` will be applied to `u`
 and to `v` individually, before the composing function is applied. The regridding
 is applied after the composing function. `u` and `v` could also come from separate
@@ -109,7 +109,7 @@ timevaryinginput = TimeVaryingInputs.TimeVaryingInput(["era5_1980.nc", "era5_198
 
 This capability is only available for the `InterpolationsRegridder`.
 
-Read more about this feature in the page about [`DataHandler`](@ref).
+Read more about this feature in the page about [`DataHandler`](@ref datahandling_module).
 
 ### Extrapolation boundary conditions
 
@@ -213,23 +213,24 @@ albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_
 
 !!! note
 
-    In this example we used the [`TempestRegridder`](@ref). This is not the best
-    choice in most cases because the [`TempestRegridder`](@ref) is slower, and
+    In this example we used the [`TempestRegridder`](@ref tempest_regridder).
+    This is not the best
+    choice in most cases because the [`TempestRegridder`](@ref tempest_regridder) is slower, and
     not well-compatible with MPI and GPUs (`ClimaUtilities` implements
     workarounds for this, so the code would still work).
-    [`InterpolationsRegridder`](@ref) should be preferred, unless there is a
-    strict requirement of conservation: while [`TempestRegridder`](@ref) is
-    guaranteed to conserve various properties, [`InterpolationsRegridder`](@ref)
+    [`InterpolationsRegridder`](@ref interp_regridder) should be preferred, unless there is a
+    strict requirement of conservation: while [`TempestRegridder`](@ref tempest_regridder) is
+    guaranteed to conserve various properties, [`InterpolationsRegridder`](@ref interp_regridder)
     is not.
 
-## `SpaceVaryingInputs`
+## [`SpaceVaryingInputs`](@id spacevaryinginput)
 
 > This extension is loaded when loading `ClimaCore` is loaded. In addition to
 > this, if NetCDF files are used, `NCDatasets` has to be loaded too. Finally, a
 > `Regridder` is needed (which might require importing additional packages).
 
 `SpaceVaryingInput`s uses the same building blocks as `TimeVaryingInput`
-(chiefly the [`DataHandling`](@ref) module) to construct a `Field` from
+(chiefly the [`DataHandling`](@ref datahandling_module) datahandling_module) to construct a `Field` from
 different sources.
 
 `SpaceVaryingInputs` support:
@@ -246,7 +247,7 @@ be a named tuple or a dictionary that maps `Symbol`s to values.
 
 `SpaceVaryingInputs` support reading individual input variables from NetCDF files,
 as well as composing multiple input variables into one `SpaceVaryingInput`.
-See the [`TimeVaryingInput`](@ref) "NetCDF file inputs" section for more
+See the [`TimeVaryingInput`](@ref timevaryinginput) "NetCDF file inputs" section for more
 information about this feature.
 
 ### Example
@@ -284,5 +285,6 @@ ClimaUtilities.TimeVaryingInputs.Flat
 ClimaUtilities.TimeVaryingInputs.evaluate!
 ClimaUtilities.TimeVaryingInputs.extrapolation_bc
 Base.in
-Base.close
+Base.close(::ClimaUtilities.TimeVaryingInputs.AbstractTimeVaryingInput)
+
 ```

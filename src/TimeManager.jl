@@ -67,7 +67,11 @@ datetime_to_strdate(datetime::Dates.DateTime) =
     string(lpad(Dates.day(datetime), 2, "0"))
 
 abstract type AbstractFrequency end
+
+"Struct used to dispatch callback that is triggered monthly"
 struct Monthly <: AbstractFrequency end
+
+"Struct used to dispatch callback that is triggered every timestep"
 struct EveryTimestep <: AbstractFrequency end
 
 """
