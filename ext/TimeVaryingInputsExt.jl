@@ -40,6 +40,8 @@ import ClimaUtilities.DataHandling:
     available_dates,
     date_to_time
 
+import ClimaUtilities.TimeManager: ITime, date
+
 # Ideally, we should be able to split off the analytic part in a different
 # extension, but precompilation stops working when we do so
 
@@ -113,6 +115,12 @@ function Base.in(time, itp::InterpolatingTimeVaryingInput23D)
     return itp.range[1] <= time <= itp.range[2]
 end
 
+function Base.in(time::ITime, itp::InterpolatingTimeVaryingInput23D)
+    first_date = itp.data_handler.available_dates[begin]
+    last_date = itp.data_handler.available_dates[end]
+    return first_date <= date(time) <= last_date
+end
+
 function TimeVaryingInputs.TimeVaryingInput(
     data_handler;
     method = LinearInterpolation(),
@@ -139,6 +147,7 @@ function TimeVaryingInputs.TimeVaryingInput(
     )
 end
 
+# This get called if I remove start_date from the function...
 function TimeVaryingInputs.TimeVaryingInput(
     file_paths::Union{AbstractString, AbstractArray{<:AbstractString}},
     varnames::Union{AbstractString, AbstractArray{<:AbstractString}},
@@ -290,8 +299,20 @@ function _interpolation_times_periodic_calendar(
     time,
     itp::InterpolatingTimeVaryingInput23D,
 )
+    # Main.@infiltrate
     t_init, t_end, dt, dt_e = _time_range_dt_dt_e(itp)
     time = wrap_time(time, t_init, t_end + dt)
+    return time, t_init, t_end, dt, dt_e
+end
+
+# TODO: Change this later, I am not sure how to fix this, so don't we can
+# do this purely using dates
+function _interpolation_times_periodic_calendar(
+    time::ITime,
+    itp::InterpolatingTimeVaryingInput23D,
+)
+    t_init, t_end, dt, dt_e = _time_range_dt_dt_e(itp)
+    time = wrap_time(float(time), t_init, t_end + dt)
     return time, t_init, t_end, dt, dt_e
 end
 
@@ -351,6 +372,7 @@ function TimeVaryingInputs.evaluate!(
     field_t0, field_t1 = itp.preallocated_regridded_fields[begin:(begin + 1)]
 
     if extrapolation_bc(itp.method) isa PeriodicCalendar
+        # Main.@infiltrate
         time, t_init, t_end, dt, _ =
             _interpolation_times_periodic_calendar(time, itp)
 

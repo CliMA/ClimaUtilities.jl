@@ -211,6 +211,7 @@ function TimeVaryingInputs.evaluate!(
     available_periods = unique_periods(available_dates, period)
 
     # E.g., Date(1987, 2, 1)
+    # Main.@infiltrate
     target_date = DataHandling.time_to_date(itp.data_handler, time)
 
     # If the target date falls within an available period, we just interpolate it with
@@ -365,6 +366,188 @@ function TimeVaryingInputs.evaluate!(
         # y = y0 * (1 - coeff) + coff * y1
         TimeVaryingInputs.evaluate!(dest, itp, time_pre, method)
         coeff = (time - time_pre) / (time_post - time_pre)
+        dest .*= (1 - coeff)
+        TimeVaryingInputs.evaluate!(tmp_field2, itp, time_post, method)
+        tmp_field2 .*= coeff
+        dest .+= tmp_field2
+        return nothing
+    end
+    return nothing
+end
+
+function TimeVaryingInputs.evaluate!(
+    dest,
+    itp::InterpolatingTimeVaryingInput23D,
+    time::ITime,
+    method::LinearPeriodFillingInterpolation,
+    args...;
+    kwargs...,
+)
+    # E.g., Year(1)
+    period = method.period
+
+    # E.g., [Date(1985, 1, 15), Date(1985, 2, 17), Date(1995, 1, 8), Date(1995, 2, 18),
+    # Date(2015, 1, 10)]
+    available_dates = DataHandling.available_dates(itp.data_handler)
+
+    # E.g., [Date(1985, 1, 1), Date(1995, 1, 1), Date(2005, 1, 1)]
+    available_periods = unique_periods(available_dates, period)
+
+    # E.g., Date(1987, 2, 1)
+    target_date = DataHandling.time_to_date(itp.data_handler, time)
+
+    # If the target date falls within an available period, we just interpolate it with
+    # LinearInterpolation()
+    if _extract_period(target_date, period) in available_periods
+        # Here we are just interpolating within some available data, so it is easy
+        TimeVaryingInputs.evaluate!(dest, itp, time, LinearInterpolation())
+        return nothing
+    end
+
+    # We can assume that time is defined in the range of available_times because we handle
+    # extrapolation boundary conditions elsewhere. For this reason, we will always have a
+    # left and right periods
+
+    # We are not in one of the available_periods, we have two cases: either we are in the
+    # interpolable region, or not. The interpolable region is a region where we can directly
+    # perform linear interpolation in both the left and right periods, and then interpolate
+    # the resulting two values.
+    #
+    # When we are not in the interpolable region, we have to reduce to that case. So, we
+    # have to identify two dates in the interpolable region that bound the desired date and
+    # interpolate across them.
+
+    # itp.preallocated_regridded_fields[1:2] is used internally by functions called by this
+    # function, so we should not used them here. Also, we will use dest as a working area to
+    # avoid extra allocations
+    tmp_field1, tmp_field2 = itp.preallocated_regridded_fields[(end - 1):end]
+
+    # E.g, Date(1985, 1, 1), Date(1995, 1, 1)
+    period_left, period_right =
+        _neighboring_periods(target_date, available_periods, period)
+
+    # E.g., Date(1985, 1, 15), Date(1985, 2, 17)
+    dates_period_left = filter(
+        d -> period_left <= d <= endofperiod(period_left, period),
+        available_dates,
+    )
+
+    # E.g., Date(1995, 1, 8), Date(1995, 2, 18)
+    dates_period_right = filter(
+        d -> period_right <= d <= endofperiod(period_right, period),
+        available_dates,
+    )
+
+    # Move the target date to the left period, where we can compare it with the interpolable
+    # range
+    # E.g., Date(1985, 2, 1)
+    target_date_in_left_period =
+        _move_date_to_period(target_date, period_left, period)
+
+    # E.g., [Date(1985, 1, 8), Date(1985, 2, 17)]
+    min_interpolable_range, max_interpolable_range =
+        _interpolable_range(dates_period_left, dates_period_right, period)
+
+    in_interpolable_region = _date_in_range(
+        target_date_in_left_period,
+        min_interpolable_range,
+        max_interpolable_range,
+    )
+
+    if in_interpolable_region
+        date_pre = _move_date_to_period(target_date, period_left, period)
+        date_post = _move_date_to_period(target_date, period_right, period)
+        time_pre = date_to_time(itp.data_handler, date_pre)
+        time_post = date_to_time(itp.data_handler, date_post)
+
+        # Linear interpolation: y = y0 * (1 - coeff) + coeff * y1
+        #
+        # coeff here is the period weight, for example, if we are interpolating in 1987
+        # from 1985 and 1985, it would be 2/10.
+
+        # E.g., 730 days
+        offset_periods_left =
+            beginningofperiod(target_date, period) - period_left
+        period_offset = period_right - period_left
+        coeff = offset_periods_left / period_offset
+
+        TimeVaryingInputs.evaluate!(dest, itp, time_pre, LinearInterpolation())
+        dest .*= (1 - coeff)
+        TimeVaryingInputs.evaluate!(
+            tmp_field1,
+            itp,
+            time_post,
+            LinearInterpolation(),
+        )
+        tmp_field1 .*= coeff
+        dest .+= tmp_field1
+        return nothing
+    else
+        # In this branch, we are not in the interpolable region. This can happen because the
+        # target_date is earlier than the left boundary or later than the right boundary of
+        # the interpolable region in one/both period_left and period_right.
+        #
+        # When that happens, we change the interpolation dates to be the boundaries of the
+        # interpolable region moved to the relevant period
+        #
+        # For example, for Date(1987, 1, 1), we would interpolate it with
+        # Date(1986, 2, 17) and Date(1987, 1, 15)
+        #
+        target_date_in_left_period =
+            _move_date_to_period(target_date, period_left, period)
+        target_date_in_right_period =
+            _move_date_to_period(target_date, period_right, period)
+
+        target_period = _extract_period(target_date, period)
+
+        if target_date_in_left_period >= maximum(dates_period_left) ||
+           target_date_in_right_period >= maximum(dates_period_right)
+            # First case, the date is later than the interpolable region
+            #
+            # E.g., Date(1987, 12, 31), in this case we interpolate with
+            # Date(1987, 2, 17) and Date(1988, 1, 15)
+            #
+            # For date_pre, we take the max of the interpolable range and bring it to the
+            # current period. For date_post, we take the min, and take it to the next period
+            date_pre = _move_date_to_period(
+                max_interpolable_range,
+                target_period,
+                period,
+            )
+            date_post = _move_date_to_period(
+                min_interpolable_range,
+                target_period + period,
+                period,
+            )
+        elseif minimum(dates_period_left) >= target_date_in_left_period ||
+               minimum(dates_period_right) >= target_date_in_right_period
+            # Second case, the date is  than the interpolable region
+            #
+            # E.g., Date(1987, 1, 1), in this case we interpolate with
+            # Date(1986, 2, 17) and Date(1987, 1, 15)
+            #
+            # For date_pre, we take the max of the interpolable range and bring it to the
+            # previous period. For date_post, we take the min, and take it to the current period
+            date_pre = _move_date_to_period(
+                max_interpolable_range,
+                target_period + period,
+                period,
+            )
+            date_post = _move_date_to_period(
+                min_interpolable_range,
+                target_period,
+                period,
+            )
+        else
+            error("We should not be here!")
+        end
+
+        time_pre = date_to_time(itp.data_handler, date_pre)
+        time_post = date_to_time(itp.data_handler, date_post)
+
+        # y = y0 * (1 - coeff) + coff * y1
+        TimeVaryingInputs.evaluate!(dest, itp, time_pre, method)
+        coeff = (date(time) - date_pre) / (date_post - date_pre)
         dest .*= (1 - coeff)
         TimeVaryingInputs.evaluate!(tmp_field2, itp, time_post, method)
         tmp_field2 .*= coeff

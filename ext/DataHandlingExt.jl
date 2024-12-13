@@ -13,6 +13,8 @@ import ClimaUtilities.Regridders: AbstractRegridder, regrid
 
 import ClimaUtilities.Utils: isequispaced, period_to_seconds_float
 
+import ClimaUtilities.TimeManager: ITime, date
+
 import ClimaUtilities.DataHandling
 
 """
@@ -427,6 +429,13 @@ function DataHandling.time_to_date(
     # it.
     time_ms = Dates.Millisecond(round(1_000 * time))
     return data_handler.start_date + time_ms
+end
+
+function DataHandling.time_to_date(
+    data_handler::DataHandler,
+    time::ITime,
+)
+    return date(time)
 end
 
 """
