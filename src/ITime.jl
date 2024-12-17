@@ -314,6 +314,7 @@ Base.one(t::T) where {T <: ITime} = 1
 Base.oneunit(t::T) where {T <: ITime} = ITime(1, t.period, t.start_date)
 Base.zero(t::T) where {T <: ITime} = ITime(0, t.period, t.start_date)
 
+# TODO: Fix this since this sometimes return a Int instead of a float
 """
     float(t::ITime)
 
