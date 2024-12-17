@@ -117,11 +117,19 @@ Read more about this feature in the page about [`DataHandler`](@ref datahandling
 default, the `Throw` condition is used, meaning that interpolating onto a point
 that is outside the range of definition of the data is not allowed. Other
 boundary conditions are allowed. With the `Flat` boundary condition, when
-interpolating outside of the range of definition, return the value of the
-of closest boundary is used instead.
+interpolating outside of the range of definition, return the value of the of
+closest boundary is used instead.
 
-Another boundary condition that is often useful is `PeriodicCalendar`, which
-repeats data over and over.
+To set these boundary conditions, construct the relevant method passing the
+argument. For example, to combine `NearestNeighbor` with `Flat`:
+```julia
+import ClimaUtilities: TimeVaryingInputs
+
+method = TimeVaryingInputs.NearestNeighbor(TimeVaryingInputs.Flat())
+```
+
+A boundary condition that is often useful is `PeriodicCalendar`, which repeats
+the data over and over.
 
 In general `PeriodicCalendar` takes two inputs: the `period` and `repeat_date`.
 The repeat period is a `Dates.DatePeriod` (e.g., `Dates.Year(1)`) that defines
