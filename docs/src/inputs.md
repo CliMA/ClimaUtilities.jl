@@ -117,8 +117,8 @@ Read more about this feature in the page about [`DataHandler`](@ref datahandling
 default, the `Throw` condition is used, meaning that interpolating onto a point
 that is outside the range of definition of the data is not allowed. Other
 boundary conditions are allowed. With the `Flat` boundary condition, when
-interpolating outside of the range of definition, return the value of the
-of closest boundary is used instead.
+interpolating outside of the range of definition, the value of the closest
+boundary is used instead.
 
 Another boundary condition that is often useful is `PeriodicCalendar`, which
 repeats data over and over.
