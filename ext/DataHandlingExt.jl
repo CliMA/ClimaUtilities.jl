@@ -485,6 +485,13 @@ function DataHandling.previous_time(
     return data_handler.available_times[index]
 end
 
+function DataHandling.previous_time(
+    data_handler::DataHandler,
+    time::ITime,
+)
+    return DataHandling.previous_time(data_handler, date(time))
+end
+
 """
     next_time(data_handler::DataHandler, time::AbstractFloat)
     next_time(data_handler::DataHandler, date::Dates.DateTime)
@@ -509,6 +516,13 @@ function DataHandling.next_time(data_handler::DataHandler, date::Dates.DateTime)
     index > length(data_handler.available_dates) &&
         error("Date $date is after available dates")
     return data_handler.available_times[index]
+end
+
+function DataHandling.next_time(
+    data_handler::DataHandler,
+    time::ITime,
+)
+    return DataHandling.next_time(data_handler, date(time))
 end
 
 """
