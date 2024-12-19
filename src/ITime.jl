@@ -36,7 +36,7 @@ Second / dt)` for Int64.
 """
 struct ITime{
     INT <: IntegerOrRatio,
-    DT <: Dates.FixedPeriod,
+    DT <: Dates.Period,
     START_DATE <: Union{Nothing, Dates.DateTime},
 }
     counter::INT
@@ -69,7 +69,7 @@ If the `start_date` is provided as a `Date`, it is converted to a `DateTime`.
 """
 function ITime(
     counter::IntegerOrRatio;
-    period::Dates.FixedPeriod = Dates.Second(1),
+    period::Dates.Period = Dates.Second(1),
     start_date = nothing,
 )
     # Convert start_date to DateTime if it is not nothing (from, e.g., Date)
@@ -114,7 +114,7 @@ function start_date(t::ITime)
     return t.start_date
 end
 
-function date(t::ITime{<:IntegerOrRatio, <:Dates.FixedPeriod, Nothing})
+function date(t::ITime{<:IntegerOrRatio, <:Dates.Period, Nothing})
     error("Time does not have start_date information")
 end
 
@@ -206,6 +206,11 @@ function Base.show(io::IO, time::ITime)
     print(io, "]")
 end
 
+function Base.promote(ts::ITime...)
+    ts = (promote_to_fixed_period(t) for t in ts)
+    return _promote(ts...)
+end
+
 """
     promote(ts::ITime...)
 
@@ -215,7 +220,7 @@ This function determines a common `start_date` and `period` for all the input
 `ITime` instances and returns a tuple of new `ITime` instances with the common
 type.  It throws an error if the start dates are different.
 """
-function Base.promote(ts::ITime...)
+function _promote(ts::ITime...)
     unique_start_dates =
         Set(start_date(t) for t in ts if !isnothing(start_date(t)))
     periods = Set(period(t) for t in ts)
@@ -225,7 +230,6 @@ function Base.promote(ts::ITime...)
         error("Incompatible start_dates: Cannot promote")
     common_start_date =
         length(unique_start_dates) == 0 ? nothing : first(unique_start_dates)
-
     # Determine the common period
     common_period = reduce(gcd, periods)
 
@@ -238,6 +242,35 @@ function Base.promote(ts::ITime...)
         ),
         ts,
     )
+end
+
+"""
+    promote_to_fixed_period(t::ITime)
+
+Promote an ITime whose period is not a fixed period to a ITime with a fixed period.
+
+This will throw an error if a start date is not available.
+"""
+function promote_to_fixed_period(t::ITime)
+    t.period isa Dates.FixedPeriod && return(t)
+    isnothing(start_date(t)) && error("Start date is not available; cannot promote")
+    elapsed = date(t) - start_date(t)
+    periods = [
+        Dates.Week,
+        Dates.Day,
+        Dates.Hour,
+        Dates.Minute,
+        Dates.Second,
+        Dates.Millisecond,
+        Dates.Microsecond,
+        Dates.Nanosecond,
+    ]
+    for period in periods
+        if mod(elapsed, period(1)).value |> iszero
+            return ITime((elapsed |> period).value, period(1), start_date(t))
+        end
+    end
+    return error("Cannot convert period to a fixed period")
 end
 
 macro itime_unary_op(op)
