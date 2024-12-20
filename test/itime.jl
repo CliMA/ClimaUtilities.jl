@@ -8,7 +8,7 @@ using Test, Dates
         t1 = ITime(10)
         @test t1.counter == 10
         @test t1.period == Dates.Second(1)
-        @test isnothing(t1.start_date)
+        @test isnothing(t1.epoch)
 
         # Constructor with just an integer counter in Int32
         t1_int32 = ITime(Int32(10))
@@ -19,16 +19,16 @@ using Test, Dates
         t2 = ITime(1 // 2)
         @test t2.counter == 1 // 2
         @test t2.period == Dates.Second(1)
-        @test isnothing(t2.start_date)
+        @test isnothing(t2.epoch)
 
         # Constructor with start date
-        start_date = Dates.DateTime(2024, 1, 1)
-        t3 = ITime(10, start_date = start_date)
-        @test t3.start_date == start_date
+        epoch = Dates.DateTime(2024, 1, 1)
+        t3 = ITime(10, epoch = epoch)
+        @test t3.epoch == epoch
 
         # Start date as Date (not DateTime)
-        t4 = ITime(10, start_date = Dates.Date(2024, 1, 1))
-        @test t4.start_date == start_date
+        t4 = ITime(10, epoch = Dates.Date(2024, 1, 1))
+        @test t4.epoch == epoch
 
         # Explicit period
         t5 = ITime(10, period = Dates.Millisecond(100))
@@ -57,8 +57,8 @@ using Test, Dates
         @test t9.period == Dates.Millisecond(1)
 
 
-        t10 = ITime(1.5; start_date = Dates.DateTime(2020, 1, 1))
-        @test t10.start_date == Dates.DateTime(2020, 1, 1)
+        t10 = ITime(1.5; epoch = Dates.DateTime(2020, 1, 1))
+        @test t10.epoch == Dates.DateTime(2020, 1, 1)
 
         # Cannot be represented exactly
         @test_throws ErrorException ITime(1e-20)
@@ -68,18 +68,18 @@ using Test, Dates
         t = ITime(10, Dates.Millisecond(50), Dates.DateTime(2024, 1, 1))
         @test counter(t) == 10
         @test period(t) == Dates.Millisecond(50)
-        @test start_date(t) == Dates.DateTime(2024, 1, 1)
+        @test epoch(t) == Dates.DateTime(2024, 1, 1)
     end
 
     @testset "date" begin
-        t1 = ITime(10, start_date = Dates.DateTime(2024, 1, 1))
+        t1 = ITime(10, epoch = Dates.DateTime(2024, 1, 1))
         @test date(t1) == Dates.DateTime(2024, 1, 1) + Dates.Second(10)
         @test Dates.DateTime(t1) ==
               Dates.DateTime(2024, 1, 1) + Dates.Second(10)
 
         # Correct conversion with rational counter
-        t2 = ITime(1 // 2, start_date = Dates.DateTime(2024, 1, 1))
-        @test date(t2) == t2.start_date + Dates.Millisecond(500)
+        t2 = ITime(1 // 2, epoch = Dates.DateTime(2024, 1, 1))
+        @test date(t2) == t2.epoch + Dates.Millisecond(500)
 
         # Cannot convert to date without a start date
         t3 = ITime(10)
@@ -94,16 +94,16 @@ using Test, Dates
         @test t2_promoted.counter == 100
         @test t1_promoted.period == Dates.Millisecond(10)
 
-        t3 = ITime(10, start_date = Dates.DateTime(2024, 1, 1))
+        t3 = ITime(10, epoch = Dates.DateTime(2024, 1, 1))
         t4 = ITime(20)
 
         t3_promoted, t4_promoted = promote(t3, t4)
-        @test t3_promoted.start_date == Dates.DateTime(2024, 1, 1)
-        @test t4_promoted.start_date == Dates.DateTime(2024, 1, 1)
+        @test t3_promoted.epoch == Dates.DateTime(2024, 1, 1)
+        @test t4_promoted.epoch == Dates.DateTime(2024, 1, 1)
 
         @test_throws ErrorException promote(
             t3,
-            ITime(10, start_date = Dates.DateTime(2024, 1, 2)),
+            ITime(10, epoch = Dates.DateTime(2024, 1, 2)),
         )
     end
 
@@ -137,12 +137,12 @@ using Test, Dates
         @test zero(t1) == ITime(0)
 
 
-        t5 = ITime(10, start_date = Dates.DateTime(2024, 1, 1))
-        t6 = ITime(5, start_date = Dates.DateTime(2024, 1, 1))
-        @test (t5 + t6).start_date == t5.start_date
+        t5 = ITime(10, epoch = Dates.DateTime(2024, 1, 1))
+        t6 = ITime(5, epoch = Dates.DateTime(2024, 1, 1))
+        @test (t5 + t6).epoch == t5.epoch
 
-        t7 = ITime(5, start_date = Dates.DateTime(2024, 10, 1))
-        # Arithmetic operations between ITime with different start_dates are disallowed
+        t7 = ITime(5, epoch = Dates.DateTime(2024, 10, 1))
+        # Arithmetic operations between ITime with different epochs are disallowed
         @test_throws ErrorException t6 + t7
     end
 
@@ -158,9 +158,9 @@ using Test, Dates
         t1 = ITime(10)
         @test sprint(show, t1) == "10 seconds [counter = 10, period = 1 second]"
 
-        t2 = ITime(10, start_date = Dates.DateTime(2024, 1, 1))
+        t2 = ITime(10, epoch = Dates.DateTime(2024, 1, 1))
         @test sprint(show, t2) ==
-              "10 seconds (2024-01-01T00:00:10) [counter = 10, period = 1 second, start_date = 2024-01-01T00:00:00]"
+              "10 seconds (2024-01-01T00:00:10) [counter = 10, period = 1 second, epoch = 2024-01-01T00:00:00]"
 
         t3 = ITime(1 // 2)
         @test sprint(show, t3) ==
@@ -169,10 +169,10 @@ using Test, Dates
         t4 = ITime(
             10,
             period = Dates.Hour(1),
-            start_date = Dates.DateTime(2024, 1, 1),
+            epoch = Dates.DateTime(2024, 1, 1),
         )
         @test sprint(show, t4) ==
-              "10 hours (2024-01-01T10:00:00) [counter = 10, period = 1 hour, start_date = 2024-01-01T00:00:00]"
+              "10 hours (2024-01-01T10:00:00) [counter = 10, period = 1 hour, epoch = 2024-01-01T00:00:00]"
     end
 
     @testset "Rational counter tests" begin
