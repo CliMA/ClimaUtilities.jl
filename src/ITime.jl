@@ -331,3 +331,19 @@ end
 # Behave as a scalar when broadcasted
 Base.Broadcast.broadcastable(t::ITime) = Ref(t)
 
+function Base.:+(
+    t1::ITime{T1, P, E1},
+    t2::ITime{T2, P, E2},
+) where {
+    T1 <: IntegerOrRatio,
+    T2 <: IntegerOrRatio,
+    P <: Dates.FixedPeriod,
+    E1 <: Union{Nothing, Dates.DateTime},
+    E2 <: Union{Nothing, Dates.DateTime},
+}
+    t1_epoch = epoch(t1)
+    t2_epoch = epoch(t2)
+    (!isnothing(t1_epoch) && !isnothing(t2_epoch)) && (t1_epoch != t2_epoch) && return error("Incompatible epochs: Cannot promote")
+    isnothing(t1) ? curr_epoch = t2_epoch : curr_epoch = t1_epoch
+    return ITime(t1.counter + t2.counter, t1.period, curr_epoch)
+end
