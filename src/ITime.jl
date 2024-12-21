@@ -216,18 +216,10 @@ This function determines a common `epoch` and `period` for all the input
 type.  It throws an error if the start dates are different.
 """
 function Base.promote(ts::ITime...)
-    unique_epochs =
-        Set(epoch(t) for t in ts if !isnothing(epoch(t)))
-    periods = Set(period(t) for t in ts)
-
-    # Determine the common epoch
-    length(unique_epochs) > 1 &&
-        error("Incompatible epochs: Cannot promote")
-    common_epoch =
-        length(unique_epochs) == 0 ? nothing : first(unique_epochs)
+    common_epoch = find_common_epoch(ts...)
 
     # Determine the common period
-    common_period = reduce(gcd, periods)
+    common_period = reduce(gcd, (period(t) for t in ts))
 
     # Promote each ITime instance by computing the scaling factor needed
     return map(
@@ -238,6 +230,17 @@ function Base.promote(ts::ITime...)
         ),
         ts,
     )
+end
+
+function find_common_epoch(ts::ITime...)
+    epochs = (epoch(t) for t in ts if !isnothing(epoch(t)))
+    if isempty(epochs)
+        common_epoch = nothing
+    else
+        epoch_unique(t1, t2) = (t1 == t2) ? (return t1) : (return error("Cannot find common epoch"))
+        common_epoch = reduce(epoch_unique, epochs)
+    end
+    return common_epoch
 end
 
 macro itime_unary_op(op)
@@ -331,6 +334,7 @@ end
 # Behave as a scalar when broadcasted
 Base.Broadcast.broadcastable(t::ITime) = Ref(t)
 
+# TODO: Make this into a macro
 function Base.:+(
     t1::ITime{T1, P, E1},
     t2::ITime{T2, P, E2},
