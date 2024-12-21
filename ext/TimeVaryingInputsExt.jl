@@ -38,7 +38,8 @@ import ClimaUtilities.DataHandling:
     regridded_snapshot!,
     available_times,
     available_dates,
-    date_to_time
+    date_to_time,
+    time_to_date
 
 import ClimaUtilities.TimeManager: ITime, date
 
@@ -400,6 +401,62 @@ function TimeVaryingInputs.evaluate!(
         t0, t1 = previous_time(itp.data_handler, time),
         next_time(itp.data_handler, time)
         coeff = (time - t0) / (t1 - t0)
+
+        regridded_snapshot!(field_t0, itp.data_handler, t0)
+        regridded_snapshot!(field_t1, itp.data_handler, t1)
+
+        dest .= (1 - coeff) .* field_t0 .+ coeff .* field_t1
+    end
+    return nothing
+end
+
+function TimeVaryingInputs.evaluate!(
+    dest,
+    itp::InterpolatingTimeVaryingInput23D,
+    time::ITime,
+    ::LinearInterpolation,
+    args...;
+    kwargs...,
+)
+    # Linear interpolation is:
+    # y = y0 + (y1 - y0) * (time - t0) / (t1 - t0)
+    #
+    # Define coeff = (time - t0) / (t1 - t0)
+    #
+    # y = (1 - coeff) * y0 + coeff * y1
+
+    field_t0, field_t1 = itp.preallocated_regridded_fields[begin:(begin + 1)]
+
+    if extrapolation_bc(itp.method) isa PeriodicCalendar
+        # Main.@infiltrate
+        time, t_init, t_end, dt, _ =
+            _interpolation_times_periodic_calendar(time, itp)
+
+        # We have to handle separately the edge case where the desired time is past t_end.
+        # In this case, we know that t_end <= time <= t_end + dt and we have to do linear
+        # interpolation between t_init and t_end. In this case, y0 = regridded_field(t_end),
+        # y1 = regridded_field(t_init), t1 - t0 = dt, and time - t0 = time - t_end
+
+        # TODO: It would be nice to handle this edge case directly instead of copying the
+        # code
+        if time > t_end
+            regridded_snapshot!(field_t0, itp.data_handler, t_end)
+            regridded_snapshot!(field_t1, itp.data_handler, t_init)
+            coeff = (time - t_end) / dt
+            dest .= (1 - coeff) .* field_t0 .+ coeff .* field_t1
+            return nothing
+        end
+    end
+
+    # We have to consider the edge case where time is precisely the last available_time.
+    # This is relevant also because it can be triggered by LinearPeriodFilling
+    if time in DataHandling.available_times(itp.data_handler)
+        regridded_snapshot!(dest, itp.data_handler, time)
+    else
+        t0, t1 = previous_time(itp.data_handler, time),
+        next_time(itp.data_handler, time)
+        date0, date1 = time_to_date(itp.data_handler, t0), time_to_date(itp.data_handler, t1)
+        coeff = (date(time) - date0) / (date1 - date0)
 
         regridded_snapshot!(field_t0, itp.data_handler, t0)
         regridded_snapshot!(field_t1, itp.data_handler, t1)
