@@ -261,4 +261,91 @@ using Test, Dates
         @test length(t1) == 1
     end
 
+    @testset "Int32 test" begin
+        # Check if any operation with Int32 in ITime can lead to an Int64
+        t1 = ITime(Int32(0), period = Second(1))
+        t2 = ITime(Int32(1), period = Minute(1))
+        t3 = ITime(Int32(2), period = Hour(1), epoch = DateTime(2010))
+        t4 = ITime(Int32(1) // Int32(2), period = Second(1))
+        t5 = ITime(Int32(3) // Int32(4), period = Minute(1))
+        t6 = ITime(
+            Int32(7) // Int32(8),
+            period = Minute(1),
+            epoch = DateTime(2011),
+        )
+
+        # Test promote
+        tt1, tt2, tt3, tt4, tt5 = promote(t1, t2, t3, t4, t5)
+        @test typeof(tt1.counter) == Int32
+        @test typeof(tt2.counter) == Int32
+        @test typeof(tt3.counter) == Int32
+        @test typeof(tt4.counter) == Rational{Int32}
+        @test typeof(tt5.counter) == Int32
+
+        t7 = t1 + t2
+        t8 = t2 + t3
+        t9 = t4 + t5
+        t10 = t5 + t6
+        t11 = t1 + t4
+        t12 = t1 + t6
+        t13 = t3 + t4
+        @test typeof(t7.counter) == Int32
+        @test typeof(t8.counter) == Int32
+        @test typeof(t9.counter) == Rational{Int32}
+        @test typeof(t10.counter) == Rational{Int32}
+        @test typeof(t11.counter) == Rational{Int32}
+        @test typeof(t12.counter) == Rational{Int32}
+        @test typeof(t13.counter) == Rational{Int32}
+
+        t7 = t1 - t2
+        t8 = t2 - t3
+        t9 = t4 - t5
+        t10 = t5 - t6
+        t11 = t1 - t4
+        t12 = t1 - t6
+        t13 = t3 - t4
+        @test typeof(t7.counter) == Int32
+        @test typeof(t8.counter) == Int32
+        @test typeof(t9.counter) == Rational{Int32}
+        @test typeof(t10.counter) == Rational{Int32}
+        @test typeof(t11.counter) == Rational{Int32}
+        @test typeof(t12.counter) == Rational{Int32}
+        @test typeof(t13.counter) == Rational{Int32}
+
+        t7 = t1 / Int32(1)
+        t8 = t2 / Int32(4)
+        t9 = t3 / Int32(3)
+        t10 = t4 / (Int32(1) // Int32(2))
+        t11 = t5 / Int32(4)
+        t12 = t6 / Int32(2)
+        @test typeof(t7.counter) == Int32
+        @test typeof(t8.counter) == Rational{Int32}
+        @test typeof(t9.counter) == Rational{Int32}
+        @test typeof(t10.counter) == Int32
+        @test typeof(t11.counter) == Rational{Int32}
+        @test typeof(t12.counter) == Rational{Int32}
+
+        t7 = t1 * Int32(1)
+        t8 = t2 * (Int32(4) // Int32(3))
+        t9 = t3 * Int32(3)
+        t10 = t4 * Int32(2)
+        t11 = t5 * Int32(7)
+        t12 = t6 * Int32(2)
+        @test typeof(t7.counter) == Int32
+        @test typeof(t8.counter) == Rational{Int32}
+        @test typeof(t9.counter) == Int32
+        @test typeof(t10.counter) == Int32
+        @test typeof(t11.counter) == Rational{Int32}
+        @test typeof(t12.counter) == Rational{Int32}
+
+        @test typeof(oneunit(t1).counter) == Int32
+        @test typeof(oneunit(t4).counter) == Int32
+        @test typeof(zero(t1).counter) == Int32
+        @test typeof(zero(t4).counter) == Int32
+
+        @test typeof(mod(t4, t5).counter) == Rational{Int32}
+        @test typeof(mod(t4, t3).counter) == Rational{Int32}
+        @test typeof(mod(t3, t4).counter) == Int32
+        @test typeof(mod(t3, t2).counter) == Int32
+    end
 end
