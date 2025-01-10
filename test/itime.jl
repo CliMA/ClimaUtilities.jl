@@ -256,4 +256,9 @@ using Test, Dates
         @test iszero(t2) == false
     end
 
+    @testset "length" begin
+        t1 = ITime(0, period = Hour(1))
+        @test length(t1) == 1
+    end
+
 end

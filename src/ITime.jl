@@ -304,6 +304,14 @@ function Base.iszero(x::ITime)
     return iszero(x.counter)
 end
 
+"""
+    Base.length(x::ITime)
+
+Return the length of an ITime which is always one.
+"""
+function Base.length(x::ITime)
+    return 1
+end
 
 macro itime_unary_op(op)
     return esc(
