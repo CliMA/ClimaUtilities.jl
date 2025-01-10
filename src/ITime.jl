@@ -356,6 +356,8 @@ end
 
 Base.isnan(t::ITime) = Base.isnan(t.counter)
 
+@itime_binary_op_notype <=
+@itime_binary_op_notype >=
 @itime_binary_op_notype isless
 @itime_binary_op_notype ==
 @itime_binary_op_notype isequal

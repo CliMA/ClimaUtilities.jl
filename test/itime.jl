@@ -123,6 +123,8 @@ using Test, Dates
         @test !(t1 < t2)
         @test t1 > t2
         @test t1 == ITime(10)
+        @test t1 >= ITime(10)
+        @test t1 <= ITime(10)
         @test t1 != ITime(5)
         @test isapprox(t1, ITime(10))
 
