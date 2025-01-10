@@ -240,6 +240,33 @@ function Base.promote(ts::ITime...)
     )
 end
 
+"""
+    find_common_epoch(ts::ITime...)
+
+Find a common epoch of `ts` if one exists.
+"""
+function find_common_epoch(ts::ITime...)
+    epochs = (epoch(t) for t in ts if !isnothing(epoch(t)))
+    common_epoch = reduce(_unique_epochs, epochs, init = nothing)
+    return common_epoch
+end
+
+"""
+    _unique_epochs(epoch1, epoch2)
+
+Return an epoch if it is unique or an error otherwise.
+"""
+function _unique_epochs(epoch1, epoch2)
+    if isnothing(epoch1)
+        return epoch2
+    elseif epoch1 == epoch2
+        return epoch2
+    else
+        return error("Cannot find common epoch")
+    end
+end
+
+
 macro itime_unary_op(op)
     return esc(
         quote

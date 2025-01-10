@@ -1,3 +1,4 @@
+import ClimaUtilities
 using ClimaUtilities.TimeManager
 
 using Test, Dates
@@ -184,5 +185,25 @@ using Test, Dates
         @test t2 - t1 == ITime(-3 // 2)
         @test t2 * 2 == ITime(1)
         @test t1 / 2 == ITime(1)
+    end
+
+    @testset "Find common epoch" begin
+        t1 = ITime(0, period = Second(1), epoch = Date(2011))
+        t2 = ITime(0, period = Minute(1), epoch = Date(2011))
+        t3 = ITime(0, period = Hour(1))
+        t4 = ITime(0, period = Day(1), epoch = Date(2012))
+
+        @test ClimaUtilities.TimeManager.find_common_epoch(t1, t2) == Date(2011)
+        @test ClimaUtilities.TimeManager.find_common_epoch(t1, t3) == Date(2011)
+        @test_throws ErrorException ClimaUtilities.TimeManager.find_common_epoch(
+            t1,
+            t4,
+        )
+        @test_throws ErrorException ClimaUtilities.TimeManager.find_common_epoch(
+            t1,
+            t2,
+            t3,
+            t4,
+        )
     end
 end
