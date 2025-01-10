@@ -394,7 +394,7 @@ Convert an `ITime` to a floating-point number representing the time in seconds.
 """
 function Base.float(t::T) where {T <: ITime}
     if VERSION >= v"1.11"
-        return Dates.seconds(t.period) * t.counter
+        return float(Dates.seconds(t.period) * t.counter)
     else
         return Dates.tons(t.period) / 1_000_000_000 * t.counter
     end
