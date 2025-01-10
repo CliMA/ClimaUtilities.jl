@@ -206,4 +206,22 @@ using Test, Dates
             t4,
         )
     end
+
+    @testset "Range" begin
+        start = ITime(0, period = Hour(1))
+        step = ITime(1, period = Second(1), epoch = Date(2011))
+        stop = ITime(1, period = Minute(1))
+        stop1 = ITime(0, period = Day(1), epoch = Date(2012))
+
+        start2stop = collect(start:step:stop)
+        @test length(start2stop) == 61
+        @test start2stop[begin] ==
+              ITime(0, period = Second(1), epoch = Date(2011))
+        @test start2stop[2] == ITime(1, period = Second(1), epoch = Date(2011))
+        @test start2stop[end] ==
+              ITime(60, period = Second(1), epoch = Date(2011))
+
+        @test_throws ErrorException start:step:stop1
+    end
+
 end

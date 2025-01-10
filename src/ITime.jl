@@ -258,6 +258,21 @@ function _unique_epochs(epoch1, epoch2)
     end
 end
 
+"""
+    Base.:(:)(start::ITime, step::ITime, stop::ITime)
+
+Range operator. `start:step:stop` constructs a range from start to stop with a
+step size equal to step.
+"""
+function Base.:(:)(start::ITime, step::ITime, stop::ITime)
+    start, step, stop = promote(start, step, stop)
+    common_epoch = find_common_epoch(start, step, stop)
+    return (
+        ITime(count, period = start.period, epoch = common_epoch) for
+        count in (start.counter):(step.counter):(stop.counter)
+    )
+end
+
 
 macro itime_unary_op(op)
     return esc(
