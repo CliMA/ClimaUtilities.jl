@@ -1,4 +1,4 @@
-export ITime, counter, period, start_date, date, seconds
+export ITime, counter, period, epoch, date, seconds
 
 # ITime needs to support ratios too because the timestepper deals with stages,
 # which are fractions of a basic unit.
@@ -32,49 +32,49 @@ Second / dt)` for Int64.
 # Fields
 - `counter::INT`: The number of clock cycles.
 - `period::DT`: The duration of each cycle.
-- `start_date::START_DATE`: An optional start date.
+- `epoch::EPOCH`: An optional start date.
 """
 struct ITime{
     INT <: IntegerOrRatio,
-    DT <: Dates.FixedPeriod,
-    START_DATE <: Union{Nothing, Dates.DateTime},
+    DT,
+    EPOCH <: Union{Nothing, Dates.DateTime},
 }
     counter::INT
     period::DT
-    start_date::START_DATE
+    epoch::EPOCH
 
-    function ITime(counter, period, start_date)
+    function ITime(counter, period, epoch)
         if counter isa Rational && counter.den == 1
-            return new{Int, typeof(period), typeof(start_date)}(
+            return new{typeof(counter.num), typeof(period), typeof(epoch)}(
                 counter.num,
                 period,
-                start_date,
+                epoch,
             )
         else
-            return new{typeof(counter), typeof(period), typeof(start_date)}(
+            return new{typeof(counter), typeof(period), typeof(epoch)}(
                 counter,
                 period,
-                start_date,
+                epoch,
             )
         end
     end
 end
 
 """
-    ITime(counter::IntegerOrRatio; period::Dates.FixedPeriod = Dates.Second(1), start_date = nothing)
+    ITime(counter::IntegerOrRatio; period::Dates.FixedPeriod = Dates.Second(1), epoch = nothing)
 
 Construct an `ITime` from a counter, a period, and an optional start date.
 
-If the `start_date` is provided as a `Date`, it is converted to a `DateTime`.
+If the `epoch` is provided as a `Date`, it is converted to a `DateTime`.
 """
 function ITime(
     counter::IntegerOrRatio;
     period::Dates.FixedPeriod = Dates.Second(1),
-    start_date = nothing,
+    epoch = nothing,
 )
-    # Convert start_date to DateTime if it is not nothing (from, e.g., Date)
-    isnothing(start_date) || (start_date = Dates.DateTime(start_date))
-    return ITime(counter, period, start_date)
+    # Convert epoch to DateTime if it is not nothing (from, e.g., Date)
+    isnothing(epoch) || (epoch = Dates.DateTime(epoch))
+    return ITime(counter, period, epoch)
 end
 
 """
@@ -106,16 +106,16 @@ function period(t::ITime)
 end
 
 """
-    start_date(t::ITime)
+    epoch(t::ITime)
 
 Return the start date of the `ITime` `t`.
 """
-function start_date(t::ITime)
-    return t.start_date
+function epoch(t::ITime)
+    return t.epoch
 end
 
 function date(t::ITime{<:IntegerOrRatio, <:Dates.FixedPeriod, Nothing})
-    error("Time does not have start_date information")
+    error("Time does not have epoch information")
 end
 
 function date(t::ITime{<:Rational})
@@ -125,7 +125,7 @@ function date(t::ITime{<:Rational})
 
     # Compute time in ms rounding it off to the nearest Millisecond
     time_ms = Int(round(float(counter(t) * period_ms)))
-    return start_date(t) + Dates.Millisecond(time_ms)
+    return epoch(t) + Dates.Millisecond(time_ms)
 end
 
 """
@@ -133,10 +133,10 @@ end
 
 Return the date associated with `t`. If the time is fractional round it to millisecond.
 
-For this to work, `t` has to have a `start_date`
+For this to work, `t` has to have a `epoch`
 """
 function date(t::ITime)
-    return start_date(t) + counter(t) * period(t)
+    return epoch(t) + counter(t) * period(t)
 end
 
 """
@@ -149,7 +149,7 @@ function Dates.DateTime(t::ITime)
 end
 
 """
-    ITime(t; start_date = nothing)
+    ITime(t; epoch = nothing)
 
 Construct an `ITime` from a number `t` representing a time interval.
 
@@ -158,9 +158,9 @@ represented as an integer multiple of that period.
 
 If `t` is approximately zero, it defaults to a period of 1 second.
 """
-function ITime(t; start_date = nothing)
+function ITime(t; epoch = nothing)
     # If it is zero, assume seconds
-    isapprox(t, 0) && return ITime(0, Dates.Second(1), start_date)
+    isapprox(t, 0) && return ITime(0, Dates.Second(1), epoch)
 
     # Promote t to Float64 to avoid loss of precision
     t = Float64(t)
@@ -178,7 +178,7 @@ function ITime(t; start_date = nothing)
         period_ns = Dates.tons(period(1))
         t_int = 1_000_000_000 / period_ns * t
         if isinteger(t_int)
-            return ITime(Int(t_int), period(1), start_date)
+            return ITime(Int(t_int), period(1), epoch)
         end
     end
     error("Cannot represent $t as integer multiple of a Dates.FixedPeriod")
@@ -195,13 +195,13 @@ function Base.show(io::IO, time::ITime)
 
     print(io, "$value $unit ")
     # Add date, if available
-    if !isnothing(start_date(time)) && counter(time) isa Integer
+    if !isnothing(epoch(time)) && counter(time) isa Integer
         print(io, "($(date(time))) ")
     end
     print(io, "[counter = $(counter(time)), period = $(period(time))")
     # Add start date, if available
-    if !isnothing(start_date(time))
-        print(io, ", start_date = $(start_date(time))")
+    if !isnothing(epoch(time))
+        print(io, ", epoch = $(epoch(time))")
     end
     print(io, "]")
 end
@@ -211,7 +211,7 @@ end
 
 Promote a tuple of `ITime` instances to a common type.
 
-This function determines a common `start_date` and `period` for all the input
+This function determines a common `epoch` and `period` for all the input
 `ITime` instances and returns a tuple of new `ITime` instances with the common
 type.  It throws an error if the start dates are different.
 """
@@ -244,7 +244,7 @@ macro itime_unary_op(op)
     return esc(
         quote
             Base.$op(t::T) where {T <: ITime} =
-                ITime($op(t.counter), t.period, t.start_date)
+                ITime($op(t.counter), t.period, t.epoch)
         end,
     )
 end
@@ -257,7 +257,7 @@ macro itime_binary_op(op)
                 ITime(
                     $op(t1p.counter, t2p.counter),
                     t1p.period,
-                    t1p.start_date,
+                    t1p.epoch,
                 )
             end
         end,
@@ -293,26 +293,24 @@ Base.:/(t1::T1, t2::T2) where {T1 <: ITime, T2 <: ITime} = t1 // t2
 
 # Multiplication/division by numbers
 Base.div(t::T1, num::IntegerOrRatio) where {T1 <: ITime} =
-    ITime(div(t.counter, num), t.period, t.start_date)
+    ITime(div(t.counter, num), t.period, t.epoch)
 function Base.://(t::T1, num::IntegerOrRatio) where {T1 <: ITime}
     new_counter_rational = t.counter // num
     new_counter =
-        new_counter_rational.dem == 1 ? new_counter_rational.num :
+        new_counter_rational.den == 1 ? new_counter_rational.num :
         new_counter_rational
-    ITime(t.counter // num, t.period, t.start_date)
+    ITime(new_counter, t.period, t.epoch)
 end
 Base.:/(t::T1, num::IntegerOrRatio) where {T1 <: ITime} = t // num
 Base.:*(num::IntegerOrRatio, t::T) where {T <: ITime} =
-    ITime(num * t.counter, t.period, t.start_date)
+    ITime(num * t.counter, t.period, t.epoch)
 Base.:*(t::T, num::IntegerOrRatio) where {T <: ITime} =
-    ITime(num * t.counter, t.period, t.start_date)
-
-# TODO: Add errors when working with Floats
+    ITime(num * t.counter, t.period, t.epoch)
 
 # Pay attention to the units here! zero and one are not symmetric
 Base.one(t::T) where {T <: ITime} = 1
-Base.oneunit(t::T) where {T <: ITime} = ITime(1, t.period, t.start_date)
-Base.zero(t::T) where {T <: ITime} = ITime(0, t.period, t.start_date)
+Base.oneunit(t::T) where {T <: ITime} = ITime(eltype(t.counter)(1), t.period, t.epoch)
+Base.zero(t::T) where {T <: ITime} = ITime(eltype(t.counter)(0), t.period, t.epoch)
 
 """
     float(t::ITime)
