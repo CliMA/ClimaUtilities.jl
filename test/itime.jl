@@ -224,4 +224,29 @@ using Test, Dates
         @test_throws ErrorException start:step:stop1
     end
 
+    @testset "% and mod operators" begin
+        t1 = ITime(0, period = Hour(1))
+        t2 = ITime(1, period = Second(1))
+        t3 = ITime(10, period = Day(1))
+        t4 = ITime(7, period = Second(1))
+        t5 = ITime(2, period = Second(1))
+        t6 = ITime(7 // 2, period = Second(1))
+        t7 = ITime(7 // (2 * 60), period = Minute(1))
+        t8 = ITime(9, period = Second(2))
+        t9 = ITime(2, period = Second(2))
+        @test t1 % t2 == ITime(0, period = Second(1))
+        @test t3 % t2 == ITime(0, period = Second(1))
+        @test t4 % t5 == ITime(1, period = Second(1))
+        @test t6 % t5 == ITime(3 // 2, period = Second(1))
+        @test t7 % t5 == ITime(3 // 2, period = Second(1))
+        @test t8 % t9 == ITime(1, period = Second(2))
+
+        @test mod(t1, t2) == ITime(0, period = Second(1))
+        @test mod(t3, t2) == ITime(0, period = Second(1))
+        @test mod(t4, t5) == ITime(1, period = Second(1))
+        @test mod(t6, t5) == ITime(3 // 2, period = Second(1))
+        @test mod(t7, t5) == ITime(3 // 2, period = Second(1))
+        @test t8 % t9 == ITime(1, period = Second(2))
+    end
+
 end

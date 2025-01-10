@@ -273,6 +273,28 @@ function Base.:(:)(start::ITime, step::ITime, stop::ITime)
     )
 end
 
+"""
+    Base.mod(x::ITime, y::ITime)
+
+Return the counter of `x` modulo counter of `y` after promote `x` and `y` to the
+same period and epoch.
+"""
+function Base.mod(x::ITime, y::ITime)
+    x, y = promote(x, y)
+    reminder = mod(x.counter, y.counter)
+    return ITime(reminder, period = x.period, epoch = x.epoch)
+end
+
+"""
+    Base.:(%)(x::ITime, y::ITime)
+
+Return the counter of `x` modulo counter of `y` after promote `x` and `y` to the
+same period and epoch.
+"""
+function Base.:(%)(x::ITime, y::ITime)
+    return mod(x, y)
+end
+
 
 macro itime_unary_op(op)
     return esc(
