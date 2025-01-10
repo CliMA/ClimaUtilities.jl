@@ -216,25 +216,17 @@ This function determines a common `epoch` and `period` for all the input
 type.  It throws an error if the start dates are different.
 """
 function Base.promote(ts::ITime...)
-    unique_start_dates =
-        Set(start_date(t) for t in ts if !isnothing(start_date(t)))
-    periods = Set(period(t) for t in ts)
-
-    # Determine the common start_date
-    length(unique_start_dates) > 1 &&
-        error("Incompatible start_dates: Cannot promote")
-    common_start_date =
-        length(unique_start_dates) == 0 ? nothing : first(unique_start_dates)
+    common_epoch = find_common_epoch(ts...)
 
     # Determine the common period
-    common_period = reduce(gcd, periods)
+    common_period = reduce(gcd, (period(t) for t in ts))
 
     # Promote each ITime instance by computing the scaling factor needed
     return map(
         t -> ITime(
-            counter(t) * div(period(t), common_period),
+            counter(t) * typeof(t.counter)(div(period(t), common_period)),
             common_period,
-            common_start_date,
+            common_epoch,
         ),
         ts,
     )
