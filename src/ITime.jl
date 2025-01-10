@@ -295,6 +295,15 @@ function Base.:(%)(x::ITime, y::ITime)
     return mod(x, y)
 end
 
+"""
+    Base.iszero(x::ITime)
+
+Return `true` if the counter of `x` is zero.
+"""
+function Base.iszero(x::ITime)
+    return iszero(x.counter)
+end
+
 
 macro itime_unary_op(op)
     return esc(

@@ -249,4 +249,11 @@ using Test, Dates
         @test t8 % t9 == ITime(1, period = Second(2))
     end
 
+    @testset "iszero" begin
+        t1 = ITime(0, period = Hour(1))
+        t2 = ITime(1, period = Second(1))
+        @test iszero(t1) == true
+        @test iszero(t2) == false
+    end
+
 end
