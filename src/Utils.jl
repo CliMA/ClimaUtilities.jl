@@ -1,6 +1,6 @@
 module Utils
 
-import Dates: Period, DatePeriod, Date, DateTime, OtherPeriod
+import Dates: Period, DatePeriod, Date, DateTime, OtherPeriod, TimeType
 import Dates: Year, Month, Week, Day, Second
 import Dates: year, month, week, dayofweek, day, days
 
@@ -151,6 +151,11 @@ julia> wrap_time(1.9, t_init, t_end)
 function wrap_time(time, t_init, t_end)
     period = t_end - t_init
     return t_init + mod(time - t_init, period)
+end
+
+function wrap_date(date::TimeType, date_init::TimeType, date_end::TimeType)
+    period = date_end - date_init
+    return date_init + mod(date - date_init, period)
 end
 
 """

@@ -7,6 +7,7 @@ import ClimaUtilities.Utils:
     linear_interpolation,
     isequispaced,
     wrap_time,
+    wrap_date,
     beginningofperiod,
     endofperiod,
     bounding_dates,
@@ -67,6 +68,20 @@ end
     # Wrapping when time equals date_init or date_end
     @test wrap_time(date_init, date_init, date_end) == date_init
     @test wrap_time(date_end, date_init, date_end) == date_init
+end
+
+@testset "warp_date" begin
+    date_init = DateTime(2010)
+    date_end = DateTime(2011)
+
+    @test wrap_date(DateTime(2010, 1), date_init, date_end) == DateTime(2010, 1)
+    @test wrap_date(DateTime(2011, 1), date_init, date_end) == DateTime(2010, 1)
+    @test wrap_date(DateTime(2009, 11), date_init, date_end) ==
+          DateTime(2010, 11)
+
+    # Wrapping when date equals date_init or date_end
+    @test wrap_date(DateTime(2010), date_init, date_end) == DateTime(2010)
+    @test wrap_date(DateTime(2011), date_init, date_end) == DateTime(2010)
 end
 
 @testset "bounding_dates" begin
