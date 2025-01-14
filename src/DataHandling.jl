@@ -51,6 +51,10 @@ function previous_time end
 
 function next_time end
 
+function previous_date end
+
+function next_date end
+
 function regridded_snapshot end
 
 function regridded_snapshot! end
@@ -68,6 +72,8 @@ extension_fns = [
         :available_dates,
         :previous_time,
         :next_time,
+        :previous_date,
+        :next_date,
         :regridded_snapshot,
         :regridded_snapshot!,
         :dt,
@@ -80,6 +86,8 @@ extension_fns = [
         :available_dates,
         :previous_time,
         :next_time,
+        :previous_date,
+        :next_date,
         :regridded_snapshot,
         :regridded_snapshot!,
         :dt,

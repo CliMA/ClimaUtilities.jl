@@ -512,6 +512,46 @@ function DataHandling.next_time(data_handler::DataHandler, date::Dates.DateTime)
 end
 
 """
+    DataHandling.previous_date(data_handler::DataHandler, time::Dates.TimeType)
+
+Return the date of the snapshot before the given `date`.
+If `date` is one of the snapshots, return itself.
+
+If `date` is not in the `data_handler`, return an error.
+"""
+function DataHandling.previous_date(
+    data_handler::DataHandler,
+    date::Dates.TimeType,
+)
+    if date in data_handler.available_dates
+        index = searchsortedfirst(data_handler.available_dates, date)
+    else
+        index = searchsortedfirst(data_handler.available_dates, date) - 1
+    end
+    index < 1 && error("Date $date is before available dates")
+    return data_handler.available_dates[index]
+end
+
+"""
+    DataHandling.next_date(data_handler::DataHandler, time::Dates.TimeType)
+
+Return the date of the snapshot after the given `time`.
+If `date` is one of the snapshots, return itself.
+
+If `date` is not in the `data_handler`, return an error.
+"""
+function DataHandling.next_date(data_handler::DataHandler, date::Dates.TimeType)
+    if date in data_handler.available_dates
+        index = searchsortedfirst(data_handler.available_dates, date) + 1
+    else
+        index = searchsortedfirst(data_handler.available_dates, date)
+    end
+    index > length(data_handler.available_dates) &&
+        error("Date $date is after available dates")
+    return data_handler.available_dates[index]
+end
+
+"""
     regridded_snapshot(data_handler::DataHandler, date::Dates.DateTime)
     regridded_snapshot(data_handler::DataHandler, time::AbstractFloat)
     regridded_snapshot(data_handler::DataHandler)

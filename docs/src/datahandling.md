@@ -189,6 +189,8 @@ ClimaUtilities.DataHandling.available_times
 ClimaUtilities.DataHandling.available_dates
 ClimaUtilities.DataHandling.previous_time
 ClimaUtilities.DataHandling.next_time
+ClimaUtilities.DataHandling.previous_date
+ClimaUtilities.DataHandling.next_date
 ClimaUtilities.DataHandling.regridded_snapshot
 ClimaUtilities.DataHandling.regridded_snapshot!
 ClimaUtilities.DataHandling.dt
