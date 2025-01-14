@@ -33,12 +33,13 @@ import ClimaUtilities.TimeVaryingInputs: extrapolation_bc
 import ClimaUtilities.DataHandling
 import ClimaUtilities.DataHandling:
     DataHandler,
-    previous_time,
-    next_time,
     regridded_snapshot!,
     available_times,
     available_dates,
-    date_to_time
+    date_to_time,
+    time_to_date,
+    previous_date,
+    next_date
 
 # Ideally, we should be able to split off the analytic part in a different
 # extension, but precompilation stops working when we do so
@@ -110,8 +111,15 @@ end
 Check if the given `time` is in the range of definition for `itp`.
 """
 function Base.in(time, itp::InterpolatingTimeVaryingInput23D)
-    return itp.range[1] <= time <= itp.range[2]
+    return itp.data_handler.available_dates[begin] <=
+           time <=
+           itp.data_handler.available_dates[end]
 end
+
+function Base.in(time::Number, itp::InterpolatingTimeVaryingInput23D)
+    return Base.in(time_to_date(itp.data_handler, time), itp)
+end
+
 
 function TimeVaryingInputs.TimeVaryingInput(
     data_handler;
@@ -198,16 +206,34 @@ function TimeVaryingInputs.evaluate!(
         time in itp || error("TimeVaryingInput does not cover time $time")
     end
     if extrapolation_bc(itp.method) isa Flat
-        t_init, t_end = itp.range
-        if time >= t_end
-            regridded_snapshot!(dest, itp.data_handler, t_end)
+        date_init, date_end = itp.data_handler.available_dates[begin],
+        itp.data_handler.available_dates[end]
+        if time >= date_end
+            regridded_snapshot!(dest, itp.data_handler, date_end)
         else
-            time <= t_init
-            regridded_snapshot!(dest, itp.data_handler, t_init)
+            time <= date_init
+            regridded_snapshot!(dest, itp.data_handler, date_init)
         end
     else
         TimeVaryingInputs.evaluate!(dest, itp, time, itp.method)
     end
+    return nothing
+end
+
+function TimeVaryingInputs.evaluate!(
+    dest,
+    itp::InterpolatingTimeVaryingInput23D,
+    time::Number,
+    args...;
+    kwargs...,
+)
+    TimeVaryingInputs.evaluate!(
+        dest,
+        itp,
+        Dates.Millisecond(round(1_000 * time)) + itp.data_handler.start_date,
+        args...,
+        kwargs...,
+    )
     return nothing
 end
 
@@ -220,7 +246,10 @@ function _time_range_dt_dt_e(
     extrapolation_bc::PeriodicCalendar{Nothing},
 )
     dt = DataHandling.dt(itp.data_handler)
-    return itp.range[begin], itp.range[end], dt, dt / 2
+    return itp.data_handler.available_dates[begin],
+    itp.data_handler.available_dates[end],
+    Dates.Millisecond(round(1_000 * dt)),
+    Dates.Millisecond(round((1_000 * dt) / 2))
 end
 
 function _time_range_dt_dt_e(
@@ -240,11 +269,9 @@ function _time_range_dt_dt_e(
     date_to_time(itp.data_handler, date_end)
     # We have to add 1 Second because endofperiod(date_end, period) returns the very last
     # second before the next period
-    dt_e =
-        (endofperiod(date_end, period) + Dates.Second(1) - date_end) |>
-        period_to_seconds_float
-    dt = (date_init + period - date_end) |> period_to_seconds_float
-    return t_init, t_end, dt, dt_e
+    dt_e = (endofperiod(date_end, period) + Dates.Second(1) - date_end)
+    dt = (date_init + period - date_end)
+    return date_init, date_end, dt, dt_e
 end
 
 """
@@ -320,15 +347,14 @@ function TimeVaryingInputs.evaluate!(
         end
         return nothing
     end
-
-    t0, t1 =
-        previous_time(itp.data_handler, time), next_time(itp.data_handler, time)
+    date0, date1 =
+        previous_date(itp.data_handler, time), next_date(itp.data_handler, time)
 
     # The closest regridded_snapshot could be either the previous or the next one
-    if (time - t0) <= (t1 - time)
-        regridded_snapshot!(dest, itp.data_handler, t0)
+    if (time - date0) <= (date1 - time)
+        regridded_snapshot!(dest, itp.data_handler, date0)
     else
-        regridded_snapshot!(dest, itp.data_handler, t1)
+        regridded_snapshot!(dest, itp.data_handler, date1)
     end
     return nothing
 end
@@ -351,7 +377,7 @@ function TimeVaryingInputs.evaluate!(
     field_t0, field_t1 = itp.preallocated_regridded_fields[begin:(begin + 1)]
 
     if extrapolation_bc(itp.method) isa PeriodicCalendar
-        time, t_init, t_end, dt, _ =
+        time, date_init, date_end, dt, _ =
             _interpolation_times_periodic_calendar(time, itp)
 
         # We have to handle separately the edge case where the desired time is past t_end.
@@ -361,10 +387,10 @@ function TimeVaryingInputs.evaluate!(
 
         # TODO: It would be nice to handle this edge case directly instead of copying the
         # code
-        if time > t_end
-            regridded_snapshot!(field_t0, itp.data_handler, t_end)
-            regridded_snapshot!(field_t1, itp.data_handler, t_init)
-            coeff = (time - t_end) / dt
+        if time > date_end
+            regridded_snapshot!(field_t0, itp.data_handler, date_end)
+            regridded_snapshot!(field_t1, itp.data_handler, date_init)
+            coeff = (time - date_end) / dt
             dest .= (1 - coeff) .* field_t0 .+ coeff .* field_t1
             return nothing
         end
@@ -372,15 +398,15 @@ function TimeVaryingInputs.evaluate!(
 
     # We have to consider the edge case where time is precisely the last available_time.
     # This is relevant also because it can be triggered by LinearPeriodFilling
-    if time in DataHandling.available_times(itp.data_handler)
+    if time in DataHandling.available_dates(itp.data_handler)
         regridded_snapshot!(dest, itp.data_handler, time)
     else
-        t0, t1 = previous_time(itp.data_handler, time),
-        next_time(itp.data_handler, time)
-        coeff = (time - t0) / (t1 - t0)
+        date0, date1 = previous_date(itp.data_handler, time),
+        next_date(itp.data_handler, time)
+        coeff = (time - date0) / (date1 - date0)
 
-        regridded_snapshot!(field_t0, itp.data_handler, t0)
-        regridded_snapshot!(field_t1, itp.data_handler, t1)
+        regridded_snapshot!(field_t0, itp.data_handler, date0)
+        regridded_snapshot!(field_t1, itp.data_handler, date1)
 
         dest .= (1 - coeff) .* field_t0 .+ coeff .* field_t1
     end

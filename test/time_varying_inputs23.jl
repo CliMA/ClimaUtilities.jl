@@ -142,170 +142,199 @@ include("TestTools.jl")
                             ),
                         ),
                     )
-
                 @test 0.0 in input_nearest
-                @test !(1e23 in input_nearest)
+                @test !(82801.0 in input_nearest)
+                @test Dates.DateTime(2021, 1, 1, 0) in input_nearest
+                @test !(Dates.DateTime(2021, 1, 2, 0) in input_nearest)
 
                 available_times = DataHandling.available_times(data_handler)
+                available_dates = DataHandling.available_dates(data_handler)
                 dest = Fields.zeros(target_space)
 
                 # Time outside of range
-                @test_throws ErrorException TimeVaryingInputs.evaluate!(
-                    dest,
-                    input_nearest,
-                    FT(-40000),
-                )
+                for t in (FT(-40000), Dates.DateTime(2020))
+                    @test_throws ErrorException TimeVaryingInputs.evaluate!(
+                        dest,
+                        input_nearest,
+                        t,
+                    )
+                end
 
                 # We are testing NearestNeighbor, so we can just have to check if the fields agree
 
                 # Left nearest point
                 target_time = available_times[10] + 1
-                TimeVaryingInputs.evaluate!(dest, input_nearest, target_time)
+                target_date = available_dates[10] + Second(1)
+                for t in (target_time, target_date)
+                    TimeVaryingInputs.evaluate!(
+                        dest,
+                        input_nearest,
+                        target_time,
+                    )
 
-                # We use isequal to handle NaNs
-                @test isequal(
-                    Array(parent(dest)),
-                    Array(
-                        parent(
-                            DataHandling.regridded_snapshot(
-                                data_handler,
-                                available_times[10],
+                    # We use isequal to handle NaNs
+                    @test isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[10],
+                                ),
                             ),
                         ),
-                    ),
-                )
+                    )
+                end
 
                 # Right nearest point
                 target_time = available_times[9] - 1
-                TimeVaryingInputs.evaluate!(dest, input_nearest, target_time)
+                target_date = available_dates[9] - Second(1)
+                for t in (target_time, target_date)
+                    TimeVaryingInputs.evaluate!(dest, input_nearest, t)
 
-                @test isequal(
-                    Array(parent(dest)),
-                    Array(
-                        parent(
-                            DataHandling.regridded_snapshot(
-                                data_handler,
-                                available_times[9],
+                    @test isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[9],
+                                ),
                             ),
                         ),
-                    ),
-                )
+                    )
+                end
 
                 # On node
                 target_time = available_times[11]
-                TimeVaryingInputs.evaluate!(dest, input_nearest, target_time)
+                target_date = available_dates[11]
+                for t in (target_time, target_date)
+                    TimeVaryingInputs.evaluate!(
+                        dest,
+                        input_nearest,
+                        target_time,
+                    )
 
-                @test isequal(
-                    Array(parent(dest)),
-                    Array(
-                        parent(
-                            DataHandling.regridded_snapshot(
-                                data_handler,
-                                available_times[11],
+                    @test isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[11],
+                                ),
                             ),
                         ),
-                    ),
-                )
+                    )
+                end
 
                 # Flat left
                 target_time = available_times[begin] - 1
-                TimeVaryingInputs.evaluate!(
-                    dest,
-                    input_nearest_flat,
-                    target_time,
-                )
+                target_date = available_dates[begin] - Second(1)
+                for t in (target_time, target_date)
+                    TimeVaryingInputs.evaluate!(dest, input_nearest_flat, t)
 
-                @test isequal(
-                    Array(parent(dest)),
-                    Array(
-                        parent(
-                            DataHandling.regridded_snapshot(
-                                data_handler,
-                                available_times[begin],
+                    @test isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[begin],
+                                ),
                             ),
                         ),
-                    ),
-                )
+                    )
+                end
 
                 # Flat right
                 target_time = available_times[end] + 1
-                TimeVaryingInputs.evaluate!(
-                    dest,
-                    input_nearest_flat,
-                    target_time,
-                )
+                target_date = available_dates[end] + Second(1)
+                for t in (target_time, target_date)
+                    TimeVaryingInputs.evaluate!(dest, input_nearest_flat, t)
 
-                @test isequal(
-                    Array(parent(dest)),
-                    Array(
-                        parent(
-                            DataHandling.regridded_snapshot(
-                                data_handler,
-                                available_times[end],
+                    @test isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[end],
+                                ),
                             ),
                         ),
-                    ),
-                )
+                    )
+                end
 
                 # Nearest periodic calendar
                 dt = available_times[2] - available_times[1]
                 target_time = available_times[end] + 0.1dt
-                TimeVaryingInputs.evaluate!(
-                    dest,
-                    input_nearest_periodic_calendar,
-                    target_time,
-                )
+                d_date = available_dates[2] - available_dates[1]
+                target_date = available_dates[end] + 0.1d_date
+                for t in (target_time, target_date)
+                    TimeVaryingInputs.evaluate!(
+                        dest,
+                        input_nearest_periodic_calendar,
+                        target_time,
+                    )
 
-                @test isequal(
-                    Array(parent(dest)),
-                    Array(
-                        parent(
-                            DataHandling.regridded_snapshot(
-                                data_handler,
-                                available_times[end],
+                    @test isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[end],
+                                ),
                             ),
                         ),
-                    ),
-                )
+                    )
+                end
 
                 # With date
-                TimeVaryingInputs.evaluate!(
-                    dest,
-                    input_nearest_periodic_calendar_date,
-                    target_time,
-                )
+                for t in (target_time, target_date)
+                    TimeVaryingInputs.evaluate!(
+                        dest,
+                        input_nearest_periodic_calendar_date,
+                        target_time,
+                    )
 
-                @test isequal(
-                    Array(parent(dest)),
-                    Array(
-                        parent(
-                            DataHandling.regridded_snapshot(
-                                data_handler,
-                                available_times[end],
+                    @test isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[end],
+                                ),
                             ),
                         ),
-                    ),
-                )
+                    )
+                end
 
                 dt = available_times[2] - available_times[1]
                 target_time = available_times[end] + 0.6dt
-                TimeVaryingInputs.evaluate!(
-                    dest,
-                    input_nearest_periodic_calendar,
-                    target_time,
-                )
+                d_date = available_dates[2] - available_dates[1]
+                target_date = available_dates[end] + 0.6d_date
+                for t in (target_time, target_date)
+                    TimeVaryingInputs.evaluate!(
+                        dest,
+                        input_nearest_periodic_calendar,
+                        target_time,
+                    )
 
-                @test isequal(
-                    Array(parent(dest)),
-                    Array(
-                        parent(
-                            DataHandling.regridded_snapshot(
-                                data_handler,
-                                available_times[begin],
+                    @test isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[begin],
+                                ),
                             ),
                         ),
-                    ),
-                )
+                    )
+                end
 
                 # Now testing LinearInterpolation
                 input_linear = TimeVaryingInputs.TimeVaryingInput(data_handler)
@@ -315,6 +344,11 @@ include("TestTools.jl")
                     dest,
                     input_linear,
                     FT(-40000),
+                )
+                @test_throws ErrorException TimeVaryingInputs.evaluate!(
+                    dest,
+                    input_linear,
+                    Dates.DateTime(2021, 1, 1) + Second(-40000),
                 )
 
                 left_value = DataHandling.regridded_snapshot(
@@ -330,7 +364,7 @@ include("TestTools.jl")
                 left_time = available_times[10]
                 right_time = available_times[11]
 
-                TimeVaryingInputs.evaluate!(dest, input_linear, target_time)
+                target_date = available_dates[10] + Second(30)
 
                 expected = Fields.zeros(target_space)
                 expected .=
@@ -338,7 +372,10 @@ include("TestTools.jl")
                     (target_time - left_time) / (right_time - left_time) .*
                     (right_value .- left_value)
 
-                @test parent(dest) ≈ parent(expected)
+                for t in (target_time, target_date)
+                    TimeVaryingInputs.evaluate!(dest, input_linear, t)
+                    @test parent(dest) ≈ parent(expected)
+                end
 
                 # LinearInterpolation with PeriodicCalendar
                 time_delta = 0.1dt
@@ -358,26 +395,32 @@ include("TestTools.jl")
                 left_time = available_times[10]
                 right_time = available_times[11]
 
-                TimeVaryingInputs.evaluate!(
-                    dest,
-                    input_linear_periodic_calendar,
-                    target_time,
-                )
-
                 expected = Fields.zeros(target_space)
                 expected .=
                     left_value .+ time_delta / dt .* (right_value .- left_value)
 
-                @test parent(dest) ≈ parent(expected)
+                target_date = available_dates[end] + 0.1d_date
+                for t in (target_time, target_date)
+                    TimeVaryingInputs.evaluate!(
+                        dest,
+                        input_linear_periodic_calendar,
+                        target_time,
+                    )
+                    @test parent(dest) ≈ parent(expected)
+                end
 
                 # With offset of one period
-                TimeVaryingInputs.evaluate!(
-                    dest,
-                    input_linear_periodic_calendar_date,
-                    target_time + 86400,
-                )
+                target_time += 86400
+                target_date += Second(86400)
+                for t in (target_time, target_date)
+                    TimeVaryingInputs.evaluate!(
+                        dest,
+                        input_linear_periodic_calendar_date,
+                        t,
+                    )
 
-                @test parent(dest) ≈ parent(expected)
+                    @test parent(dest) ≈ parent(expected)
+                end
 
                 close(input_multiple_vars)
                 close(input_nearest)
