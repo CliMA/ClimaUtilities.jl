@@ -55,6 +55,18 @@ end
     # Wrapping when time equals t_init or t_end
     @test wrap_time(10, t_init, t_end) == 10
     @test wrap_time(20, t_init, t_end) == 10
+
+    date_init = Dates.DateTime(2010) + Dates.Second(10)
+    date_end = Dates.DateTime(2010) + Dates.Second(20)
+    dt = Dates.Second(1)
+
+    @test wrap_time(date_init + 5dt, date_init, date_end) == date_init + 5dt
+    @test wrap_time(date_end + 5dt, date_init, date_end) == date_init + 5dt
+    @test wrap_time(date_init - 5dt, date_init, date_end) == date_init + 5dt
+
+    # Wrapping when time equals date_init or date_end
+    @test wrap_time(date_init, date_init, date_end) == date_init
+    @test wrap_time(date_end, date_init, date_end) == date_init
 end
 
 @testset "bounding_dates" begin
