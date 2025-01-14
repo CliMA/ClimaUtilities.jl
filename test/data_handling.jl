@@ -361,6 +361,31 @@ end
                     available_dates[10],
                 ) == available_times[10]
 
+                # Previous date
+                @test_throws ErrorException DataHandling.previous_date(
+                    data_handler,
+                    available_dates[1] - Second(1),
+                )
+
+                @test DataHandling.previous_date(
+                    data_handler,
+                    available_dates[10] + Second(1),
+                ) == available_dates[10]
+                @test DataHandling.previous_date(
+                    data_handler,
+                    available_dates[1] + Second(1),
+                ) == available_dates[1]
+
+                # Previous time with time, boundaries (return the node)
+                @test DataHandling.previous_date(
+                    data_handler,
+                    available_dates[1],
+                ) == available_dates[1]
+                @test DataHandling.previous_date(
+                    data_handler,
+                    available_dates[end],
+                ) == available_dates[end]
+
                 # Next time with time
                 @test_throws ErrorException DataHandling.next_time(
                     data_handler,
@@ -390,6 +415,31 @@ end
                     data_handler,
                     available_dates[10],
                 ) == available_times[11]
+
+                # Next date
+                @test_throws ErrorException DataHandling.next_date(
+                    data_handler,
+                    available_dates[end] + Second(1),
+                )
+
+                @test DataHandling.next_date(
+                    data_handler,
+                    available_dates[10] + Second(1),
+                ) == available_dates[11]
+                @test DataHandling.next_date(
+                    data_handler,
+                    available_dates[1] + Second(1),
+                ) == available_dates[2]
+
+                # On node
+                @test DataHandling.next_date(
+                    data_handler,
+                    available_dates[10],
+                ) == available_dates[11]
+                @test DataHandling.next_date(
+                    data_handler,
+                    available_dates[10],
+                ) == available_dates[11]
 
                 # Asking for a regridded_snapshot without specifying the time
                 @test_throws ErrorException DataHandling.regridded_snapshot(
