@@ -211,7 +211,7 @@ function TimeVaryingInputs.evaluate!(
     available_periods = unique_periods(available_dates, period)
 
     # E.g., Date(1987, 2, 1)
-    target_date = DataHandling.time_to_date(itp.data_handler, time)
+    target_date = time
 
     # If the target date falls within an available period, we just interpolate it with
     # LinearInterpolation()
@@ -274,8 +274,6 @@ function TimeVaryingInputs.evaluate!(
     if in_interpolable_region
         date_pre = _move_date_to_period(target_date, period_left, period)
         date_post = _move_date_to_period(target_date, period_right, period)
-        time_pre = date_to_time(itp.data_handler, date_pre)
-        time_post = date_to_time(itp.data_handler, date_post)
 
         # Linear interpolation: y = y0 * (1 - coeff) + coeff * y1
         #
@@ -288,12 +286,12 @@ function TimeVaryingInputs.evaluate!(
         period_offset = period_right - period_left
         coeff = offset_periods_left / period_offset
 
-        TimeVaryingInputs.evaluate!(dest, itp, time_pre, LinearInterpolation())
+        TimeVaryingInputs.evaluate!(dest, itp, date_pre, LinearInterpolation())
         dest .*= (1 - coeff)
         TimeVaryingInputs.evaluate!(
             tmp_field1,
             itp,
-            time_post,
+            date_post,
             LinearInterpolation(),
         )
         tmp_field1 .*= coeff
@@ -359,17 +357,32 @@ function TimeVaryingInputs.evaluate!(
             error("We should not be here!")
         end
 
-        time_pre = date_to_time(itp.data_handler, date_pre)
-        time_post = date_to_time(itp.data_handler, date_post)
-
         # y = y0 * (1 - coeff) + coff * y1
-        TimeVaryingInputs.evaluate!(dest, itp, time_pre, method)
-        coeff = (time - time_pre) / (time_post - time_pre)
+        TimeVaryingInputs.evaluate!(dest, itp, date_pre, method)
+        coeff = (time - date_pre) / (date_post - date_pre)
         dest .*= (1 - coeff)
-        TimeVaryingInputs.evaluate!(tmp_field2, itp, time_post, method)
+        TimeVaryingInputs.evaluate!(tmp_field2, itp, date_post, method)
         tmp_field2 .*= coeff
         dest .+= tmp_field2
         return nothing
     end
+    return nothing
+end
+
+function TimeVaryingInputs.evaluate!(
+    dest,
+    itp::InterpolatingTimeVaryingInput23D,
+    time::Number,
+    method::LinearPeriodFillingInterpolation,
+    args...;
+    kwargs...,
+)
+    TimeVaryingInputs.evaluate!(
+        dest,
+        itp,
+        Dates.Millisecond(round(1_000 * time)) + itp.data_handler.start_date,
+        args...,
+        kwargs...,
+    )
     return nothing
 end
