@@ -383,8 +383,26 @@ Base.:*(t::T, num::IntegerOrRatio) where {T <: ITime} =
     ITime(num * t.counter, t.period, t.epoch)
 
 # Pay attention to the units here! zero and one are not symmetric
+"""
+    Base.one(t::T) where {T <: ITime}
+
+Return the multiplicative identity for an `ITime` which is `1`.
+"""
 Base.one(t::T) where {T <: ITime} = 1
+
+"""
+    Base.oneunit(t::T) where {T <: ITime}
+
+Return `ITime(1, period(t), epoch(t))`.
+"""
 Base.oneunit(t::T) where {T <: ITime} = ITime(eltype(t.counter)(1), t.period, t.epoch)
+
+"""
+    Base.zero(t::T) where {T <: ITime}
+
+Return the additive identity element for an `ITime` which is
+`ITime(0, period(t), epoch(t))`.
+"""
 Base.zero(t::T) where {T <: ITime} = ITime(eltype(t.counter)(0), t.period, t.epoch)
 
 """

@@ -11,8 +11,8 @@ meaning that operations with `ITime` are exact and do not occur in
 floating-point errors.
 
 `ITime` can be thought a combination of three quantities, a `counter`, a
-`period`, and (optionally) a `start_date`, with the `counter` counting how many
-`period`s have elapsed since `start_date`. In other words, `ITime` counts clock
+`period`, and (optionally) a `epoch`, with the `counter` counting how many
+`period`s have elapsed since `epoch`. In other words, `ITime` counts clock
 cycles from an epoch, with each clock cycle lasting a `period`.
 
 Another useful mental model for `ITime` is that it is a time with some units. It
@@ -50,49 +50,51 @@ down into the integer counter (5) and the duration of each clock cycle (1
 second). 
 
 This `ITime` does not come with any date information attached to it. To add it,
-you can pass the `start_date` keyword
+you can pass the `epoch` keyword
 ```@example example1
 using Dates
-ITime(5; start_date = DateTime(2012, 12, 21))
+ITime(5; epoch = DateTime(2012, 12, 21))
 ```
-Now, the output also reports `start_date` and current date (5 seconds after
+Now, the output also reports `epoch` and current date (5 seconds after
 midnight of the 21st of December 2012).
 
 The period can also be customized with the `period` keyword. This keyword
 accepts any `Dates.FixedPeriod` (fixed periods are intervals of time that have a
 fixed duration, such as `Week`, but unlike `Month`), for example
 ```@example example1
-time1 = ITime(5; period = Hour(20), start_date = DateTime(2012, 12, 21))
+time1 = ITime(5; period = Hour(20), epoch = DateTime(2012, 12, 21))
 ```
 All these quantities are accessible with functions:
 ```@example example1
-@show "time1" counter(time1) period(time1) start_date(time1) date(time1)
+@show "time1" counter(time1) period(time1) epoch(time1) date(time1)
 ```
 
 Now that we know how to create `ITime`s, we can manipulate them. `ITime`s
 support most (but not all) arithmetic operations.
 
-For `ITime`s with a `start_date`, it is only possible to combine `ITime`s that
-have the same `start_date`. `ITime`s can be composed to other times and
-arithmetic operations propagate `start_date`s.
+For `ITime`s with a `epoch`, it is only possible to combine `ITime`s that
+have the same `epoch`. `ITime`s can be composed to other times and
+arithmetic operations propagate `epoch`s.
 
 This works:
 ```@example example1
-time1 = ITime(5; start_date = DateTime(2012, 12, 21))
-time2 = ITime(15; start_date = DateTime(2012, 12, 21))
+time1 = ITime(5; epoch = DateTime(2012, 12, 21))
+time2 = ITime(15; epoch = DateTime(2012, 12, 21))
 time1 + time2
 ```
 This works too
 ```@example example1
-time1 = ITime(5; start_date = DateTime(2012, 12, 21))
+time1 = ITime(5; epoch = DateTime(2012, 12, 21))
 time2 = ITime(15)
 time1 + time2
 ```
-This does not work because the two `ITimes` don't have the same `start_date`
+This does not work because the two `ITimes` don't have the same `epoch`
 ```@example example1
-time1 = ITime(5; start_date = DateTime(2012, 12, 21))
-time2 = ITime(15; start_date = DateTime(2025, 12, 21))
+time1 = ITime(5; epoch = DateTime(2012, 12, 21))
+time2 = ITime(15; epoch = DateTime(2025, 12, 21))
+try  #hide
 time1 + time2
+catch err; showerror(stderr, err); end  #hide
 ```
 
 When dealing with binary operations, it is convenient to think of `ITimes` as
@@ -122,12 +124,12 @@ because it the greatest common divisor between `Hour(1)` and `Minute(25)`.
 
 At any point, we can obtain a date or a number of seconds from an `ITime`:
 ```@example example1
-time1 = ITime(5; period = Day(10), start_date = DateTime(2012, 12, 21))
+time1 = ITime(5; period = Day(10), epoch = DateTime(2012, 12, 21))
 date(time1)
 ```
 And
 ```@example example1
-time1 = ITime(5; period = Day(10), start_date = DateTime(2012, 12, 21))
+time1 = ITime(5; period = Day(10), epoch = DateTime(2012, 12, 21))
 seconds(time1)
 ```
 In this, note that the `seconds` function always returns a Float64.
@@ -160,15 +162,16 @@ by being encoded with the number of milliseconds from an epoch, we also truncate
 fractions to milliseconds when converting to dates.
 
 !!! note
-  The current implementation of fractional times uses the `Rational` module in the
-  standard library. This might have performance implications. Please, open an
-  issue if you have any.
+    The current implementation of fractional times uses the `Rational` module in
+    the standard library. This might have performance implications. Please, open
+    an issue if you have any.
  
 ### How to use `ITime`s in packages
 
-The two key interfaces to work with `ITime`s are [`seconds`](@ref) and
-[`date`](@ref), which respectively return the time as Float64 number of seconds
-and the associated `DateTime`.
+The two key interfaces to work with `ITime`s are
+[`ClimaUtilities.TimeManager.seconds`](@ref) and
+[`ClimaUtilities.TimeManager.date`](@ref), which respectively return the time as
+Float64 number of seconds and the associated `DateTime`.
 
 If you want to support `AbstractFloat`s and `ITime`s, some useful functions are
 `float` (which returns the number of seconds as a Float64), `zero`, `one`, and
@@ -181,7 +184,7 @@ your code to using `ITime`s. Resist to this temptation because it might defy the
 purpose of using integer times in the first place.
 
 For typical codes and simulation, we recommend only setting `t_start` and
-`t_end` with a `start_date`: the `start_date` will be propagated naturally to
+`t_end` with a `epoch`: the `epoch` will be propagated naturally to
 all the other times involved in the calculations. 
 
 Regarding the question on what `period` to use: if there are natural periods
@@ -198,7 +201,7 @@ ITime(60.0)
 
 ## Developer notes
 
-### Why not using `Dates` directly?
+### Why not use `Dates` directly?
 
 Periods in Julia's `Dates` are also implemented as integer counters attached to
 a type that encode its units. So why not using them directly?
@@ -213,5 +216,24 @@ There are a few reasons why `ITime` is preferred over Julia's `Dates`:
 - Julia's `Dates` are not necessarily faster or better and, being part of the
   standard library, means that it is hard to improve them.
 
+## TimeManager API
 
-
+```@docs
+ClimaUtilities.TimeManager.ITime
+ClimaUtilities.TimeManager.ITime(counter::Union{Integer, Rational}; period::Dates.FixedPeriod = Dates.Second(1), epoch = nothing)
+ClimaUtilities.TimeManager.ITime(t; epoch = nothing)
+ClimaUtilities.TimeManager.seconds
+ClimaUtilities.TimeManager.counter
+ClimaUtilities.TimeManager.period
+ClimaUtilities.TimeManager.epoch
+ClimaUtilities.TimeManager.date
+Base.promote(ts::ClimaUtilities.TimeManager.ITime...)
+Base.:(:)(start::ClimaUtilities.TimeManager.ITime, step::ClimaUtilities.TimeManager.ITime, stop::ClimaUtilities.TimeManager.ITime)
+Base.mod(x::ClimaUtilities.TimeManager.ITime, y::ClimaUtilities.TimeManager.ITime)
+Base.iszero(x::ClimaUtilities.TimeManager.ITime)
+Base.length(x::ClimaUtilities.TimeManager.ITime)
+Base.float(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
+Base.one(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
+Base.oneunit(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
+Base.zero(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
+```
