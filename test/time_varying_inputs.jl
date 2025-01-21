@@ -117,7 +117,6 @@ end
         input = TimeVaryingInputs.TimeVaryingInput(
             times,
             vals;
-            context,
             method = TimeVaryingInputs.NearestNeighbor(),
         )
 
@@ -125,7 +124,6 @@ end
         input_clamp = TimeVaryingInputs.TimeVaryingInput(
             times,
             vals;
-            context,
             method = TimeVaryingInputs.NearestNeighbor(
                 TimeVaryingInputs.Flat(),
             ),
@@ -135,7 +133,6 @@ end
         input_periodic_calendar = TimeVaryingInputs.TimeVaryingInput(
             times,
             vals;
-            context,
             method = TimeVaryingInputs.NearestNeighbor(
                 TimeVaryingInputs.PeriodicCalendar(),
             ),
@@ -145,7 +142,6 @@ end
         input_periodic_calendar_linear = TimeVaryingInputs.TimeVaryingInput(
             times,
             vals;
-            context,
             method = TimeVaryingInputs.LinearInterpolation(
                 TimeVaryingInputs.PeriodicCalendar(),
             ),
@@ -226,7 +222,7 @@ end
             @test Array(parent(dest))[1] == vals[10]
 
             # Linear interpolation
-            input = TimeVaryingInputs.TimeVaryingInput(times, vals; context)
+            input = TimeVaryingInputs.TimeVaryingInput(times, vals)
 
             TimeVaryingInputs.evaluate!(dest, input, 0.1)
 
