@@ -2,7 +2,6 @@ module TimeVaryingInputs0DExt
 
 import ClimaCore
 import ClimaCore: ClimaComms
-import ClimaCore: DeviceSideContext
 import ClimaCore.Fields: Adapt
 
 import ClimaUtilities.Utils:
@@ -24,8 +23,7 @@ import ClimaUtilities.TimeVaryingInputs
     InterpolatingTimeVaryingInput0D
 
 The constructor for InterpolatingTimeVaryingInput0D is not supposed to be used directly, unless you
-know what you are doing. The constructor does not perform any check and does not take care of
-GPU compatibility. It is responsibility of the user-facing constructor TimeVaryingInput() to do so.
+know what you are doing.
 
 `times` and `vales` may have different float types, but they must be the same length, and we
 assume that they have been sorted to be monotonically increasing in time, without repeated
@@ -35,7 +33,6 @@ struct InterpolatingTimeVaryingInput0D{
     AA1 <: AbstractArray,
     AA2 <: AbstractArray,
     M <: AbstractInterpolationMethod,
-    CC <: ClimaComms.AbstractCommsContext,
     R <: Tuple,
 } <: AbstractTimeVaryingInput
     # AA1 and AA2 could be different because of different FTs
@@ -48,9 +45,6 @@ struct InterpolatingTimeVaryingInput0D{
 
     """Interpolation method"""
     method::M
-
-    """ClimaComms context"""
-    context::CC
 
     """Range of times over which the interpolator is defined. range is always defined on the
     CPU. Used by the in() function."""
@@ -66,23 +60,6 @@ function Base.in(time, itp::InterpolatingTimeVaryingInput0D)
     return itp.range[1] <= time <= itp.range[2]
 end
 
-
-# GPU compatibility
-function Adapt.adapt_structure(to, itp::InterpolatingTimeVaryingInput0D)
-    times = Adapt.adapt_structure(to, itp.times)
-    vals = Adapt.adapt_structure(to, itp.vals)
-    method = Adapt.adapt_structure(to, itp.method)
-    range = Adapt.adapt_structure(to, itp.range)
-    # On a GPU, we have a "ClimaCore.DeviceSideContext"
-    InterpolatingTimeVaryingInput0D(
-        times,
-        vals,
-        method,
-        DeviceSideContext(),
-        range,
-    )
-end
-
 function TimeVaryingInputs.evaluate!(
     destination,
     itp::InterpolatingTimeVaryingInput0D,
@@ -93,35 +70,29 @@ function TimeVaryingInputs.evaluate!(
     if extrapolation_bc(itp.method) isa Throw
         time in itp || error("TimeVaryingInput does not cover time $time")
     end
-    TimeVaryingInputs.evaluate!(
-        ClimaComms.device(itp.context),
-        parent(destination),
-        itp,
-        time,
-        itp.method,
-    )
+    scalar_dest = [zero(eltype(destination))]
 
-    return nothing
-end
+    TimeVaryingInputs.evaluate!(scalar_dest, itp, time, itp.method)
+    fill!(destination, scalar_dest[])
 
-function TimeVaryingInputs.evaluate!(
-    device::ClimaComms.AbstractCPUDevice,
-    destination,
-    itp::InterpolatingTimeVaryingInput0D,
-    time,
-    args...;
-    kwargs...,
-)
-    TimeVaryingInputs.evaluate!(parent(destination), itp, time, itp.method)
     return nothing
 end
 
 function TimeVaryingInputs.TimeVaryingInput(
     times::AbstractArray,
     vals::AbstractArray;
+    context = nothing,
     method::AbstractInterpolationMethod = LinearInterpolation(),
-    context = ClimaComms.context(),
 )
+    ########### DEPRECATED ###############
+    if !isnothing(context)
+        Base.depwarn(
+            "The keyword argument `context` is no longer required for TimeVaryingInputs. It will be removed.",
+            :TimeVaryingInput,
+        )
+    end
+    ########### DEPRECATED ###############
+
     issorted(times) || error("Can only interpolate with sorted times")
     length(times) == length(vals) ||
         error("times and vals have different lengths")
@@ -145,16 +116,11 @@ function TimeVaryingInputs.TimeVaryingInput(
         end
     end
 
-    # When device is CUDADevice, ArrayType will be a CUDADevice, so that times and vals get
-    # copied to the GPU.
-    ArrayType = ClimaComms.array_type(ClimaComms.device(context))
-
     range = (times[begin], times[end])
     return InterpolatingTimeVaryingInput0D(
-        ArrayType(times),
-        ArrayType(vals),
+        copy(times),
+        copy(vals),
         method,
-        context,
         range,
     )
 end

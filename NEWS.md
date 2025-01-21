@@ -4,6 +4,19 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+v0.1.21
+------
+
+#### Simplified `TimeVaryingInput0D`, removed `context` argument. PR [#148](https://github.com/CliMA/ClimaUtilities.jl/pull/148)
+
+The need for a dedicated CUDA extension was by leveraging `ClimaCore` functions.
+As a result, the code for `TimeVaryingInput0D` could be significantly
+simplified, while attaining greater performance at the same time.
+
+As a result, the keyword argument `context` is no longer required in
+constructing this type of `TimeVaryingInput`s. In the future, the argument will
+be removed.
+
 v0.1.20
 ------
 
