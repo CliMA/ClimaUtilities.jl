@@ -258,4 +258,27 @@ using Test, Dates
 
         @test typeof(mod(t3, t2).counter) == Int32
     end
+
+    @testset "Multiply a float by an ITime" begin
+        t1 = ITime(1, Minute(1), DateTime(2010))
+        t2 = ITime(1, Second(1), DateTime(2010))
+        @test_throws ErrorException 4.2 * t1
+        @test_throws ErrorException t1 * 4.2
+        @test_throws ErrorException -4.2 * t1
+        @test_throws ErrorException t1 * -4.2
+
+        t1_no_round = 1.0 * t1
+        t1_round_down = 0.3 * t1
+        t1_round_up = 0.6 * t1
+        t2_no_round = 1.0 * t2
+        t2_round_down = 0.3 * t2
+        t2_round_up = 0.6 * t2
+
+        @test t1_no_round == ITime(1, Minute(1), DateTime(2010))
+        @test t1_round_down == ITime(0, Minute(1), DateTime(2010))
+        @test t1_round_up == ITime(1, Minute(1), DateTime(2010))
+        @test t2_no_round == ITime(1, Second(1), DateTime(2010))
+        @test t2_round_down == ITime(0, Second(1), DateTime(2010))
+        @test t2_round_up == ITime(1, Second(1), DateTime(2010))
+    end
 end

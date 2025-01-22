@@ -384,5 +384,32 @@ function Base.float(t::T) where {T <: ITime}
     end
 end
 
+"""
+    Base.:*(t::ITime, a::AbstractFloat)
+
+Multiplication between an ITime and float return the nearest integer value for
+counter. The float `a` can only be between 0 and 1.
+
+This function should only be used when subdividing time is necessary (e.g. time
+stepping stages in ClimaTimeSteppers). In most cases, it is preferable to
+convert `t` into a float if multiplication by a float is needed.
+"""
+function Base.:*(t::ITime, a::AbstractFloat)
+    if a > one(a) || a < zero(a)
+        return error("In most cases, multiplying an ITime by a float is not desirable. Cast the ITime into a float")
+    else
+        return ITime(round(Int, a * t.counter), t.period, t.epoch)
+    end
+end
+
+
+function Base.:*(a::AbstractFloat, t::ITime)
+    if a > one(a) || a < zero(a)
+        return error("In most cases, multiplying an ITime by a float is not desirable. Cast the ITime into a float")
+    else
+        return ITime(round(Int, a * t.counter), t.period, t.epoch)
+    end
+end
+
 # Behave as a scalar when broadcasted
 Base.Broadcast.broadcastable(t::ITime) = Ref(t)

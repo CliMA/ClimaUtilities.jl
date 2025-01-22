@@ -47,7 +47,7 @@ ITime(5)
 ```
 The output that is printed shows the time represented (5 seconds), and its break
 down into the integer counter (5) and the duration of each clock cycle (1
-second). 
+second).
 
 This `ITime` does not come with any date information attached to it. To add it,
 you can pass the `epoch` keyword
@@ -140,32 +140,42 @@ and manipulated in a natural way.
 `ITime`s support another feature, fractional times, useful for further
 partitioning an interval of time.
 
-### Fractional times
+### Dealing with times that cannot be represented
 
 Sometimes, one need to work with fractions of a `period`. The primary
 application of this is timestepping loops, which are typically divided in stages
 which are a fraction of a timestep.
 
-`ITime`s can represent fractions of a `period` using rational numbers. For
-example
+In these cases, we round to the nearest amount representable as an ITime.
+Furthermore, these cases are constrained to only when an ITime is multipled by a
+float between zero and one. These are the only cases we consider, because the only
+instance in which the problem of handling fraction of a `period` is in the
+timestepping loops.
+
+See the examples below.
 ```@example example1
-time1 = ITime(5)
-time1 / 2
+time = ITime(1; period = Hour(1), epoch = DateTime(2012, 12, 21))
 ```
-Here, we can see that the counter is now `5//2` (the fraction 5 divided by 2).
-Only integer and rational counters are allowed.
 
-`ITime`s with fractional counters largely behave as `ITime`s with integer
-counters with the exception that it is generally not possible to covert them to
-dates without rounding. Given that Julia's Dates follow the UNIX representation
-by being encoded with the number of milliseconds from an epoch, we also truncate
-fractions to milliseconds when converting to dates.
+```@repl example1
+0.3 * time # round down
+0.5 * time # round down
+0.7 * time # round up
+1.2 * time # error because 1.2 > 1.0
+-0.2 * time # error because -0.2 < 0.0
+```
 
-!!! note
-    The current implementation of fractional times uses the `Rational` module in
-    the standard library. This might have performance implications. Please, open
-    an issue if you have any.
- 
+If multiplication between an ITime and a float is needed, you most likely want
+to cast the ITime into a float. For example, in functions that compute
+tendencies, there are no operations that are of the form `t + a * dt` where `a`
+is a float, so it is safe to cast the ITime into a float as it will not lead to
+a loss of accuracy in time.
+
+In cases where you compute an expression of the form `t + a * dt` where `a` is a
+float or something similar, then rounding occurs. For packages like
+ClimaTimeSteppers, this means that any time stepping stages will incur a slight
+inaccuracy in the time if the period is not divisible by `dt`.
+
 ### How to use `ITime`s in packages
 
 The two key interfaces to work with `ITime`s are
@@ -185,7 +195,7 @@ purpose of using integer times in the first place.
 
 For typical codes and simulation, we recommend only setting `t_start` and
 `t_end` with a `epoch`: the `epoch` will be propagated naturally to
-all the other times involved in the calculations. 
+all the other times involved in the calculations.
 
 Regarding the question on what `period` to use: if there are natural periods
 (e.g., you are dealing with an hourly diagnostic variable), use it, otherwise
@@ -198,6 +208,11 @@ the largest period that can be used to properly represent the data.
 ```@example example1
 ITime(60.0)
 ```
+
+Beside the rounding which can lead to different results compared to using
+floats, the other change can come from using `float` to convert an ITime to a
+floating point type. At the moment, `float(t::ITime)` returns a `Float64` which
+can cause changes if the model is ran with Float32 instead of Float64.
 
 ## Developer notes
 
@@ -251,4 +266,5 @@ Base.float(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
 Base.one(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
 Base.oneunit(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
 Base.zero(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
+Base.:*(t::ClimaUtilities.TimeManager.ITime, a::AbstractFloat)
 ```
