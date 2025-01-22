@@ -41,6 +41,9 @@ import ClimaUtilities.DataHandling:
     previous_date,
     next_date
 
+
+import ClimaUtilities.TimeManager: ITime, date
+
 # Ideally, we should be able to split off the analytic part in a different
 # extension, but precompilation stops working when we do so
 
@@ -231,6 +234,23 @@ function TimeVaryingInputs.evaluate!(
         dest,
         itp,
         Dates.Millisecond(round(1_000 * time)) + itp.data_handler.start_date,
+        args...,
+        kwargs...,
+    )
+    return nothing
+end
+
+function TimeVaryingInputs.evaluate!(
+    dest,
+    itp::InterpolatingTimeVaryingInput23D,
+    time::ITime,
+    args...;
+    kwargs...,
+)
+    TimeVaryingInputs.evaluate!(
+        dest,
+        itp,
+        date(time),
         args...,
         kwargs...,
     )
