@@ -1,9 +1,5 @@
 export ITime, counter, period, epoch, date, seconds
 
-# ITime needs to support ratios too because the timestepper deals with stages,
-# which are fractions of a basic unit.
-const IntegerOrRatio = Union{Integer, Rational}
-
 """
     ITime ("Integer Time")
 
@@ -13,10 +9,6 @@ const IntegerOrRatio = Union{Integer, Rational}
 having a fixed duration (`period`).
 
 Another way to think about this is that this is time with units.
-
-`ITime` can also represent fractions of a cycle. It is recommended to stick with
-integer times as much as possible. Fractions of a cycle cannot be converted to
-dates.
 
 This type is currently using Dates, but one of the design goals is to try to be
 as agnostic as possible with respect to this so that in the future in will be
@@ -35,7 +27,7 @@ Second / dt)` for Int64.
 - `epoch::EPOCH`: An optional start date.
 """
 struct ITime{
-    INT <: IntegerOrRatio,
+    INT <: Integer,
     DT,
     EPOCH <: Union{Nothing, Dates.DateTime},
 }
@@ -44,31 +36,23 @@ struct ITime{
     epoch::EPOCH
 
     function ITime(counter, period, epoch)
-        if counter isa Rational && counter.den == 1
-            return new{typeof(counter.num), typeof(period), typeof(epoch)}(
-                counter.num,
-                period,
-                epoch,
-            )
-        else
-            return new{typeof(counter), typeof(period), typeof(epoch)}(
+        return new{typeof(counter), typeof(period), typeof(epoch)}(
                 counter,
                 period,
                 epoch,
             )
-        end
     end
 end
 
 """
-    ITime(counter::IntegerOrRatio; period::Dates.FixedPeriod = Dates.Second(1), epoch = nothing)
+    ITime(counter::Integer; period::Dates.FixedPeriod = Dates.Second(1), epoch = nothing)
 
 Construct an `ITime` from a counter, a period, and an optional start date.
 
 If the `epoch` is provided as a `Date`, it is converted to a `DateTime`.
 """
 function ITime(
-    counter::IntegerOrRatio;
+    counter::Integer;
     period::Dates.FixedPeriod = Dates.Second(1),
     epoch = nothing,
 )
@@ -114,18 +98,8 @@ function epoch(t::ITime)
     return t.epoch
 end
 
-function date(t::ITime{<:IntegerOrRatio, <:Dates.FixedPeriod, Nothing})
+function date(t::ITime{<:Integer, <:Dates.FixedPeriod, Nothing})
     error("Time does not have epoch information")
-end
-
-function date(t::ITime{<:Rational})
-    # For Rational counters, we truncate at millisecond (which is the time
-    # resolution in Dates any way)
-    period_ms = Dates.toms(period(t))
-
-    # Compute time in ms rounding it off to the nearest Millisecond
-    time_ms = Int(round(float(counter(t) * period_ms)))
-    return epoch(t) + Dates.Millisecond(time_ms)
 end
 
 """
@@ -246,7 +220,7 @@ end
 """
     _unique_epochs(epoch1, epoch2)
 
-Return an epoch if it is unique or an error otherwise.
+Return `epoch2` if `epoch1` and `epoch2` are the same and an error otherwise.
 """
 function _unique_epochs(epoch1, epoch2)
     if isnothing(epoch1)
@@ -367,19 +341,11 @@ Base.isnan(t::ITime) = Base.isnan(t.counter)
 Base.:/(t1::T1, t2::T2) where {T1 <: ITime, T2 <: ITime} = t1 // t2
 
 # Multiplication/division by numbers
-Base.div(t::T1, num::IntegerOrRatio) where {T1 <: ITime} =
+Base.div(t::T1, num::Integer) where {T1 <: ITime} =
     ITime(div(t.counter, num), t.period, t.epoch)
-function Base.://(t::T1, num::IntegerOrRatio) where {T1 <: ITime}
-    new_counter_rational = t.counter // num
-    new_counter =
-        new_counter_rational.den == 1 ? new_counter_rational.num :
-        new_counter_rational
-    ITime(new_counter, t.period, t.epoch)
-end
-Base.:/(t::T1, num::IntegerOrRatio) where {T1 <: ITime} = t // num
-Base.:*(num::IntegerOrRatio, t::T) where {T <: ITime} =
+Base.:*(num::Integer, t::T) where {T <: ITime} =
     ITime(num * t.counter, t.period, t.epoch)
-Base.:*(t::T, num::IntegerOrRatio) where {T <: ITime} =
+Base.:*(t::T, num::Integer) where {T <: ITime} =
     ITime(num * t.counter, t.period, t.epoch)
 
 # Pay attention to the units here! zero and one are not symmetric

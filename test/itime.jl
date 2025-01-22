@@ -16,12 +16,6 @@ using Test, Dates
         @test t1_int32.counter isa Int32
         @test t1_int32.counter == 10
 
-        # Constructor with just an integer ratio
-        t2 = ITime(1 // 2)
-        @test t2.counter == 1 // 2
-        @test t2.period == Dates.Second(1)
-        @test isnothing(t2.epoch)
-
         # Constructor with start date
         epoch = Dates.DateTime(2024, 1, 1)
         t3 = ITime(10, epoch = epoch)
@@ -34,11 +28,6 @@ using Test, Dates
         # Explicit period
         t5 = ITime(10, period = Dates.Millisecond(100))
         @test t5.period == Dates.Millisecond(100)
-
-        # Rational with denominator 1 converts to Integer
-        t6 = ITime(3 // 1)
-        @test t6.counter == 3
-        @test t6.counter isa Int
 
         # From float
         t6 = ITime(0.0)
@@ -78,13 +67,9 @@ using Test, Dates
         @test Dates.DateTime(t1) ==
               Dates.DateTime(2024, 1, 1) + Dates.Second(10)
 
-        # Correct conversion with rational counter
-        t2 = ITime(1 // 2, epoch = Dates.DateTime(2024, 1, 1))
-        @test date(t2) == t2.epoch + Dates.Millisecond(500)
-
         # Cannot convert to date without a start date
-        t3 = ITime(10)
-        @test_throws ErrorException date(t3) # No start date
+        t2 = ITime(10)
+        @test_throws ErrorException date(t2) # No start date
     end
 
     @testset "Promote" begin
@@ -128,7 +113,6 @@ using Test, Dates
         @test t1 != ITime(5)
         @test isapprox(t1, ITime(10))
 
-        @test t1 / 2 == ITime(5)
         @test t1 * 2 == ITime(20)
         @test 2 * t1 == ITime(20)
         @test div(t1, 2) == ITime(5)
@@ -165,28 +149,13 @@ using Test, Dates
         @test sprint(show, t2) ==
               "10 seconds (2024-01-01T00:00:10) [counter = 10, period = 1 second, epoch = 2024-01-01T00:00:00]"
 
-        t3 = ITime(1 // 2)
-        @test sprint(show, t3) ==
-              "1//2 seconds [counter = 1//2, period = 1 second]"
-
-        t4 = ITime(
+        t3 = ITime(
             10,
             period = Dates.Hour(1),
             epoch = Dates.DateTime(2024, 1, 1),
         )
-        @test sprint(show, t4) ==
+        @test sprint(show, t3) ==
               "10 hours (2024-01-01T10:00:00) [counter = 10, period = 1 hour, epoch = 2024-01-01T00:00:00]"
-    end
-
-    @testset "Rational counter tests" begin
-        t1 = ITime(2)
-        t2 = ITime(1 // 2)
-
-        @test t1 + t2 == ITime(5 // 2)
-        @test t1 - t2 == ITime(3 // 2)
-        @test t2 - t1 == ITime(-3 // 2)
-        @test t2 * 2 == ITime(1)
-        @test t1 / 2 == ITime(1)
     end
 
     @testset "Find common epoch" begin
@@ -232,23 +201,17 @@ using Test, Dates
         t3 = ITime(10, period = Day(1))
         t4 = ITime(7, period = Second(1))
         t5 = ITime(2, period = Second(1))
-        t6 = ITime(7 // 2, period = Second(1))
-        t7 = ITime(7 // (2 * 60), period = Minute(1))
-        t8 = ITime(9, period = Second(2))
-        t9 = ITime(2, period = Second(2))
+        t6 = ITime(9, period = Second(2))
+        t7 = ITime(2, period = Second(2))
         @test t1 % t2 == ITime(0, period = Second(1))
         @test t3 % t2 == ITime(0, period = Second(1))
         @test t4 % t5 == ITime(1, period = Second(1))
-        @test t6 % t5 == ITime(3 // 2, period = Second(1))
-        @test t7 % t5 == ITime(3 // 2, period = Second(1))
-        @test t8 % t9 == ITime(1, period = Second(2))
+        @test t6 % t7 == ITime(1, period = Second(2))
 
         @test mod(t1, t2) == ITime(0, period = Second(1))
         @test mod(t3, t2) == ITime(0, period = Second(1))
         @test mod(t4, t5) == ITime(1, period = Second(1))
-        @test mod(t6, t5) == ITime(3 // 2, period = Second(1))
-        @test mod(t7, t5) == ITime(3 // 2, period = Second(1))
-        @test t8 % t9 == ITime(1, period = Second(2))
+        @test t6 % t7 == ITime(1, period = Second(2))
     end
 
     @testset "iszero" begin
@@ -268,86 +231,31 @@ using Test, Dates
         t1 = ITime(Int32(0), period = Second(1))
         t2 = ITime(Int32(1), period = Minute(1))
         t3 = ITime(Int32(2), period = Hour(1), epoch = DateTime(2010))
-        t4 = ITime(Int32(1) // Int32(2), period = Second(1))
-        t5 = ITime(Int32(3) // Int32(4), period = Minute(1))
-        t6 = ITime(
-            Int32(7) // Int32(8),
-            period = Minute(1),
-            epoch = DateTime(2011),
-        )
 
         # Test promote
-        tt1, tt2, tt3, tt4, tt5 = promote(t1, t2, t3, t4, t5)
+        tt1, tt2, tt3 = promote(t1, t2, t3)
         @test typeof(tt1.counter) == Int32
         @test typeof(tt2.counter) == Int32
         @test typeof(tt3.counter) == Int32
-        @test typeof(tt4.counter) == Rational{Int32}
-        @test typeof(tt5.counter) == Int32
 
         t7 = t1 + t2
         t8 = t2 + t3
-        t9 = t4 + t5
-        t10 = t5 + t6
-        t11 = t1 + t4
-        t12 = t1 + t6
-        t13 = t3 + t4
         @test typeof(t7.counter) == Int32
         @test typeof(t8.counter) == Int32
-        @test typeof(t9.counter) == Rational{Int32}
-        @test typeof(t10.counter) == Rational{Int32}
-        @test typeof(t11.counter) == Rational{Int32}
-        @test typeof(t12.counter) == Rational{Int32}
-        @test typeof(t13.counter) == Rational{Int32}
 
         t7 = t1 - t2
         t8 = t2 - t3
-        t9 = t4 - t5
-        t10 = t5 - t6
-        t11 = t1 - t4
-        t12 = t1 - t6
-        t13 = t3 - t4
         @test typeof(t7.counter) == Int32
         @test typeof(t8.counter) == Int32
-        @test typeof(t9.counter) == Rational{Int32}
-        @test typeof(t10.counter) == Rational{Int32}
-        @test typeof(t11.counter) == Rational{Int32}
-        @test typeof(t12.counter) == Rational{Int32}
-        @test typeof(t13.counter) == Rational{Int32}
-
-        t7 = t1 / Int32(1)
-        t8 = t2 / Int32(4)
-        t9 = t3 / Int32(3)
-        t10 = t4 / (Int32(1) // Int32(2))
-        t11 = t5 / Int32(4)
-        t12 = t6 / Int32(2)
-        @test typeof(t7.counter) == Int32
-        @test typeof(t8.counter) == Rational{Int32}
-        @test typeof(t9.counter) == Rational{Int32}
-        @test typeof(t10.counter) == Int32
-        @test typeof(t11.counter) == Rational{Int32}
-        @test typeof(t12.counter) == Rational{Int32}
 
         t7 = t1 * Int32(1)
-        t8 = t2 * (Int32(4) // Int32(3))
         t9 = t3 * Int32(3)
-        t10 = t4 * Int32(2)
-        t11 = t5 * Int32(7)
-        t12 = t6 * Int32(2)
         @test typeof(t7.counter) == Int32
-        @test typeof(t8.counter) == Rational{Int32}
         @test typeof(t9.counter) == Int32
-        @test typeof(t10.counter) == Int32
-        @test typeof(t11.counter) == Rational{Int32}
-        @test typeof(t12.counter) == Rational{Int32}
 
         @test typeof(oneunit(t1).counter) == Int32
-        @test typeof(oneunit(t4).counter) == Int32
         @test typeof(zero(t1).counter) == Int32
-        @test typeof(zero(t4).counter) == Int32
 
-        @test typeof(mod(t4, t5).counter) == Rational{Int32}
-        @test typeof(mod(t4, t3).counter) == Rational{Int32}
-        @test typeof(mod(t3, t4).counter) == Int32
         @test typeof(mod(t3, t2).counter) == Int32
     end
 end

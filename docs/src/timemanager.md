@@ -216,6 +216,21 @@ There are a few reasons why `ITime` is preferred over Julia's `Dates`:
 - Julia's `Dates` are not necessarily faster or better and, being part of the
   standard library, means that it is hard to improve them.
 
+### Why not support `Rational`?
+
+Handling the case when the counter is rational introduces more complexity than
+necessary. For instance, it is unclear how to handle the case when a float is
+not perfectly representable as a rational number. This case comes up when
+examining the time stepping stages of ARS343 in ClimaTimeSteppers. In
+particular, the value ``\gamma`` is the middle root of the polynomial ``6x^3 -
+18x^2 + 9x - 1 = 0`` and irrational. One could approximate ``\gamma`` as a
+rational number, but large integers for the numerator and denominator are needed
+to approximate ``\gamma`` to high accuracy. For example, ``\gamma`` approximated
+as a rational number with tolerance within machine epsilon of `Float64` is
+`19126397//43881317`. This could lead to overflowing in either the numerator or
+denominator as ``\gamma`` propagates through the code. Hence, rational numbers
+are not considered for this reason.
+
 ## TimeManager API
 
 ```@docs
