@@ -1,7 +1,5 @@
 module Utils
 
-# AAAAAAAAAAAAAA
-
 import Dates: Period, DatePeriod, Date, DateTime, OtherPeriod
 import Dates: Year, Month, Week, Day, Second
 import Dates: year, month, week, dayofweek, day, days
