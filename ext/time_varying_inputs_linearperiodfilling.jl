@@ -386,3 +386,15 @@ function TimeVaryingInputs.evaluate!(
     )
     return nothing
 end
+
+function TimeVaryingInputs.evaluate!(
+    dest,
+    itp::InterpolatingTimeVaryingInput23D,
+    time::ITime,
+    method::LinearPeriodFillingInterpolation,
+    args...;
+    kwargs...,
+)
+    TimeVaryingInputs.evaluate!(dest, itp, date(time), args..., kwargs...)
+    return nothing
+end

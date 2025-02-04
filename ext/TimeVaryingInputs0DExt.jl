@@ -19,6 +19,8 @@ import ClimaUtilities.TimeVaryingInputs: extrapolation_bc
 
 import ClimaUtilities.TimeVaryingInputs
 
+import ClimaUtilities.TimeManager: ITime, date
+
 """
     InterpolatingTimeVaryingInput0D
 
@@ -208,4 +210,21 @@ function TimeVaryingInputs.evaluate!(
     dest .= linear_interpolation(indep_vars, dep_vars, indep_value)
     return nothing
 end
+
+function TimeVaryingInputs.evaluate!(
+    destination,
+    itp::InterpolatingTimeVaryingInput0D,
+    time::ITime,
+    args...;
+    kwargs...,
+)
+    return TimeVaryingInputs.evaluate!(
+        destination,
+        itp,
+        eltype(itp.range)(float(time)),
+        args...;
+        kwargs...,
+    )
+end
+
 end
