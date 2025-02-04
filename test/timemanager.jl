@@ -3,6 +3,66 @@ import Dates
 import CFTime
 using Test
 
+import ClimaTimeSteppers
+import SciMLBase
+
+@testset "TimeStepper" begin
+    # Checking that we can complete an integration with SSPKnoth with both an
+    # explicit and implicit components
+    λ = -0.1
+    Y0 = [1.0]
+    t0 = TimeManager.ITime(0.0; epoch = Dates.DateTime(2024))
+    tf = TimeManager.ITime(100.0)
+    dt = TimeManager.ITime(1.0)
+    t0, td, dt = promote(t0, tf, dt)
+    tendency! = (Yₜ, Y, _, t) -> Yₜ .= λ .* Y
+    ode_algo = ClimaTimeSteppers.RosenbrockAlgorithm(
+        ClimaTimeSteppers.tableau(ClimaTimeSteppers.SSPKnoth()),
+    )
+    Wfact = (W, Y, p, dtγ, t) -> W .= dtγ * λ - 1
+    jac_prototype = [0.0;;]
+    T_imp! = SciMLBase.ODEFunction(
+        tendency!;
+        jac_prototype = jac_prototype,
+        Wfact = Wfact,
+    )
+    prob = SciMLBase.ODEProblem(
+        ClimaTimeSteppers.ClimaODEFunction(T_exp! = tendency!, T_imp! = T_imp!),
+        Y0,
+        (t0, tf),
+        (;),
+    )
+
+    SciMLBase.solve(prob, ode_algo; dt)
+
+    # Repeating the same thing with ARS343
+    λ = -0.1
+    Y0 = [1.0]
+    t0 = TimeManager.ITime(0.0; epoch = Dates.DateTime(2024))
+    tf = TimeManager.ITime(100.0)
+    dt = TimeManager.ITime(1.0)
+    tendency! = (Yₜ, Y, _, t) -> Yₜ .= λ .* Y
+    ode_algo = ClimaTimeSteppers.IMEXAlgorithm(
+        ClimaTimeSteppers.ARS343(),
+        ClimaTimeSteppers.NewtonsMethod(; max_iters = 2),
+    )
+    Wfact = (W, Y, p, dtγ, t) -> W .= dtγ * λ - 1
+    jac_prototype = [0.0;;]
+    T_imp! = SciMLBase.ODEFunction(
+        tendency!;
+        jac_prototype = jac_prototype,
+        Wfact = Wfact,
+    )
+    prob = SciMLBase.ODEProblem(
+        ClimaTimeSteppers.ClimaODEFunction(T_exp! = tendency!, T_imp! = T_imp!),
+        Y0,
+        (t0, tf),
+        (;),
+    )
+
+    SciMLBase.solve(prob, ode_algo; dt)
+end
+
 for FT in (Float32, Float64)
     @testset "test to_datetime for FT=$FT" begin
         # Test non-leap year behavior
