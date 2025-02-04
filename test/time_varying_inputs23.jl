@@ -5,6 +5,7 @@ using Artifacts
 import ClimaUtilities
 import ClimaUtilities: DataHandling
 import ClimaUtilities: TimeVaryingInputs
+import ClimaUtilities.TimeManager: ITime
 
 import ClimaCore: Domains, Geometry, Fields, Meshes, Topologies, Spaces
 import ClimaComms
@@ -142,6 +143,29 @@ include("TestTools.jl")
                             ),
                         ),
                     )
+
+                # Since TimeVaryingInputs internally use dates, we don't need a
+                # start date
+                input_nearest_no_start_date =
+                    TimeVaryingInputs.TimeVaryingInput(
+                        PATH,
+                        "u10n",
+                        target_space;
+                        regridder_type,
+                        method = TimeVaryingInputs.NearestNeighbor(),
+                    )
+
+                input_linear_periodic_calendar_no_start_date =
+                    TimeVaryingInputs.TimeVaryingInput(
+                        PATH,
+                        "u10n",
+                        target_space;
+                        regridder_type,
+                        method = TimeVaryingInputs.LinearInterpolation(
+                            TimeVaryingInputs.PeriodicCalendar(),
+                        ),
+                    )
+
                 @test 0.0 in input_nearest
                 @test !(82801.0 in input_nearest)
                 @test Dates.DateTime(2021, 1, 1, 0) in input_nearest
@@ -152,12 +176,23 @@ include("TestTools.jl")
                 dest = Fields.zeros(target_space)
 
                 # Time outside of range
-                for t in (FT(-40000), Dates.DateTime(2020))
+                for t in (
+                    FT(-40000),
+                    Dates.DateTime(2020),
+                    ITime(0, epoch = Dates.DateTime(2020)),
+                )
                     @test_throws ErrorException TimeVaryingInputs.evaluate!(
                         dest,
                         input_nearest,
                         t,
                     )
+                    if !(t isa AbstractFloat)
+                        @test_throws ErrorException TimeVaryingInputs.evaluate!(
+                            dest,
+                            input_nearest_no_start_date,
+                            t,
+                        )
+                    end
                 end
 
                 # We are testing NearestNeighbor, so we can just have to check if the fields agree
@@ -165,12 +200,12 @@ include("TestTools.jl")
                 # Left nearest point
                 target_time = available_times[10] + 1
                 target_date = available_dates[10] + Second(1)
-                for t in (target_time, target_date)
-                    TimeVaryingInputs.evaluate!(
-                        dest,
-                        input_nearest,
-                        target_time,
-                    )
+                for t in (
+                    target_time,
+                    target_date,
+                    ITime(1, epoch = available_dates[10]),
+                )
+                    TimeVaryingInputs.evaluate!(dest, input_nearest, t)
 
                     # We use isequal to handle NaNs
                     @test isequal(
@@ -184,12 +219,35 @@ include("TestTools.jl")
                             ),
                         ),
                     )
+
+                    if !(t isa AbstractFloat)
+                        TimeVaryingInputs.evaluate!(
+                            dest,
+                            input_nearest_no_start_date,
+                            t,
+                        )
+                        @test isequal(
+                            Array(parent(dest)),
+                            Array(
+                                parent(
+                                    DataHandling.regridded_snapshot(
+                                        data_handler,
+                                        available_times[10],
+                                    ),
+                                ),
+                            ),
+                        )
+                    end
                 end
 
                 # Right nearest point
                 target_time = available_times[9] - 1
                 target_date = available_dates[9] - Second(1)
-                for t in (target_time, target_date)
+                for t in (
+                    target_time,
+                    target_date,
+                    ITime(-1, epoch = available_dates[9]),
+                )
                     TimeVaryingInputs.evaluate!(dest, input_nearest, t)
 
                     @test isequal(
@@ -203,17 +261,36 @@ include("TestTools.jl")
                             ),
                         ),
                     )
+
+                    if !(t isa AbstractFloat)
+                        TimeVaryingInputs.evaluate!(
+                            dest,
+                            input_nearest_no_start_date,
+                            t,
+                        )
+                        @test isequal(
+                            Array(parent(dest)),
+                            Array(
+                                parent(
+                                    DataHandling.regridded_snapshot(
+                                        data_handler,
+                                        available_times[9],
+                                    ),
+                                ),
+                            ),
+                        )
+                    end
                 end
 
                 # On node
                 target_time = available_times[11]
                 target_date = available_dates[11]
-                for t in (target_time, target_date)
-                    TimeVaryingInputs.evaluate!(
-                        dest,
-                        input_nearest,
-                        target_time,
-                    )
+                for t in (
+                    target_time,
+                    target_date,
+                    ITime(0, epoch = available_dates[11]),
+                )
+                    TimeVaryingInputs.evaluate!(dest, input_nearest, t)
 
                     @test isequal(
                         Array(parent(dest)),
@@ -226,12 +303,35 @@ include("TestTools.jl")
                             ),
                         ),
                     )
+
+                    if !(t isa AbstractFloat)
+                        TimeVaryingInputs.evaluate!(
+                            dest,
+                            input_nearest_no_start_date,
+                            t,
+                        )
+                        @test isequal(
+                            Array(parent(dest)),
+                            Array(
+                                parent(
+                                    DataHandling.regridded_snapshot(
+                                        data_handler,
+                                        available_times[11],
+                                    ),
+                                ),
+                            ),
+                        )
+                    end
                 end
 
                 # Flat left
                 target_time = available_times[begin] - 1
                 target_date = available_dates[begin] - Second(1)
-                for t in (target_time, target_date)
+                for t in (
+                    target_time,
+                    target_date,
+                    ITime(-1, epoch = available_dates[begin]),
+                )
                     TimeVaryingInputs.evaluate!(dest, input_nearest_flat, t)
 
                     @test isequal(
@@ -250,7 +350,11 @@ include("TestTools.jl")
                 # Flat right
                 target_time = available_times[end] + 1
                 target_date = available_dates[end] + Second(1)
-                for t in (target_time, target_date)
+                for t in (
+                    target_time,
+                    target_date,
+                    ITime(1, epoch = available_dates[end]),
+                )
                     TimeVaryingInputs.evaluate!(dest, input_nearest_flat, t)
 
                     @test isequal(
@@ -271,11 +375,12 @@ include("TestTools.jl")
                 target_time = available_times[end] + 0.1dt
                 d_date = available_dates[2] - available_dates[1]
                 target_date = available_dates[end] + 0.1d_date
-                for t in (target_time, target_date)
+                for t in
+                    (target_time, target_date, ITime(0, epoch = target_date))
                     TimeVaryingInputs.evaluate!(
                         dest,
                         input_nearest_periodic_calendar,
-                        target_time,
+                        t,
                     )
 
                     @test isequal(
@@ -292,11 +397,12 @@ include("TestTools.jl")
                 end
 
                 # With date
-                for t in (target_time, target_date)
+                for t in
+                    (target_time, target_date, ITime(0, epoch = target_date))
                     TimeVaryingInputs.evaluate!(
                         dest,
                         input_nearest_periodic_calendar_date,
-                        target_time,
+                        t,
                     )
 
                     @test isequal(
@@ -316,11 +422,12 @@ include("TestTools.jl")
                 target_time = available_times[end] + 0.6dt
                 d_date = available_dates[2] - available_dates[1]
                 target_date = available_dates[end] + 0.6d_date
-                for t in (target_time, target_date)
+                for t in
+                    (target_time, target_date, ITime(0, epoch = target_date))
                     TimeVaryingInputs.evaluate!(
                         dest,
                         input_nearest_periodic_calendar,
-                        target_time,
+                        t,
                     )
 
                     @test isequal(
@@ -372,7 +479,8 @@ include("TestTools.jl")
                     (target_time - left_time) / (right_time - left_time) .*
                     (right_value .- left_value)
 
-                for t in (target_time, target_date)
+                for t in
+                    (target_time, target_date, ITime(0, epoch = target_date))
                     TimeVaryingInputs.evaluate!(dest, input_linear, t)
                     @test parent(dest) ≈ parent(expected)
                 end
@@ -400,25 +508,34 @@ include("TestTools.jl")
                     left_value .+ time_delta / dt .* (right_value .- left_value)
 
                 target_date = available_dates[end] + 0.1d_date
-                for t in (target_time, target_date)
+                for t in
+                    (target_time, target_date, ITime(0, epoch = target_date))
                     TimeVaryingInputs.evaluate!(
                         dest,
                         input_linear_periodic_calendar,
-                        target_time,
+                        t,
                     )
                     @test parent(dest) ≈ parent(expected)
+                    if !(t isa AbstractFloat)
+                        TimeVaryingInputs.evaluate!(
+                            dest,
+                            input_linear_periodic_calendar_no_start_date,
+                            t,
+                        )
+                        @test parent(dest) ≈ parent(expected)
+                    end
                 end
 
                 # With offset of one period
                 target_time += 86400
                 target_date += Second(86400)
-                for t in (target_time, target_date)
+                for t in
+                    (target_time, target_date, ITime(0, epoch = target_date))
                     TimeVaryingInputs.evaluate!(
                         dest,
                         input_linear_periodic_calendar_date,
                         t,
                     )
-
                     @test parent(dest) ≈ parent(expected)
                 end
 
@@ -428,6 +545,8 @@ include("TestTools.jl")
                 close(input_nearest_flat)
                 close(input_nearest_periodic_calendar)
                 close(input_linear_periodic_calendar)
+                close(input_nearest_no_start_date)
+                close(input_linear_periodic_calendar_no_start_date)
             end
         end
     end
