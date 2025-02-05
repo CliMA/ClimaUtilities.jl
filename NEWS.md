@@ -3,6 +3,16 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+
+v0.1.23
+------
+
+#### Support for Box Interpolations Regridder. PR[#151](https://github.com/CliMA/ClimaUtilities.jl/pull/151)
+
+`Regridders.IterpolationsRegridder` now supports regridding on 
+`ClimaCore.Geometry.XYZPoint` objects which allows for interpolation 
+onto boxes and single column simulations. 
+
 v0.1.22
 ------
 
