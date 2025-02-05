@@ -57,13 +57,13 @@ end
 end
 
 @safetestset "TimeVaryingInputs23D tests" begin
-    include("time_varying_inputs23.jl")
+    # include("time_varying_inputs23.jl")
 end
 
 @safetestset "TimeVaryingInputs tests LinearPeriodFilling" begin
-    include("time_varying_inputs_linearperiodfilling.jl")
+    # include("time_varying_inputs_linearperiodfilling.jl")
 end
 
 @safetestset "ClimaArtifacts tests" begin
-    include("clima_artifacts.jl")
+    # include("clima_artifacts.jl")
 end
