@@ -215,6 +215,50 @@ end
     end
 end
 
+@testset "InterpolationsRegridderXYZPoint" begin
+    helem = (10, 10)
+    Nq = 4
+    zelem = 10
+    FT = Float64 # test for Float64
+
+    x, y, z = collect(0.0:1:5), collect(0.0:1:6), collect(0.0:1:7)
+
+    dimensions3D = (x, y, z)
+    size3D = (6, 7, 8)
+
+    data_x3D = zeros(size3D)
+    data_y3D = zeros(size3D)
+    data_z3D = zeros(size3D)
+
+    for i in 1:length(x)
+        for j in 1:length(y)
+            for k in 1:length(z)
+                data_x3D[i, j, k] = x[i]
+                data_y3D[i, j, k] = y[j]
+                data_z3D[i, j, k] = z[k]
+            end
+        end
+    end
+    # create the box space with helper function
+    spaces = make_box_space(Float64; context)
+    # create interpolation object with InterpolationsRegridder for XYZPoint object
+    reg_box = Regridders.InterpolationsRegridder(spaces)
+
+    regridded_x = Regridders.regrid(reg_box, data_x3D, dimensions3D)
+
+    regridded_y = Regridders.regrid(reg_box, data_y3D, dimensions3D)
+
+    regridded_z = Regridders.regrid(reg_box, data_z3D, dimensions3D)
+
+    err_x = reg_box.coordinates.x .- regridded_x
+    err_y = reg_box.coordinates.y .- regridded_y
+    err_z = reg_box.coordinates.z .- regridded_z
+
+    @test maximum(err_x) < 1e-5
+    @test maximum(err_y) < 1e-5
+    @test maximum(err_z) < 1e-5
+end
+
 @testset "TempestRegridder" begin
     for FT in (Float32, Float64)
         data_path = joinpath(@__DIR__, "test_data", "era5_1979_1.0x1.0_lai.nc")

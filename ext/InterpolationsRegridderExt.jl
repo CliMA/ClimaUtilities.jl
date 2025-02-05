@@ -33,6 +33,7 @@ end
 # should be first, so files will have longitude as first dimension.
 totuple(pt::ClimaCore.Geometry.LatLongZPoint) = pt.long, pt.lat, pt.z
 totuple(pt::ClimaCore.Geometry.LatLongPoint) = pt.long, pt.lat
+totuple(pt::ClimaCore.Geometry.XYZPoint) = pt.x, pt.y, pt.z
 
 """
     InterpolationsRegridder(target_space::ClimaCore.Spaces.AbstractSpace
@@ -77,8 +78,12 @@ function Regridders.InterpolationsRegridder(
         isnothing(extrapolation_bc) &&
             (extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Throw()))
         isnothing(dim_increasing) && (dim_increasing = (true, true, true))
+    elseif eltype(coordinates) <: ClimaCore.Geometry.XYZPoint
+        isnothing(extrapolation_bc) &&
+            (extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Throw()))
+        isnothing(dim_increasing) && (dim_increasing = (true, true, true))
     else
-        error("Only lat-long, lat-long-z spaces are supported")
+        error("Only lat-long, lat-long-z, and x-y-z spaces are supported")
     end
 
     return InterpolationsRegridder(

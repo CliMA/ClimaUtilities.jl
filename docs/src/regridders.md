@@ -12,7 +12,7 @@ Currently, `Regridders` comes with two implementations:
    directly with files.
 2. `InterpolationsRegridder` uses
    [Interpolations.jl](https://github.com/JuliaMath/Interpolations.jl) to
-   perform non-conservative linear interpolation onto lat-long(-z) grids.
+   perform non-conservative linear interpolation onto lat-long(-z) and x-y-z grids.
    `InterpolationsRegridder` works directly with data.
 
 !!! note
