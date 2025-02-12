@@ -6,6 +6,7 @@ ClimaUtilities.jl
 [![Downstream](https://github.com/CliMA/ClimaUtilities.jl/actions/workflows/downstream.yml/badge.svg)](https://github.com/CliMA/ClimaUtilities.jl/actions/workflows/downstream.yml)
 [![codecov](https://codecov.io/gh/CliMA/ClimaUtilities.jl/graph/badge.svg?token=sbYkr5ydzp)](https://codecov.io/gh/CliMA/ClimaUtilities.jl)
 [![Docs](https://img.shields.io/badge/docs_are_here-click_me!-blue.svg)](https://clima.github.io/ClimaUtilities.jl/dev/)
+[![Downloads](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaUtilities&query=total_requests&suffix=%2Ftotal&label=Downloads)](http://juliapkgstats.com/pkg/ClimaUtilities)
 
 </h1>
 
