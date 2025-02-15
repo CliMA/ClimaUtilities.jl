@@ -143,11 +143,12 @@ using Test, Dates
 
     @testset "Show method" begin
         t1 = ITime(10)
-        @test sprint(show, t1) == "10 seconds [counter = 10, period = 1 second]"
+        @test sprint(show, t1) ==
+              "10.0 seconds [counter = 10, period = 1 second]"
 
         t2 = ITime(10, epoch = Dates.DateTime(2024, 1, 1))
         @test sprint(show, t2) ==
-              "10 seconds (2024-01-01T00:00:10) [counter = 10, period = 1 second, epoch = 2024-01-01T00:00:00]"
+              "10.0 seconds (2024-01-01T00:00:10) [counter = 10, period = 1 second, epoch = 2024-01-01T00:00:00]"
 
         t3 = ITime(
             10,
@@ -155,7 +156,7 @@ using Test, Dates
             epoch = Dates.DateTime(2024, 1, 1),
         )
         @test sprint(show, t3) ==
-              "10 hours (2024-01-01T10:00:00) [counter = 10, period = 1 hour, epoch = 2024-01-01T00:00:00]"
+              "10.0 hours (2024-01-01T10:00:00) [counter = 10, period = 1 hour, epoch = 2024-01-01T00:00:00]"
     end
 
     @testset "Find common epoch" begin
@@ -289,5 +290,39 @@ using Test, Dates
         @test typeof(oneunit(t1).counter) == Int32
         @test typeof(zero(t1).counter) == Int32
         @test typeof(mod(t3, t2).counter) == Int32
+    end
+
+    @testset "Overflow test" begin
+        t1 = ITime(typemax(Int64), period = Second(2))
+        # Dates.seconds(t.period) returns an integer if t.period is in seconds
+        # Multiplying this by t.counter, an integer, results in an integer that
+        # could overflow
+        @test isapprox(float(t1), float(typemax(Int64)) * 2.0)
+
+        # The computation epoch(t) + counter(t) * period(t) could overflow since
+        # counter(t) * period(t) could overflow. In this case, the maximum value
+        # of period(t) is 2^63 - 1 nanoseconds. Multiplying 2 nanoseconds by the
+        # counter overflow and give -2 nanoseconds. Here, we decide to throw an
+        # error instead of circumventing the overflow. One way to circumvent the
+        # overflow is to add counter(t) * oneunit(period(t)) n times, where n is
+        # the value of period.
+        t2 = ITime(
+            typemax(Int64),
+            period = Nanosecond(2),
+            epoch = Dates.DateTime(2010),
+        )
+        @test_throws ErrorException date(t2)
+
+        # Same tests as above, but with Int32
+        t3 = ITime(typemax(Int32), period = Second(2))
+        @test isapprox(float(t3), float(typemax(Int32)) * 2.0)
+
+        t4 = ITime(
+            typemax(Int32),
+            period = Nanosecond(2),
+            epoch = Dates.DateTime(2010),
+        )
+        # We do not overflow because Period uses Int64 internally
+        @test date(t4) == Dates.DateTime(2010) + typemax(Int32) * Nanosecond(2)
     end
 end

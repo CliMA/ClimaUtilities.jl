@@ -101,12 +101,30 @@ end
 """
     date(t::ITime)
 
-Return the date associated with `t`. If the time is fractional round it to millisecond.
+Return the date associated with `t`. If the time is fractional, round it to
+millisecond.
 
-For this to work, `t` has to have a `epoch`
+For this to work, `t` has to have a `epoch`.
 """
 function date(t::ITime)
-    return epoch(t) + counter(t) * period(t)
+    current_date = epoch(t)
+    elapsed_period = counter(t) * period(t)
+
+    # We only check if `elapsed_period` overflows.
+    # It is reasonable to assume that the date will not overflow since the
+    # maximum value for the date is 292277025-08-17T07:12:55.807
+    # which is computed by
+    # `DateTime(Dates.UTInstant(Millisecond(typemax(Int64))))`.
+    # Meanwhile, it is possible for `elapsed_period` to overflow if the period
+    # is extremely small (e.g. nanosecond) and Int64 is used for the counter.
+    # Although, this will not happen for the nanosecond and Int64 case for ~294
+    # years
+    period_is_zero = period(t) == zero(period(t))
+    no_overflow = period_is_zero || elapsed_period / period(t) == counter(t)
+    no_overflow && return current_date + elapsed_period
+    error(
+        "Overflow with counter(t) * period(t) in computing the date; try to use a bigger value for the period if possible",
+    )
 end
 
 """
@@ -159,7 +177,7 @@ function Base.show(io::IO, time::ITime)
     # them because they cannot be nicely converted to Periods, instead of
     # reconstruct the string from the type name and the value (obtained my
     # multiplying the counter and the number of units in the period)
-    value = counter(time) * period(time).value
+    value = counter(time) * float(period(time).value)
     plural_s = abs(value) != 1 ? "s" : ""
     unit = lowercase(string(nameof(typeof(period(time))))) * plural_s
 
@@ -348,7 +366,7 @@ Convert an `ITime` to a floating-point number representing the time in seconds.
 """
 function Base.float(t::T) where {T <: ITime}
     if VERSION >= v"1.11"
-        return float(Dates.seconds(t.period) * t.counter)
+        return float(Dates.seconds(t.period)) * t.counter
     else
         return Dates.tons(t.period) / 1_000_000_000 * t.counter
     end
