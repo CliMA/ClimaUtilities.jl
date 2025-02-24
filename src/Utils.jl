@@ -412,4 +412,11 @@ function sort_by_creation_time(files)
     return sort(files, by = x -> stat(x).ctime)
 end
 
+"""
+    unwrap(x::Val{N})
+
+Unwrap the value in `Val{N}` to get `N`.
+"""
+unwrap(x::Val{N}) where {N} = N
+
 end

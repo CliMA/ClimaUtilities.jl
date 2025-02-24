@@ -581,7 +581,6 @@ function DataHandling.regridded_snapshot(
     end
 
     regridder_type = nameof(typeof(data_handler.regridder))
-    regrid_args = ()
 
     # Check if the regridded field at this date is already in the cache
     return get!(data_handler._cached_regridded_fields, date) do
