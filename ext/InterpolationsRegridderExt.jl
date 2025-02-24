@@ -7,6 +7,7 @@ import ClimaCore.Fields: Adapt
 import ClimaCore.Fields: ClimaComms
 
 import ClimaUtilities.Regridders
+import ClimaUtilities.Utils: unwrap
 
 struct InterpolationsRegridder{
     SPACE <: ClimaCore.Spaces.AbstractSpace,
@@ -119,6 +120,14 @@ Regrid the given data as defined on the given dimensions to the `target_space` i
 This function is allocating.
 """
 function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
+    num_data_dims = ndims(data)
+    num_dims = length(dimensions)
+    num_space_dims = unwrap(regridder.num_space_dims)
+    ((num_space_dims != num_data_dims) || (num_space_dims != num_dims)) &&
+        error(
+            "Number of dimensions of data ($num_data_dims) does not match the dimension of the space ($num_space_dims) or the number of dimensions passed in ($num_dims)",
+        )
+
     FT = ClimaCore.Spaces.undertype(regridder.target_space)
     dimensions_FT = ntuple(
         i ->
