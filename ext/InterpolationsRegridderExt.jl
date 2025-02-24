@@ -13,6 +13,8 @@ struct InterpolationsRegridder{
     FIELD <: ClimaCore.Fields.Field,
     BC,
     DT <: Tuple,
+    DI <: Tuple,
+    N,
 } <: Regridders.AbstractRegridder
 
     """ClimaCore.Space where the output Field will be defined"""
@@ -27,6 +29,12 @@ struct InterpolationsRegridder{
     """Tuple of booleans signifying if the dimension is monotonically increasing. True for
     dimensions that are monotonically increasing, false for dimensions that are monotonically decreasing."""
     dim_increasing::DT
+
+    """Tuple of integers indicating which dimensions to reverse in data"""
+    decreasing_indices::DI
+
+    "Number of dimensions of the target space"
+    num_space_dims::N
 end
 
 # Note, we swap Lat and Long! This is because according to the CF conventions longitude
@@ -74,23 +82,32 @@ function Regridders.InterpolationsRegridder(
         isnothing(extrapolation_bc) &&
             (extrapolation_bc = (Intp.Periodic(), Intp.Flat()))
         isnothing(dim_increasing) && (dim_increasing = (true, true))
+        num_space_dims = Val(2)
     elseif eltype(coordinates) <: ClimaCore.Geometry.LatLongZPoint
         isnothing(extrapolation_bc) &&
             (extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Throw()))
         isnothing(dim_increasing) && (dim_increasing = (true, true, true))
+        num_space_dims = Val(3)
     elseif eltype(coordinates) <: ClimaCore.Geometry.XYZPoint
         isnothing(extrapolation_bc) &&
             (extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Throw()))
         isnothing(dim_increasing) && (dim_increasing = (true, true, true))
+        num_space_dims = Val(3)
     else
         error("Only lat-long, lat-long-z, and x-y-z spaces are supported")
     end
+
+    decreasing_indices =
+        !all(dim_increasing) ?
+        Tuple([i for (i, d) in enumerate(dim_increasing) if !d]) : ()
 
     return InterpolationsRegridder(
         target_space,
         coordinates,
         extrapolation_bc,
         dim_increasing,
+        decreasing_indices,
+        num_space_dims,
     )
 end
 
@@ -103,16 +120,17 @@ This function is allocating.
 """
 function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
     FT = ClimaCore.Spaces.undertype(regridder.target_space)
-    dimensions_FT = map(dimensions, regridder.dim_increasing) do dim, increasing
-        !increasing ? reverse(FT.(dim)) : FT.(dim)
-    end
+    dimensions_FT = ntuple(
+        i ->
+            !regridder.dim_increasing[i] ? reverse(FT.(dimensions[i])) :
+            FT.(dimensions[i]),
+        regridder.num_space_dims,
+    )
 
     data_transformed = data
     # Reverse the data if needed. This allocates, so ideally it should be done in preprocessing
     if !all(regridder.dim_increasing)
-        decreasing_indices =
-            Tuple([i for (i, d) in enumerate(regridder.dim_increasing) if !d])
-        data_transformed = reverse(data, dims = decreasing_indices)
+        data_transformed = reverse(data, dims = regridder.decreasing_indices)
     end
     # Make a linear spline
     itp = Intp.extrapolate(
