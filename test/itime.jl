@@ -324,5 +324,14 @@ using Test, Dates
         )
         # We do not overflow because Period uses Int64 internally
         @test date(t4) == Dates.DateTime(2010) + typemax(Int32) * Nanosecond(2)
+
+        # Should not overflow
+        t5 = ClimaUtilities.TimeManager.ITime(
+            typemax(Int64),
+            period = Nanosecond(1),
+            epoch = DateTime(2010),
+        )
+        @test date(t5) ==
+              Dates.DateTime(2010) + (typemax(Int64) * Dates.Nanosecond(1))
     end
 end
