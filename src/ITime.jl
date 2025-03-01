@@ -120,7 +120,7 @@ function date(t::ITime)
     # Although, this will not happen for the nanosecond and Int64 case for ~294
     # years
     period_is_zero = period(t) == zero(period(t))
-    no_overflow = period_is_zero || elapsed_period / period(t) == counter(t)
+    no_overflow = period_is_zero || div(elapsed_period, period(t)) == counter(t)
     no_overflow && return current_date + elapsed_period
     error(
         "Overflow with counter(t) * period(t) in computing the date; try to use a bigger value for the period if possible",
