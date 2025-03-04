@@ -129,6 +129,21 @@ end
     @test regridded_lat_reversed == regridded_lat
     @test regridded_lon_reversed == regridded_lon
     @test regridded_z_reversed == regridded_z
+
+    # Error handling
+    data = [1.0, 2.0, 3.0, 4.0]
+    @test_throws ErrorException Regridders.regrid(
+        reg_hv_reversed,
+        data,
+        dimensions3D_reversed,
+    )
+
+    dimensions = ([1.0, 2.0, 3.0],)
+    @test_throws ErrorException Regridders.regrid(
+        reg_hv_reversed,
+        data_z3D_reversed,
+        dimensions,
+    )
 end
 
 @testset "InterpolationsRegridder" begin
