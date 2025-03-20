@@ -151,9 +151,9 @@ function TimeVaryingInputs.TimeVaryingInput(
 end
 
 function TimeVaryingInputs.TimeVaryingInput(
-    file_paths::Union{AbstractString, AbstractArray{<:AbstractString}},
-    varnames::Union{AbstractString, AbstractArray{<:AbstractString}},
-    target_space::ClimaCore.Spaces.AbstractSpace;
+    file_paths,
+    varnames,
+    target_space;
     method = LinearInterpolation(),
     start_date::Union{Dates.DateTime, Dates.Date} = Dates.DateTime(1979, 1, 1),
     regridder_type = nothing,
