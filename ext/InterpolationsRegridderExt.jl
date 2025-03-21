@@ -158,7 +158,12 @@ function Regridders.regrid!(
         regridder.extrapolation_bc,
     )
     gpuitp = Adapt.adapt(ClimaComms.array_type(regridder.target_space), itp)
-    map!(coord -> gpuitp(totuple(coord)...), output, regridder.coordinates)
+    if pkgversion(ClimaCore) < v"0.14.27"
+        @warn "regrid! allocates when using ClimaCore < 0.14.27"
+        output .= map(coord -> gpuitp(totuple(coord)...), regridder.coordinates)
+    else
+        map!(coord -> gpuitp(totuple(coord)...), output, regridder.coordinates)
+    end
 end
 
 end
