@@ -23,6 +23,8 @@ function InterpolationsRegridder end
 
 function regrid end
 
+function regrid! end
+
 """
     default_regridder_type()
 
