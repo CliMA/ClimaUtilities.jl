@@ -132,4 +132,38 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
     end
 end
 
+"""
+     Regridders.regrid!(output, regridder::InterpolationsRegridder, data::AbstractArray{FT, N}, dimensions::NTuple{N, AbstractVector{FT}})
+
+Regrid the given data as defined on the given dimensions to the `target_space` in `regridder`, and store the result in `output`.
+This method does not automatically reverse dimensions, so the dimensions must be sorted before calling this method.
+"""
+function Regridders.regrid!(
+    output,
+    regridder::InterpolationsRegridder,
+    data::AbstractArray{FT, N},
+    dimensions::NTuple{N, AbstractVector{FT}},
+) where {FT, N}
+    @assert ClimaCore.Spaces.undertype(regridder.target_space) == FT
+    @assert eltype(output) == FT
+    @assert eltype(data) == FT
+    all(regridder.dim_increasing) || error(
+        "Dimensions must be sorted to use regrid!. Sort the dimensions first, or use regrid.",
+    )
+    # interpolate! still allocates some, and might "destroy" data while using the array to store
+    # coefficients... but it seems like the data is equal to the coefficients
+    # for a gridded interpolation, so data is not modified
+    itp = Intp.extrapolate(
+        Intp.interpolate!(dimensions, data, Intp.Gridded(Intp.Linear())),
+        regridder.extrapolation_bc,
+    )
+    gpuitp = Adapt.adapt(ClimaComms.array_type(regridder.target_space), itp)
+    if pkgversion(ClimaCore) < v"0.14.27"
+        @warn "regrid! allocates when using ClimaCore < 0.14.27"
+        output .= map(coord -> gpuitp(totuple(coord)...), regridder.coordinates)
+    else
+        map!(coord -> gpuitp(totuple(coord)...), output, regridder.coordinates)
+    end
+end
+
 end
