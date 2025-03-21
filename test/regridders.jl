@@ -129,6 +129,13 @@ end
     @test regridded_lat_reversed == regridded_lat
     @test regridded_lon_reversed == regridded_lon
     @test regridded_z_reversed == regridded_z
+
+    @test_throws "Dimensions must be monotonically increasing to use regrid!. Sort the dimensions first, or use regrid." Regridders.regrid!(
+        zeros(axes(regridded_z_reversed)),
+        reg_hv_reversed,
+        data_lat3D,
+        dimensions3D_reversed,
+    )
 end
 
 @testset "InterpolationsRegridder" begin
@@ -177,6 +184,25 @@ end
         regridded_lat = Regridders.regrid(reg_horz, data_lat2D, dimensions2D)
         regridded_lon = Regridders.regrid(reg_horz, data_lon2D, dimensions2D)
 
+        # now repeat the regrid with in place method, and check that the result is the same
+        in_place_regridded_lat = zeros(axes(regridded_lat))
+        in_place_regridded_lon = zeros(axes(regridded_lon))
+        Regridders.regrid!(
+            in_place_regridded_lat,
+            reg_horz,
+            FT.(data_lat2D),
+            map(x -> FT.(x), dimensions2D),
+        )
+        Regridders.regrid!(
+            in_place_regridded_lon,
+            reg_horz,
+            FT.(data_lon2D),
+            map(x -> FT.(x), dimensions2D),
+        )
+
+        @test regridded_lat == in_place_regridded_lat
+        @test regridded_lon == in_place_regridded_lon
+
         coordinates = ClimaCore.Fields.coordinate_field(horzspace)
 
         # Compute max err
@@ -201,6 +227,32 @@ end
         regridded_lat = Regridders.regrid(reg_hv, data_lat3D, dimensions3D)
         regridded_lon = Regridders.regrid(reg_hv, data_lon3D, dimensions3D)
         regridded_z = Regridders.regrid(reg_hv, data_z3D, dimensions3D)
+
+        in_place_regridded_lat = zeros(axes(regridded_lat))
+        in_place_regridded_lon = zeros(axes(regridded_lon))
+        in_place_regridded_z = zeros(axes(regridded_z))
+        Regridders.regrid!(
+            in_place_regridded_lat,
+            reg_hv,
+            FT.(data_lat3D),
+            map(x -> FT.(x), dimensions3D),
+        )
+        Regridders.regrid!(
+            in_place_regridded_lon,
+            reg_hv,
+            FT.(data_lon3D),
+            map(x -> FT.(x), dimensions3D),
+        )
+        Regridders.regrid!(
+            in_place_regridded_z,
+            reg_hv,
+            FT.(data_z3D),
+            map(x -> FT.(x), dimensions3D),
+        )
+
+        @test regridded_lat == in_place_regridded_lat
+        @test regridded_lon == in_place_regridded_lon
+        @test regridded_z == in_place_regridded_z
 
         coordinates = ClimaCore.Fields.coordinate_field(hv_center_space)
 
@@ -249,6 +301,33 @@ end
     regridded_y = Regridders.regrid(reg_box, data_y3D, dimensions3D)
 
     regridded_z = Regridders.regrid(reg_box, data_z3D, dimensions3D)
+    # repeat the regrid with in place method, and check that the result is the same
+    regridded_x_inplace = zeros(axes(regridded_x))
+    regridded_y_inplace = zeros(axes(regridded_y))
+    regridded_z_inplace = zeros(axes(regridded_z))
+
+    Regridders.regrid!(
+        regridded_x_inplace,
+        reg_box,
+        FT.(data_x3D),
+        map(x -> FT.(x), dimensions3D),
+    )
+    Regridders.regrid!(
+        regridded_y_inplace,
+        reg_box,
+        FT.(data_y3D),
+        map(x -> FT.(x), dimensions3D),
+    )
+    Regridders.regrid!(
+        regridded_z_inplace,
+        reg_box,
+        FT.(data_z3D),
+        map(x -> FT.(x), dimensions3D),
+    )
+
+    @test regridded_x == regridded_x_inplace
+    @test regridded_y == regridded_y_inplace
+    @test regridded_z == regridded_z_inplace
 
     err_x = reg_box.coordinates.x .- regridded_x
     err_y = reg_box.coordinates.y .- regridded_y

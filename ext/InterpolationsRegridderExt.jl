@@ -132,4 +132,28 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
     end
 end
 
+"""
+     Regridders.regrid!(output, regridder::InterpolationsRegridder, data::AbstractArray{FT, N}, dimensions::NTuple{N, AbstractVector{FT}})
+
+Regrid the given data as defined on the given dimensions to the `target_space` in `regridder`, and store the result in `output`.
+This method does not automatically reverse dimensions, so the dimensions must be sorted before calling this method.
+"""
+function Regridders.regrid!(
+    output,
+    regridder::InterpolationsRegridder,
+    data::AbstractArray{FT, N},
+    dimensions::NTuple{N, AbstractVector{FT}},
+) where {FT, N}
+    all(regridder.dim_increasing) || error(
+        "Dimensions must be monotonically increasing to use regrid!. Sort the dimensions first, or use regrid.",
+    )
+    itp = Intp.extrapolate(
+        Intp.interpolate(dimensions, data, Intp.Gridded(Intp.Linear())),
+        regridder.extrapolation_bc,
+    )
+    gpuitp = Adapt.adapt(ClimaComms.array_type(regridder.target_space), itp)
+    output .= splat(gpuitp).(totuple.(regridder.coordinates))
+    return nothing
+end
+
 end
