@@ -12,7 +12,8 @@ import ClimaUtilities.Utils:
     bounding_dates,
     period_to_seconds_float,
     unique_periods,
-    sort_by_creation_time
+    sort_by_creation_time,
+    unwrap
 
 @testset "searchsortednearest" begin
     A = 10 * collect(range(1, 10))
@@ -170,4 +171,12 @@ end
         sorted_files = sort_by_creation_time(files)
         @test sorted_files == [files[2], files[3], files[1]]
     end
+
+    @testset "unwrap" begin
+        x = Val(2)
+        y = Val(3)
+        @test unwrap(x) == 2
+        @test unwrap(y) == 3
+    end
+
 end
