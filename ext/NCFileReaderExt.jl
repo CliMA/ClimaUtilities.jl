@@ -107,7 +107,13 @@ function FileReaders.NCFileReader(
             is_time = x -> x == "time" || x == "date" || x == "t"
             time_dims = filter(is_time, NCDatasets.dimnames(first_dataset))
             if !isempty(time_dims)
-                aggtime_kwarg = (:aggdim => first(time_dims),)
+                # When loading multifile dataset using NCDatasets.jl, the NetCDF files are
+                # not kept open due to the common limitation of 1024 open files per user on
+                # Linux. However, for our use case, we will not reach this limit. Hence, we
+                # keep the files open with deferopen = false.
+                # See: https://github.com/JuliaGeo/NCDatasets.jl/issues/277
+                aggtime_kwarg =
+                    (:aggdim => first(time_dims), :deferopen => false)
             else
                 error(
                     "Multiple files given, but no temporal dimension found. Combining multiple files is only possible along the temporal dimension.",
