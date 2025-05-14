@@ -22,16 +22,14 @@ include("TestTools.jl")
 @testset "InterpolatingTimeVaryingInput23D with LinearPeriodFillingInterpolation" begin
 
     # First, test the helper functions
-    _interpolable_range =
-        Base.get_extension(
-            ClimaUtilities,
-            :ClimaUtilitiesClimaCoreNCDatasetsExt,
-        ).TimeVaryingInputsExt._interpolable_range
-    _move_date_to_period =
-        Base.get_extension(
-            ClimaUtilities,
-            :ClimaUtilitiesClimaCoreNCDatasetsExt,
-        ).TimeVaryingInputsExt._move_date_to_period
+    _interpolable_range = Base.get_extension(
+        ClimaUtilities,
+        :ClimaUtilitiesClimaCoreNCDatasetsExt,
+    ).TimeVaryingInputsExt._interpolable_range
+    _move_date_to_period = Base.get_extension(
+        ClimaUtilities,
+        :ClimaUtilitiesClimaCoreNCDatasetsExt,
+    ).TimeVaryingInputsExt._move_date_to_period
 
     dates_period_left =
         [DateTime(1985, 1, 15), DateTime(1985, 2, 17), DateTime(1985, 12, 11)]
