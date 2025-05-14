@@ -237,7 +237,7 @@ function FileReaders.read(file_reader::NCFileReader, date::Dates.DateTime)
     if date == Dates.DateTime(0)
         return get!(file_reader._cached_reads, date) do
             file_reader.preprocess_func.(
-                Array(file_reader.dataset[file_reader.varname])
+                Array(file_reader.dataset[file_reader.varname]),
             )
         end
     end
@@ -253,7 +253,7 @@ function FileReaders.read(file_reader::NCFileReader, date::Dates.DateTime)
         i in 1:length(NCDatasets.dimnames(var))
     ]
     return file_reader.preprocess_func.(
-        file_reader.dataset[file_reader.varname][slicer...]
+        file_reader.dataset[file_reader.varname][slicer...],
     )
 end
 
@@ -278,7 +278,7 @@ function FileReaders.read(file_reader::NCFileReader)
     # When there's no dates, we use DateTime(0) as key
     return get!(file_reader._cached_reads, Dates.DateTime(0)) do
         return file_reader.preprocess_func.(
-            Array(file_reader.dataset[file_reader.varname])
+            Array(file_reader.dataset[file_reader.varname]),
         )
     end
 end
