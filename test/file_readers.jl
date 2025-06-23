@@ -117,3 +117,12 @@ end
         @test read_dates_func(nc) == DateTime.(string.(times), "yyyymmdd")
     end
 end
+
+@testset "read_missing_dims" begin
+    @test_throws contains(
+        "missing_dim.nc\"] does not contain information about dimensions (\"missing_dim\",)",
+    ) FileReaders.NCFileReader(
+        joinpath(@__DIR__, "test_data", "missing_dim.nc"),
+        "test_var",
+    )
+end
