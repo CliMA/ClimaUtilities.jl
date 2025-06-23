@@ -154,7 +154,7 @@ function FileReaders.NCFileReader(
         time_index = time_index_vec[]
 
         issorted(available_dates) || error(
-            "Cannot process files that are not sorted in time ($file_path)",
+            "Cannot process files that are not sorted in time in ($file_paths)",
         )
 
         # Remove time from the dim names
@@ -165,7 +165,9 @@ function FileReaders.NCFileReader(
         dimensions =
             Tuple(NCDatasets.nomissing(Array(dataset[d])) for d in dim_names)
     else
-        error("$file_path does not contain information about dimensions")
+        error(
+            "$file_paths does not contain information about dimensions $(filter(!in(keys(dataset)), dim_names))",
+        )
     end
 
     # Use an LRU cache to store regridded fields
@@ -244,7 +246,7 @@ function FileReaders.read(file_reader::NCFileReader, date::Dates.DateTime)
 
     index = findall(d -> d == date, file_reader.available_dates)
     length(index) == 1 ||
-        error("Problem with date $date in $(file_reader.file_path)")
+        error("Problem with date $date in one of $(file_reader.file_paths)")
     index = index[]
 
     var = file_reader.dataset[file_reader.varname]
