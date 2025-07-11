@@ -215,6 +215,20 @@ using Test, Dates
         @test t6 % t7 == ITime(1, period = Second(2))
     end
 
+    @testset "Base.:(==)" begin
+        @test ITime(0; period = Day(1), epoch = DateTime(2010)) ==
+              DateTime(2010)
+        @test DateTime(2011) ==
+              ITime(365; period = Day(1), epoch = DateTime(2010))
+        @test ITime(365; period = Day(1), epoch = DateTime(2010)) !=
+              DateTime(2010)
+        @test_throws "Cannot compare ITime with a Number" ITime(
+            1;
+            period = Day(1),
+        ) == 60 * 60 * 24
+        @test_throws "Cannot compare ITime with a Number" Inf == ITime(1.0;)
+    end
+
     @testset "iszero" begin
         t1 = ITime(0, period = Hour(1))
         t2 = ITime(1, period = Second(1))

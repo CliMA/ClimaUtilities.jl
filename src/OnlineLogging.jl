@@ -148,7 +148,8 @@ function report_walltime(wt, integrator)
 
     wall_time_ave_per_step = wt.∑Δt_wall[] / n_steps
     wall_time_ave_per_step_str = _time_and_units_str(wall_time_ave_per_step)
-    percent_complete = round((t - t_start) / (t_end - t_start) * 100; digits = 1)
+    percent_complete =
+        round((t - t_start) / (t_end - t_start) * 100; digits = 1)
     n_steps_remaining = n_steps_total - n_steps
     wall_time_remaining = wall_time_ave_per_step * n_steps_remaining
     wall_time_remaining_str = _time_and_units_str(wall_time_remaining)
