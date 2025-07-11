@@ -52,6 +52,18 @@ using Test, Dates
 
         # Cannot be represented exactly
         @test_throws ErrorException ITime(1e-20)
+
+        # Compare ITime(::Int) to ITime(::Float)
+        function compare_itime_constructors(counter, t)
+            a = ITime(counter)
+            b = ITime(t)
+            @test a.counter == b.counter
+            @test a.period == b.period
+            @test a.epoch == b.epoch
+        end
+        for nums in (0.0, 1.0, 60.0, 120.0, 3600.0)
+            compare_itime_constructors(Int(nums), nums)
+        end
     end
 
     @testset "Accessors" begin

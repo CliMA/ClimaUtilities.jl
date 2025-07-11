@@ -41,20 +41,51 @@ struct ITime{INT <: Integer, DT, EPOCH <: Union{Nothing, Dates.DateTime}}
 end
 
 """
-    ITime(counter::Integer; period::Dates.FixedPeriod = Dates.Second(1), epoch = nothing)
+    ITime(counter::Integer; period::Union{Dates.FixedPeriod, Nothing}, epoch = nothing)
 
 Construct an `ITime` from a counter, a period, and an optional start date.
 
 If the `epoch` is provided as a `Date`, it is converted to a `DateTime`.
+
+If period is not provided, the function assumes that `counter` describes a time in seconds,
+and attempts to find a `Dates.FixedPeriod` such that `counter` seconds can be
+represented as an integer multiple of that period.
+
+If `counter` is zero, it defaults to a period of 1 second.
 """
 function ITime(
     counter::Integer;
-    period::Dates.FixedPeriod = Dates.Second(1),
+    period::Union{Dates.FixedPeriod, Nothing} = nothing,
     epoch = nothing,
 )
     # Convert epoch to DateTime if it is not nothing (from, e.g., Date)
     isnothing(epoch) || (epoch = Dates.DateTime(epoch))
-    return ITime(counter, period, epoch)
+    if !isnothing(period)
+        return ITime(counter, period, epoch)
+    else
+        counter == 0 && return ITime(counter, Dates.Second(1), epoch)
+        potential_periods = [
+            Dates.Week,
+            Dates.Day,
+            Dates.Hour,
+            Dates.Minute,
+            Dates.Second,
+            Dates.Millisecond,
+            Dates.Microsecond,
+            Dates.Nanosecond,
+        ]
+        for period_i in potential_periods
+            period_ns = Dates.tons(period_i(1))
+            t_int = 1_000_000_000 / period_ns * counter
+            if isinteger(t_int)
+                return ITime(
+                    typeof(counter)(div(1_000_000_000 * counter, period_ns)),
+                    period_i(1),
+                    epoch,
+                )
+            end
+        end
+    end
 end
 
 """
