@@ -279,6 +279,18 @@ function Base.:*(a::AbstractFloat, t::ITime)
     end
 end
 
+Base.:(==)(t1::ITime, t2::Number) = error("Cannot compare ITime with a Number")
+Base.:(==)(t1::Number, t2::ITime) = t2 == t1
+
+"""
+    Base.:(==)(t1::ITime, t2::Dates.DateTime)
+
+Converts `t1` to a `DateTime` and checks for equality with `t2`. `t1` must have an `epoch`
+`t1==t2` ⟺ `t2==t1`
+"""
+Base.:(==)(t1::ITime, t2::Dates.DateTime) = date(t1) == t2
+Base.:(==)(t1::Dates.DateTime, t2::ITime) = t2 == t1
+
 """
     Base.:(:)(start::ITime, step::ITime, stop::ITime)
 
