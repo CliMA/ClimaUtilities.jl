@@ -11,6 +11,7 @@ import ClimaUtilities.Regridders
 struct InterpolationsRegridder{
     SPACE <: ClimaCore.Spaces.AbstractSpace,
     FIELD <: ClimaCore.Fields.Field,
+    IM,
     BC,
     DT <: Tuple,
 } <: Regridders.AbstractRegridder
@@ -20,6 +21,9 @@ struct InterpolationsRegridder{
 
     """ClimaCore.Field of physical coordinates over which the data will be interpolated"""
     coordinates::FIELD
+
+    """Method of gridded interpolation as accepted by Interpolations.jl"""
+    interpolation_method::IM
 
     """Tuple of extrapolation conditions as accepted by Interpolations.jl"""
     extrapolation_bc::BC
@@ -37,7 +41,9 @@ totuple(pt::ClimaCore.Geometry.XYZPoint) = pt.x, pt.y, pt.z
 
 """
     InterpolationsRegridder(target_space::ClimaCore.Spaces.AbstractSpace
-                            [; extrapolation_bc::Tuple])
+                            [; extrapolation_bc::Tuple,
+                               dim_increasing::Union{Nothing, Tuple},
+                               interpolation_method = Interpolations.Linear()])
 
 An online regridder that uses Interpolations.jl
 
@@ -67,6 +73,7 @@ function Regridders.InterpolationsRegridder(
     target_space::ClimaCore.Spaces.AbstractSpace;
     extrapolation_bc::Union{Nothing, Tuple} = nothing,
     dim_increasing::Union{Nothing, Tuple} = nothing,
+    interpolation_method = Intp.Linear(),
 )
     coordinates = ClimaCore.Fields.coordinate_field(target_space)
     # set default values for the extrapolation_bc and dim_increasing if they are not provided
@@ -89,6 +96,7 @@ function Regridders.InterpolationsRegridder(
     return InterpolationsRegridder(
         target_space,
         coordinates,
+        interpolation_method,
         extrapolation_bc,
         dim_increasing,
     )
@@ -119,7 +127,7 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
         Intp.interpolate(
             dimensions_FT,
             FT.(data_transformed),
-            Intp.Gridded(Intp.Linear()),
+            Intp.Gridded(regridder.interpolation_method),
         ),
         regridder.extrapolation_bc,
     )
@@ -148,7 +156,11 @@ function Regridders.regrid!(
         "Dimensions must be monotonically increasing to use regrid!. Sort the dimensions first, or use regrid.",
     )
     itp = Intp.extrapolate(
-        Intp.interpolate(dimensions, data, Intp.Gridded(Intp.Linear())),
+        Intp.interpolate(
+            dimensions,
+            data,
+            Intp.Gridded(regridder.interpolation_method),
+        ),
         regridder.extrapolation_bc,
     )
     gpuitp = Adapt.adapt(ClimaComms.array_type(regridder.target_space), itp)

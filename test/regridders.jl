@@ -267,6 +267,40 @@ end
     end
 end
 
+@testset "Interpolation method" begin
+    # Test constant interpolation method
+    lon, lat, z =
+        collect(0.0:1:360), collect(-90.0:1:90), collect(0.0:1.0:100.0)
+    dimensions2D = (lon, lat)
+    dimensions3D = (lon, lat, z)
+    size2D = (361, 181)
+    size3D = (361, 181, 101)
+    ones_2Ddata = ones(size2D)
+    ones_3Ddata = ones(size3D)
+
+    for FT in (Float32, Float64)
+        spaces = make_spherical_space(FT; context)
+        horzspace = spaces.horizontal
+        hv_center_space = spaces.hybrid
+
+        reg_horz = Regridders.InterpolationsRegridder(
+            horzspace,
+            interpolation_method = Interpolations.Constant(),
+        )
+        reg_hv = Regridders.InterpolationsRegridder(
+            hv_center_space,
+            interpolation_method = Interpolations.Constant(),
+        )
+
+        regridded_2Ddata =
+            Regridders.regrid(reg_horz, ones_2Ddata, dimensions2D)
+        regridded_3Ddata = Regridders.regrid(reg_hv, ones_3Ddata, dimensions3D)
+
+        @test all(x -> x == one(x), parent(regridded_2Ddata))
+        @test all(x -> x == one(x), parent(regridded_3Ddata))
+    end
+end
+
 @testset "InterpolationsRegridderXYZPoint" begin
     helem = (10, 10)
     Nq = 4
