@@ -4,6 +4,26 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+#### Interpolation method for InterpolationsRegridder
+
+`InterpolationsRegridder` now accepts the new keyword argument
+`interpolation_method` for choosing the mode of the gridded interpolation. The
+default is `Interpolations.Linear()`.
+
+```julia
+import ClimaUtilities.Regridders
+import ClimaCore, Interpolations
+
+linear_reg = Regridders.InterpolationsRegridder(
+    target_space,
+    interpolation_method = Intp.Linear(),
+)
+constant_reg = Regridders.InterpolationsRegridder(
+    target_space,
+    interpolation_method = Intp.Constant(),
+)
+```
+
 v0.1.23
 ------
 

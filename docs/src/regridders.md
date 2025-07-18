@@ -65,6 +65,13 @@ regridded_u = Regridders.regrid(reg, target_date)
 along each direction) and returns a `ClimaCore` `Field` defined on the
 `target_space`.
 
+!!! note "Did you know?"
+    With versions of ClimaUtilities after v0.1.24, you can choose the mode of
+    the gridded interpolation with the keyword argument `interpolation_method`.
+    For example, to do constant interpolation, you can pass
+    `interpolation_method = Interpolations.Constant()` as a keyword argument
+    when constructing the regridder.
+
 Currently, `InterpolationsRegridder` only supports spherical shells and extruded
 spherical shells (but it could be easily extended to other domains).
 
