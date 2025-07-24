@@ -205,27 +205,29 @@ end
 
         coordinates = ClimaCore.Fields.coordinate_field(horzspace)
 
+        # Since lon uses periodic BCs but is not periodic itself, error is large at 180 degrees.
+        # We check that the error is small at other indices, and that the values at -180 and 180 agree.
+        function check_lon_error(coords_lon, lon_regrid)
+            inds_normal = findall(!=(180), Array(parent(coords_lon)))
+            err_lon = abs.(
+                Array(parent(coords_lon))[inds_normal] .-
+                Array(parent(lon_regrid))[inds_normal],
+            )
+            @test maximum(err_lon) < 1e-4
+
+            inds_lon_180 = findall(==(180), Array(parent(coords_lon)))
+            inds_lon_neg180 = findall(==(-180), Array(parent(coords_lon)))
+            err_lon_180 = abs.(
+                Array(parent(lon_regrid))[inds_lon_180] .-
+                Array(parent(coords_lon))[inds_lon_neg180],
+            )
+            @test maximum(err_lon_180) < 1e-5
+        end
+
         # Compute max err
         err_lat = abs.(coordinates.lat .- regridded_lat)
         @test maximum(err_lat) < 1e-5
-
-        # Since lon uses periodic BCs, error is large at 180 degrees.
-        # We check that the error is small at other indices, and that the values at -180 and 180 agree.
-        # Note that for data that is actually periodic, the error at 180 degrees will also be small.
-        inds_normal = findall(!=(180), parent(coordinates.long))
-        err_lon = abs.(
-            parent(coordinates.long)[inds_normal] .-
-            parent(regridded_lon)[inds_normal],
-        )
-        @test maximum(err_lon) < 1e-4
-
-        inds_lon_180 = findall(==(180), parent(coordinates.long))
-        inds_lon_neg180 = findall(==(-180), parent(coordinates.long))
-        err_lon_180 = abs.(
-            parent(regridded_lon)[inds_lon_180] .-
-            parent(coordinates.long)[inds_lon_neg180],
-        )
-        @test maximum(err_lon_180) < 1e-5
+        check_lon_error(coordinates.long, regridded_lon)
 
         # 3D space
         extrapolation_bc = (
@@ -273,28 +275,47 @@ end
 
         # Compute max err
         err_lat = abs.(coordinates.lat .- regridded_lat)
-        err_lon = abs.(coordinates.long .- regridded_lon)
         err_z = abs.(coordinates.z .- regridded_z)
 
         @test maximum(err_lat) < 1e-5
         @test maximum(err_z) < 1e-5
+        check_lon_error(coordinates.long, regridded_lon)
 
-        # Since lon uses periodic BCs but is not periodic itself, error is large at 180 degrees.
-        # We check that the error is small at other indices, and that the values at -180 and 180 agree.
-        inds_normal = findall(!=(180), parent(coordinates.long))
-        err_lon = abs.(
-            parent(coordinates.long)[inds_normal] .-
-            parent(regridded_lon)[inds_normal],
+        # 2D space with LatLongZ coordinates
+        surface_space = ClimaCore.Spaces.level(hv_center_space, 1) # SpectralElementSpace2D with LatLongZPoint coordinates
+        coordinates = ClimaCore.Fields.coordinate_field(surface_space)
+        @assert !(
+            surface_space isa ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace
         )
-        @test maximum(err_lon) < 1e-4
+        @assert eltype(coordinates) <: ClimaCore.Geometry.LatLongZPoint
 
-        inds_lon_180 = findall(==(180), parent(coordinates.long))
-        inds_lon_neg180 = findall(==(-180), parent(coordinates.long))
-        err_lon_180 = abs.(
-            parent(regridded_lon)[inds_lon_180] .-
-            parent(coordinates.long)[inds_lon_neg180],
-        )
-        @test maximum(err_lon_180) < 1e-5
+        # 3D data
+        reg_2d = Regridders.InterpolationsRegridder(surface_space)
+
+        regridded_lat_3d = Regridders.regrid(reg_2d, data_lat3D, dimensions3D)
+        regridded_lon_3d = Regridders.regrid(reg_2d, data_lon3D, dimensions3D)
+
+        # Compute max err
+        err_lat = abs.(coordinates.lat .- regridded_lat_3d)
+        @test maximum(err_lat) < 1e-5
+        check_lon_error(coordinates.long, regridded_lon_3d)
+
+        # 2D data
+        @test_logs (
+            :warn,
+            "Regridding 2D data onto a 2D space with LatLongZ coordinates.",
+        ) Regridders.regrid(reg_2d, data_lat2D, dimensions2D)
+        @test_logs (
+            :warn,
+            "Regridding 2D data onto a 2D space with LatLongZ coordinates.",
+        ) Regridders.regrid(reg_2d, data_lon2D, dimensions2D)
+
+        regridded_lat_2d = Regridders.regrid(reg_2d, data_lat2D, dimensions2D)
+        regridded_lon_2d = Regridders.regrid(reg_2d, data_lon2D, dimensions2D)
+
+        err_lat = abs.(coordinates.lat .- regridded_lat_2d)
+        @test maximum(err_lat) < 1e-5
+        check_lon_error(coordinates.long, regridded_lon_2d)
     end
 end
 
