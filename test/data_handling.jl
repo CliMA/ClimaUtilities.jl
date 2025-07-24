@@ -541,3 +541,27 @@ end
 
     end
 end
+
+@testset "DataHandler, 2D space with LatLongZ coordinates" begin
+    hv_center_space = make_spherical_space(Float64; context).hybrid
+    surface_space = ClimaCore.Spaces.level(hv_center_space, 1) # SpectralElementSpace2D with LatLongZPoint coordinates
+
+    @assert !(surface_space isa ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace)
+    @assert eltype(ClimaCore.Fields.coordinate_field(surface_space)) <:
+            ClimaCore.Geometry.LatLongZPoint
+
+    file_path_3d = joinpath(@__DIR__, "test_data", "sorted_dims.nc")
+    varname_3d = ["test_var"]
+    data_handler_3d =
+        DataHandling.DataHandler(file_path_3d, varname_3d, surface_space)
+    DataHandling.regridded_snapshot(data_handler_3d) # THIS WORKS
+
+    file_path_2d = joinpath(
+        artifact"era5_static_example",
+        "era5_t2m_sp_u10n_20210101_static.nc",
+    )
+    varname_2d = ["sp"]
+    data_handler_2d =
+        DataHandling.DataHandler(file_path_2d, varname_2d, surface_space)
+    DataHandling.regridded_snapshot(data_handler_2d) # THIS FAILS
+end
