@@ -31,7 +31,7 @@ end
 
 @testset "InterpolationsRegridder incorrect dimensions" begin
     lon, lat, z =
-        collect(0.0:1:360), collect(-90.0:1:90), collect(0.0:1.0:100.0)
+        collect(-180.0:1:180.0), collect(-90.0:1:90), collect(0.0:1.0:100.0)
     dimensions3D = (lon, lat, z)
     dimensions3D_reversed = (lon, reverse(lat), reverse(z))
     dimensions2D = (lon, lat)
@@ -141,7 +141,7 @@ end
 @testset "InterpolationsRegridder" begin
 
     lon, lat, z =
-        collect(0.0:1:360), collect(-90.0:1:90), collect(0.0:1.0:100.0)
+        collect(-180.0:1:180.0), collect(-90.0:1:90), collect(0.0:1.0:100.0)
     dimensions2D = (lon, lat)
     dimensions3D = (lon, lat, z)
     size2D = (361, 181)
@@ -206,11 +206,26 @@ end
         coordinates = ClimaCore.Fields.coordinate_field(horzspace)
 
         # Compute max err
-        err_lat = coordinates.lat .- regridded_lat
-        err_lon = coordinates.long .- regridded_lon
-
+        err_lat = abs.(coordinates.lat .- regridded_lat)
         @test maximum(err_lat) < 1e-5
-        @test maximum(err_lon) < 1e-5
+
+        # Since lon uses periodic BCs, error is large at 180 degrees.
+        # We check that the error is small at other indices, and that the values at -180 and 180 agree.
+        # Note that for data that is actually periodic, the error at 180 degrees will also be small.
+        inds_normal = findall(!=(180), parent(coordinates.long))
+        err_lon = abs.(
+            parent(coordinates.long)[inds_normal] .-
+            parent(regridded_lon)[inds_normal],
+        )
+        @test maximum(err_lon) < 1e-4
+
+        inds_lon_180 = findall(==(180), parent(coordinates.long))
+        inds_lon_neg180 = findall(==(-180), parent(coordinates.long))
+        err_lon_180 = abs.(
+            parent(regridded_lon)[inds_lon_180] .-
+            parent(coordinates.long)[inds_lon_neg180],
+        )
+        @test maximum(err_lon_180) < 1e-5
 
         # 3D space
         extrapolation_bc = (
@@ -257,13 +272,29 @@ end
         coordinates = ClimaCore.Fields.coordinate_field(hv_center_space)
 
         # Compute max err
-        err_lat = coordinates.lat .- regridded_lat
-        err_lon = coordinates.long .- regridded_lon
-        err_z = coordinates.z .- regridded_z
+        err_lat = abs.(coordinates.lat .- regridded_lat)
+        err_lon = abs.(coordinates.long .- regridded_lon)
+        err_z = abs.(coordinates.z .- regridded_z)
 
         @test maximum(err_lat) < 1e-5
-        @test maximum(err_lon) < 1e-4
         @test maximum(err_z) < 1e-5
+
+        # Since lon uses periodic BCs but is not periodic itself, error is large at 180 degrees.
+        # We check that the error is small at other indices, and that the values at -180 and 180 agree.
+        inds_normal = findall(!=(180), parent(coordinates.long))
+        err_lon = abs.(
+            parent(coordinates.long)[inds_normal] .-
+            parent(regridded_lon)[inds_normal],
+        )
+        @test maximum(err_lon) < 1e-4
+
+        inds_lon_180 = findall(==(180), parent(coordinates.long))
+        inds_lon_neg180 = findall(==(-180), parent(coordinates.long))
+        err_lon_180 = abs.(
+            parent(regridded_lon)[inds_lon_180] .-
+            parent(coordinates.long)[inds_lon_neg180],
+        )
+        @test maximum(err_lon_180) < 1e-5
     end
 end
 
