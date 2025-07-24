@@ -264,6 +264,36 @@ end
         @test maximum(err_lat) < 1e-5
         @test maximum(err_lon) < 1e-4
         @test maximum(err_z) < 1e-5
+
+        # 2D space with LatLongZ coordinates
+        surface_space = ClimaCore.Spaces.level(hv_center_space, 1) # SpectralElementSpace2D with LatLongZPoint coordinates
+        coordinates = ClimaCore.Fields.coordinate_field(surface_space)
+        @assert !(surface_space isa ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace)
+        @assert eltype(coordinates) <: ClimaCore.Geometry.LatLongZPoint
+
+        # 3D data
+        reg_2d = Regridders.InterpolationsRegridder(surface_space; extrapolation_bc)
+
+        regridded_lat_3d = Regridders.regrid(reg_2d, data_lat3D, dimensions3D)
+        regridded_lon_3d = Regridders.regrid(reg_2d, data_lon3D, dimensions3D)
+
+        # Compute max err
+        err_lat = coordinates.lat .- regridded_lat_3d
+        err_lon = coordinates.long .- regridded_lon_3d
+        @test maximum(err_lat) < 1e-5
+        @test maximum(err_lon) < 1e-4
+
+        # # 2D data
+        @test_logs (:warn, "Regridding 2D data onto a 2D space with LatLongZ coordinates.") Regridders.regrid(reg_2d, data_lat2D, dimensions2D)
+        @test_logs (:warn, "Regridding 2D data onto a 2D space with LatLongZ coordinates.") Regridders.regrid(reg_2d, data_lon2D, dimensions2D)
+
+        regridded_lat_2d = Regridders.regrid(reg_2d, data_lat2D, dimensions2D)
+        regridded_lon_2d = Regridders.regrid(reg_2d, data_lon2D, dimensions2D)
+
+        err_lat = coordinates.lat .- regridded_lat_2d
+        err_lon = coordinates.long .- regridded_lon_2d
+        @test maximum(err_lat) < 1e-5
+        @test maximum(err_lon) < 1e-4
     end
 end
 
