@@ -4,6 +4,12 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+#### Allow regridding 2D data onto 2D spaces with LatLongZ coordinates. PR[#176](https://github.com/CliMA/ClimaUtilities.jl/pull/176)
+
+Some 2D spaces use `LatLongPoint` coordinates and others use `LatLongZPoint`,
+depending on how they were constructed. Both cases are now supported, so we can
+read in 2D data onto a 2D space with either coordinate type.
+
 #### Interpolation method for InterpolationsRegridder
 
 `InterpolationsRegridder` now accepts the new keyword argument
@@ -29,9 +35,9 @@ v0.1.23
 
 #### Support for Box Interpolations Regridder. PR[#151](https://github.com/CliMA/ClimaUtilities.jl/pull/151)
 
-`Regridders.IterpolationsRegridder` now supports regridding on 
-`ClimaCore.Geometry.XYZPoint` objects which allows for interpolation 
-onto boxes and single column simulations. 
+`Regridders.IterpolationsRegridder` now supports regridding on
+`ClimaCore.Geometry.XYZPoint` objects which allows for interpolation
+onto boxes and single column simulations.
 
 v0.1.22
 ------

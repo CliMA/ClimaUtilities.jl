@@ -111,6 +111,23 @@ This function is allocating.
 """
 function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
     FT = ClimaCore.Spaces.undertype(regridder.target_space)
+
+    # For a 2D space with LatLongZ coordinates, we need to drop the z dimension to regrid 2D data.
+    if eltype(regridder.coordinates) <: ClimaCore.Geometry.LatLongZPoint &&
+       !(
+           regridder.target_space isa
+           ClimaCore.Spaces.ExtrudedFiniteDifferenceSpace
+       ) &&
+       length(dimensions) == 2
+
+        @warn "Regridding 2D data onto a 2D space with LatLongZ coordinates."
+        coords = map(regridder.coordinates) do coord
+            ClimaCore.Geometry.LatLongPoint(coord.lat, coord.long)
+        end
+    else
+        coords = regridder.coordinates
+    end
+
     dimensions_FT = map(dimensions, regridder.dim_increasing) do dim, increasing
         !increasing ? reverse(FT.(dim)) : FT.(dim)
     end
@@ -135,7 +152,7 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
     # Move it to GPU (if needed)
     gpuitp = Adapt.adapt(ClimaComms.array_type(regridder.target_space), itp)
 
-    return map(regridder.coordinates) do coord
+    return map(coords) do coord
         gpuitp(totuple(coord)...)
     end
 end
