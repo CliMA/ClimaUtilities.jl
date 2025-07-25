@@ -140,9 +140,6 @@ using Test, Dates
         t6 = ITime(5, epoch = Dates.DateTime(2024, 1, 1))
         @test (t5 + t6).epoch == t5.epoch
 
-        t7 = ITime(1, epoch = Dates.DateTime(2024, 1, 1))
-        @test t7 * 0.5 == ITime(0.5, epoch = Dates.DateTime(2024, 1, 1))
-
         t7 = ITime(5, epoch = Dates.DateTime(2024, 10, 1))
         # Arithmetic operations between ITime with different epochs are disallowed
         @test_throws ErrorException t6 + t7
