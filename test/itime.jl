@@ -148,6 +148,8 @@ using Test, Dates
     @testset "Float Conversion and Broadcasting" begin
         t1 = ITime(10, period = Dates.Millisecond(100))
         @test float(t1) == 1.0
+        @test Float64(t1) === Float64(1)
+        @test Float32(t1) === Float32(1)
 
         # Test broadcasting (simple example)
         @test float.(t1) == 1.0
