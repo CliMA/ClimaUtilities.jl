@@ -415,6 +415,8 @@ function Base.float(t::T) where {T <: ITime}
     end
 end
 
+(::Type{FT})(t::ITime) where {FT <: AbstractFloat} = FT(float(t))
+
 macro itime_unary_op(op)
     return esc(
         quote
