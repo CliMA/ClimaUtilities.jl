@@ -295,7 +295,12 @@ function Base.:*(t::ITime, a::AbstractFloat)
             "In most cases, multiplying an ITime by a float is not desirable. Cast the ITime into a float",
         )
     else
-        return ITime(round(typeof(t.counter), a * t.counter), t.period, t.epoch)
+        a * t.counter > one(a) && return ITime(
+            round(typeof(t.counter), a * t.counter),
+            t.period,
+            t.epoch,
+        )
+        return ITime(a * float(t); epoch = t.epoch)
     end
 end
 
