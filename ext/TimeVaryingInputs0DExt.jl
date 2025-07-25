@@ -20,6 +20,7 @@ import ClimaUtilities.TimeVaryingInputs: extrapolation_bc
 import ClimaUtilities.TimeVaryingInputs
 
 import ClimaUtilities.TimeManager: ITime, date
+using Dates
 
 """
     InterpolatingTimeVaryingInput0D
@@ -27,9 +28,9 @@ import ClimaUtilities.TimeManager: ITime, date
 The constructor for InterpolatingTimeVaryingInput0D is not supposed to be used directly, unless you
 know what you are doing.
 
-`times` and `vales` may have different float types, but they must be the same length, and we
+`times` and `values` may have different types, but they must be the same length, and we
 assume that they have been sorted to be monotonically increasing in time, without repeated
-values for the same timestamp.
+values for the same timestamp. `times` can have elements of type `ITime` or floats
 """
 struct InterpolatingTimeVaryingInput0D{
     AA1 <: AbstractArray,
@@ -107,9 +108,13 @@ function TimeVaryingInputs.TimeVaryingInput(
 
     if extrapolation_bc(method) isa PeriodicCalendar
         if extrapolation_bc(method) isa PeriodicCalendar{Nothing}
-            isequispaced(times) || error(
-                "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
+            if !isequispaced(
+                eltype(times) <: ITime ? [float.(promote(times...))...] : times,
             )
+                error(
+                    "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
+                )
+            end
         else
             # We have the period in PeriodicCalendar
             error(
@@ -197,9 +202,18 @@ function TimeVaryingInputs.evaluate!(
         # interpolation between t_init and t_end. In this case, y0 = vals[end], y1 =
         # vals[begin], t1 - t0 = dt, and time - t0 = time - t_end
         if time > t_end
-            @. dest =
-                itp.vals[end] +
-                (itp.vals[begin] - itp.vals[end]) / dt * (time - t_end)
+            if time isa ITime
+                FT = eltype(itp.vals)
+                @. dest =
+                    itp.vals[end] + FT(
+                        (itp.vals[begin] - itp.vals[end]) / float(dt) *
+                        float((time - t_end)),
+                    )
+            else
+                @. dest =
+                    itp.vals[end] +
+                    (itp.vals[begin] - itp.vals[end]) / dt * (time - t_end)
+            end
             return nothing
         end
     end
@@ -213,7 +227,7 @@ end
 
 function TimeVaryingInputs.evaluate!(
     destination,
-    itp::InterpolatingTimeVaryingInput0D,
+    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:Number}},
     time::ITime,
     args...;
     kwargs...,
@@ -226,5 +240,54 @@ function TimeVaryingInputs.evaluate!(
         kwargs...,
     )
 end
+
+function TimeVaryingInputs.evaluate!(
+    destination,
+    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:ITime}},
+    eval_date::DateTime,
+    args...;
+    kwargs...,
+)
+    t0_date = date(itp.range[1])
+    diff_ms = eval_date - t0_date
+    converted_time =
+        ITime(diff_ms.value; period = typeof(diff_ms)(1), epoch = t0_date)
+    return TimeVaryingInputs.evaluate!(
+        destination,
+        itp,
+        converted_time,
+        args...;
+        kwargs...,
+    )
+
+end
+
+function TimeVaryingInputs.evaluate!(
+    destination,
+    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:ITime}},
+    time::Number,
+    args...;
+    kwargs...,
+)
+    converted_time = first(promote(ITime(time), itp.range[1]))
+    return TimeVaryingInputs.evaluate!(
+        destination,
+        itp,
+        converted_time,
+        args...;
+        kwargs...,
+    )
+
+end
+
+TimeVaryingInputs.evaluate!(
+    destination,
+    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:Number}},
+    time::DateTime,
+    args...;
+    kwargs...,
+) = error(
+    "Cannot evaluate InterpolatingTimeVaryingInput0D with times as numbers and inputs as DateTime",
+)
 
 end
