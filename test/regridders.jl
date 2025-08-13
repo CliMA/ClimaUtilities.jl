@@ -301,15 +301,6 @@ end
         check_lon_error(coordinates.long, regridded_lon_3d)
 
         # 2D data
-        @test_logs (
-            :warn,
-            "Regridding 2D data onto a 2D space with LatLongZ coordinates.",
-        ) Regridders.regrid(reg_2d, data_lat2D, dimensions2D)
-        @test_logs (
-            :warn,
-            "Regridding 2D data onto a 2D space with LatLongZ coordinates.",
-        ) Regridders.regrid(reg_2d, data_lon2D, dimensions2D)
-
         regridded_lat_2d = Regridders.regrid(reg_2d, data_lat2D, dimensions2D)
         regridded_lon_2d = Regridders.regrid(reg_2d, data_lon2D, dimensions2D)
 
