@@ -120,7 +120,6 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
        ) &&
        length(dimensions) == 2
 
-        @warn "Regridding 2D data onto a 2D space with LatLongZ coordinates."
         coords = map(regridder.coordinates) do coord
             ClimaCore.Geometry.LatLongPoint(coord.lat, coord.long)
         end
