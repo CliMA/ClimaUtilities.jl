@@ -76,6 +76,30 @@ end
         method = TimeVaryingInputs.LinearPeriodFillingInterpolation(),
     )
 
+    # test promote when some input times do not contain an epoch
+    promotion_tvi = TimeVaryingInputs.TimeVaryingInput(
+        [ITime(0; epoch = DateTime(2010)), ITime(2; period = Dates.Day(1))],
+        ys,
+    )
+    @test all(t -> t.epoch == DateTime(2010), promotion_tvi.times)
+    @test all(t -> t.period == Dates.Second(1), promotion_tvi.times)
+
+
+    # test with ITimes with different Epochs
+    @test_throws ErrorException TimeVaryingInputs.TimeVaryingInput(
+        [ITime(0; epoch = DateTime(2010)), ITime(1; epoch = DateTime(2011))],
+        ys,
+    )
+
+    # test with non-uniformly spaced ITimes
+    @test_throws ErrorException TimeVaryingInputs.TimeVaryingInput(
+        [ITime(0; epoch = DateTime(2010)), ITime(1), ITime(3), ITime(4)],
+        [1.0, 2.0, 3.0, 4.0];
+        method = TimeVaryingInputs.NearestNeighbor(
+            TimeVaryingInputs.PeriodicCalendar(),
+        ),
+    )
+
     # Test PeriodicCalendar with non simple duration
     @test_throws ErrorException TimeVaryingInputs.PeriodicCalendar(
         Month(2),

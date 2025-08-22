@@ -105,12 +105,25 @@ function TimeVaryingInputs.TimeVaryingInput(
             "LinearPeriodFillingInterpolation is not supported when the input data is 1D",
         )
     end
-
+    if eltype(times) <: ITime
+        if !all(
+            t ->
+                t.period == first(times).period &&
+                t.epoch == first(times).epoch,
+            times,
+        )
+            # promote if times do not all have same epoch and period to avoid promoting
+            # during the simulation
+            times = [promote(times...)...]
+        elseif !(eltype(times) <: ITime{<:Any, <:Any, Nothing})
+            all(d -> d.epoch == first(times).epoch, times) || error(
+                "TimeVaryingInputs cannot be used when the data is defined at `ITime`(s) with differing epochs",
+            )
+        end
+    end
     if extrapolation_bc(method) isa PeriodicCalendar
         if extrapolation_bc(method) isa PeriodicCalendar{Nothing}
-            if !isequispaced(
-                eltype(times) <: ITime ? [float.(promote(times...))...] : times,
-            )
+            if !isequispaced(eltype(times) <: ITime ? float.(times) : times)
                 error(
                     "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
                 )
