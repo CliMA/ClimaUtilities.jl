@@ -108,8 +108,16 @@ function TimeVaryingInputs.TimeVaryingInput(
 
     if extrapolation_bc(method) isa PeriodicCalendar
         if extrapolation_bc(method) isa PeriodicCalendar{Nothing}
+            if eltype(times) <: ITime
+                t0 = times[begin]
+                if !(isnothing(t0.epoch) || all(t -> t.epoch == t0.epoch, times))
+                    # promote if times have inconsistent epochs
+                    # this is a slow operation
+                    times = promote(times...)
+                end
+            end
             if !isequispaced(
-                eltype(times) <: ITime ? [float.(promote(times...))...] : times,
+                eltype(times) <: ITime ? floats.(time) : times,
             )
                 error(
                     "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
