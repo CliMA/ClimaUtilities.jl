@@ -76,6 +76,13 @@ end
         method = TimeVaryingInputs.LinearPeriodFillingInterpolation(),
     )
 
+    # test promote when some input times do not contain an epoch
+    promotion_tvi = TimeVaryingInputs.TimeVaryingInput(
+        [ITime(0; epoch = DateTime(2010)), ITime(1)],
+        ys,
+    )
+    @test all(t -> t.epoch == DateTime(2010), promotion_tvi.times)
+
     # Test PeriodicCalendar with non simple duration
     @test_throws ErrorException TimeVaryingInputs.PeriodicCalendar(
         Month(2),

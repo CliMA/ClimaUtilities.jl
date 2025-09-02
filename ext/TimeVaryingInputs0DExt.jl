@@ -105,12 +105,12 @@ function TimeVaryingInputs.TimeVaryingInput(
             "LinearPeriodFillingInterpolation is not supported when the input data is 1D",
         )
     end
-
+    if eltype(times) <: ITime && eltype(times) isa UnionAll
+        times = [promote(times...)...]
+    end
     if extrapolation_bc(method) isa PeriodicCalendar
         if extrapolation_bc(method) isa PeriodicCalendar{Nothing}
-            if !isequispaced(
-                eltype(times) <: ITime ? [float.(promote(times...))...] : times,
-            )
+            if !isequispaced(eltype(times) <: ITime ? float.(times) : times)
                 error(
                     "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
                 )
