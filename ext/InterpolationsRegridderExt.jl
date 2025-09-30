@@ -14,6 +14,7 @@ struct InterpolationsRegridder{
     IM,
     BC,
     DT <: Tuple,
+    DN <: Union{Nothing, Tuple},
 } <: Regridders.AbstractRegridder
 
     """ClimaCore.Space where the output Field will be defined"""
@@ -31,6 +32,9 @@ struct InterpolationsRegridder{
     """Tuple of booleans signifying if the dimension is monotonically increasing. True for
     dimensions that are monotonically increasing, false for dimensions that are monotonically decreasing."""
     dim_increasing::DT
+
+    """Tuple of dimension names (e.g., ("lon", "lat", "z")) from the input data. Nothing if not provided."""
+    dim_names::DN
 end
 
 # Note, we swap Lat and Long! This is because according to the CF conventions longitude
@@ -38,6 +42,7 @@ end
 totuple(pt::ClimaCore.Geometry.LatLongZPoint) = pt.long, pt.lat, pt.z
 totuple(pt::ClimaCore.Geometry.LatLongPoint) = pt.long, pt.lat
 totuple(pt::ClimaCore.Geometry.XYZPoint) = pt.x, pt.y, pt.z
+totuple(pt::ClimaCore.Geometry.ZPoint) = pt.z
 
 """
     InterpolationsRegridder(target_space::ClimaCore.Spaces.AbstractSpace
@@ -47,11 +52,11 @@ totuple(pt::ClimaCore.Geometry.XYZPoint) = pt.x, pt.y, pt.z
 
 An online regridder that uses Interpolations.jl
 
-Currently, InterpolationsRegridder is only implemented for LatLong and LatLongZ spaces. It
+Currently, InterpolationsRegridder is implemented for LatLong, LatLongZ, XYZ, and Z spaces. It
 performs linear interpolation along each of the directions (separately). By default, it
 imposes periodic boundary conditions for longitude, flat for latitude, and throwing errors
-when extrapolating in z. This can be customized by passing the `extrapolation_bc` keyword
-argument.
+when extrapolating in z. For Z spaces, it throws errors when extrapolating. This can be 
+customized by passing the `extrapolation_bc` keyword argument.
 
 InterpolationsRegridder is GPU and MPI compatible in the simplest possible way: each MPI
 process has the entire input data and everything is copied to GPU.
@@ -73,6 +78,7 @@ function Regridders.InterpolationsRegridder(
     target_space::ClimaCore.Spaces.AbstractSpace;
     extrapolation_bc::Union{Nothing, Tuple} = nothing,
     dim_increasing::Union{Nothing, Tuple} = nothing,
+    dim_names::Union{Nothing, Tuple} = nothing,
     interpolation_method = Intp.Linear(),
 )
     coordinates = ClimaCore.Fields.coordinate_field(target_space)
@@ -89,8 +95,11 @@ function Regridders.InterpolationsRegridder(
         isnothing(extrapolation_bc) &&
             (extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Throw()))
         isnothing(dim_increasing) && (dim_increasing = (true, true, true))
+    elseif eltype(coordinates) <: ClimaCore.Geometry.ZPoint
+        isnothing(extrapolation_bc) && (extrapolation_bc = (Intp.Throw(),))
+        isnothing(dim_increasing) && (dim_increasing = (true,))
     else
-        error("Only lat-long, lat-long-z, and x-y-z spaces are supported")
+        error("Only lat-long, lat-long-z, x-y-z, and z spaces are supported")
     end
 
     return InterpolationsRegridder(
@@ -99,6 +108,7 @@ function Regridders.InterpolationsRegridder(
         interpolation_method,
         extrapolation_bc,
         dim_increasing,
+        dim_names,
     )
 end
 
@@ -125,6 +135,41 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
         end
     else
         coords = regridder.coordinates
+    end
+
+    # For a Z-only space with 3D input data, extract the vertical column at the center
+    if eltype(coords) <: ClimaCore.Geometry.ZPoint && length(dimensions) == 3
+        # Find the vertical dimension index
+        if !isnothing(regridder.dim_names)
+            # Use dimension names to identify the vertical dimension
+            z_names = ("z", "lev", "level", "plev", "height", "altitude")
+            z_idx = findfirst(name -> name in z_names, regridder.dim_names)
+            if isnothing(z_idx)
+                error(
+                    "Could not identify vertical dimension in $(regridder.dim_names). Expected one of: $z_names",
+                )
+            end
+            # Get horizontal dimension indices (all dimensions except vertical)
+            horiz_indices = [i for i in 1:3 if i != z_idx]
+            # Extract center point of horizontal domain
+            h1_idx = round(Int, length(dimensions[horiz_indices[1]]) / 2 + 0.5)
+            h2_idx = round(Int, length(dimensions[horiz_indices[2]]) / 2 + 0.5)
+            # Extract data based on dimension order
+            if z_idx == 1
+                data = data[:, h1_idx, h2_idx]
+            elseif z_idx == 2
+                data = data[h1_idx, :, h2_idx]
+            else  # z_idx == 3
+                data = data[h1_idx, h2_idx, :]
+            end
+            dimensions = (dimensions[z_idx],)
+        else
+            # Fallback: assume dimensions are (lon, lat, z)
+            h1_idx = round(Int, length(dimensions[1]) / 2 + 0.5)
+            h2_idx = round(Int, length(dimensions[2]) / 2 + 0.5)
+            data = data[h1_idx, h2_idx, :]
+            dimensions = (dimensions[3],)
+        end
     end
 
     dimensions_FT = map(dimensions, regridder.dim_increasing) do dim, increasing

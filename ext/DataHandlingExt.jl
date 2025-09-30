@@ -337,7 +337,8 @@ function DataHandling.DataHandler(
             issorted(dim) ? true : false
         end
         regridder_args = (target_space,)
-        regridder_kwargs = merge((; dim_increasing), regridder_kwargs)
+        regridder_kwargs =
+            merge((; dim_increasing, dim_names), regridder_kwargs)
     end
 
     RegridderConstructor = getfield(Regridders, regridder_type)
