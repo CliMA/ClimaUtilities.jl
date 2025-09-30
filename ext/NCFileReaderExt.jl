@@ -104,7 +104,8 @@ function FileReaders.NCFileReader(
         # first dataset. We need this to aggregate multiple datasets, if data is split across
         # multiple files
         NCDatasets.NCDataset(first(file_paths)) do first_dataset
-            is_time = x -> x == "time" || x == "date" || x == "t"
+            is_time =
+                x -> x == "time" || x == "date" || x == "t" || x == "valid_time"
             time_dims = filter(is_time, NCDatasets.dimnames(first_dataset))
             if !isempty(time_dims)
                 # When loading multifile dataset using NCDatasets.jl, the NetCDF files are
@@ -146,7 +147,8 @@ function FileReaders.NCFileReader(
     dim_names = NCDatasets.dimnames(dataset[varname])
 
     if !isempty(available_dates)
-        is_time = x -> x == "time" || x == "date" || x == "t"
+        is_time =
+            x -> x == "time" || x == "date" || x == "t" || x == "valid_time"
 
         time_index_vec = findall(is_time, dim_names)
         length(time_index_vec) == 1 ||
