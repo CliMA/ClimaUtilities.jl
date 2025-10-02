@@ -336,6 +336,23 @@ function DataHandling.DataHandler(
             @assert issorted(dim) || issorted(dim, rev = true) "dimension $dim_name is neither monotonically increasing nor decreasing"
             issorted(dim) ? true : false
         end
+
+        # Verify that dim_increasing and dim_names have matching orderings
+        # This ensures that dim_increasing[i] corresponds to dim_names[i] and dimensions[i]
+        @assert length(dim_increasing) == length(dim_names) "dim_increasing and dim_names must have the same length. Got dim_increasing with length $(length(dim_increasing)) and dim_names with length $(length(dim_names))"
+
+        # Additional validation: verify that dim_increasing order matches the actual dimension sorting behavior
+        for (i, (dim_name, increasing_flag, dim)) in
+            enumerate(zip(dim_names, dim_increasing, dimensions))
+            expected_increasing = issorted(dim)
+            if increasing_flag != expected_increasing
+                error(
+                    "Detected mismatch in dimension ordering: dim_names[$i]=\"$dim_name\" but dim_increasing[$i]=$increasing_flag does not match actual sorting of dimensions[$i] (expected $expected_increasing). " *
+                    "This indicates a potential bug in DataHandler construction where dim_names and dimensions are not in the same order.",
+                )
+            end
+        end
+
         regridder_args = (target_space,)
         regridder_kwargs =
             merge((; dim_increasing, dim_names), regridder_kwargs)

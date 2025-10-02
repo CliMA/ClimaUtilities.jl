@@ -73,6 +73,12 @@ The optional keyword argument `dim_increasing` controls which dimensions should
 be reversed before performing interpolation. This must be a tuple of N booleans, where
 N is the number of spatial dimensions. The default is the `true` for each
 spatial dimension.
+
+The optional keyword argument `dim_names` provides dimension names for the input data
+(e.g., ("lon", "lat", "z")). When provided with `dim_increasing`, they must be in the same
+order: `dim_increasing[i]` applies to `dim_names[i]` and the i-th dimension. This is
+particularly important for Z-only spaces where vertical dimensions need to be identified
+by name.
 """
 function Regridders.InterpolationsRegridder(
     target_space::ClimaCore.Spaces.AbstractSpace;
@@ -164,6 +170,11 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
             end
             dimensions = (dimensions[z_idx],)
         else
+            @warn """dim_names not provided to InterpolationsRegridder for \
+                Z-only space with 3D input data. Assuming dimensions are ordered \
+                 as (lon, lat, z). To avoid this assumption and potential incorrect \
+                 results, provide dim_names when creating the regridder."""
+
             # Fallback: assume dimensions are (lon, lat, z)
             h1_idx = round(Int, length(dimensions[1]) / 2 + 0.5)
             h2_idx = round(Int, length(dimensions[2]) / 2 + 0.5)
