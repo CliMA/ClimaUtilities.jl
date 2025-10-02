@@ -142,3 +142,26 @@ function make_box_space(FT; context = ClimaComms.context())
     return hybrid
 
 end
+
+function make_z_only_space(FT; context = ClimaComms.context())
+    zlim = (FT(0), FT(1))
+    zelem = 10
+
+    vertdomain = ClimaCore.Domains.IntervalDomain(
+        ClimaCore.Geometry.ZPoint{FT}(zlim[1]),
+        ClimaCore.Geometry.ZPoint{FT}(zlim[2]);
+        boundary_names = (:bottom, :top),
+    )
+    vertmesh = ClimaCore.Meshes.IntervalMesh(vertdomain, nelems = zelem)
+    if pkgversion(ClimaCore) >= v"0.14.10"
+        vert_center_space = ClimaCore.Spaces.CenterFiniteDifferenceSpace(
+            ClimaComms.device(context),
+            vertmesh,
+        )
+    else
+        vert_center_space =
+            ClimaCore.Spaces.CenterFiniteDifferenceSpace(vertmesh)
+    end
+
+    return vert_center_space
+end
