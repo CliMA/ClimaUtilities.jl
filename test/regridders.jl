@@ -155,6 +155,14 @@ end
         data_lon2D[:, i] .= lon
     end
 
+    periodic_lon = collect(-179.5:1:179.5)
+    periodic_dimensions2D = (periodic_lon, lat)
+    periodic_size2D = (360, 181)
+    periodic_data_lon2D = zeros(periodic_size2D)
+    for i in 1:length(lat)
+        periodic_data_lon2D[:, i] .= periodic_lon
+    end
+
     data_lat3D = zeros(size3D)
     data_lon3D = zeros(size3D)
     data_z3D = zeros(size3D)
@@ -181,12 +189,20 @@ end
 
         reg_horz = Regridders.InterpolationsRegridder(horzspace)
 
+        periodic_reg_horz = Regridders.InterpolationsRegridder(horzspace)
+
         regridded_lat = Regridders.regrid(reg_horz, data_lat2D, dimensions2D)
         regridded_lon = Regridders.regrid(reg_horz, data_lon2D, dimensions2D)
+        regridded_periodic_lon = Regridders.regrid(
+            periodic_reg_horz,
+            periodic_data_lon2D,
+            periodic_dimensions2D,
+        )
 
         # now repeat the regrid with in place method, and check that the result is the same
         in_place_regridded_lat = zeros(axes(regridded_lat))
         in_place_regridded_lon = zeros(axes(regridded_lon))
+        in_place_regridded_periodic_lon = zeros(axes(regridded_periodic_lon))
         Regridders.regrid!(
             in_place_regridded_lat,
             reg_horz,
@@ -199,9 +215,17 @@ end
             FT.(data_lon2D),
             map(x -> FT.(x), dimensions2D),
         )
+        Regridders.regrid!(
+            in_place_regridded_periodic_lon,
+            periodic_reg_horz,
+            FT.(periodic_data_lon2D),
+            map(x -> FT.(x), periodic_dimensions2D),
+        )
+
 
         @test regridded_lat == in_place_regridded_lat
         @test regridded_lon == in_place_regridded_lon
+        @test regridded_periodic_lon == in_place_regridded_periodic_lon
 
         coordinates = ClimaCore.Fields.coordinate_field(horzspace)
 
@@ -228,6 +252,31 @@ end
         err_lat = abs.(coordinates.lat .- regridded_lat)
         @test maximum(err_lat) < 1e-5
         check_lon_error(coordinates.long, regridded_lon)
+
+        # Check periodic oncell boundary conditions
+        # Because of how the data is specified, the errors will be large at
+        # 180.0 degrees and -180.0 degrees along the longitudes
+        diff_coordinates =
+            parent(coordinates.long) - parent(regridded_periodic_lon)
+        inds_not_ends = findall(
+            x -> !(x ≈ 180.0 || x ≈ -180.0),
+            Array(parent(coordinates.long)),
+        )
+        @test minimum(abs.(view(diff_coordinates, inds_not_ends))) ≈ 0.0
+
+        # When lon is 180.0 or -180.0, then coordinates.lon is 180.0 or -180.0
+        # respectively. Since periodic_lon is collect(-179.5:1:179.5) with
+        # periodic oncell boundary condition, when the input to the
+        # interpolation along the longitude dimension is 180.0 or -180.0, it
+        # should be 0.0 for both cases. Hence, we get the results below.
+        # This happens when lon = 180.0
+        inds_180_end = findall(x -> x ≈ 180.0, Array(parent(coordinates.long)))
+        @test all(≈(180.0), view(diff_coordinates, inds_180_end))
+
+        # This happens when lon = -180.0
+        inds_neg_180_end =
+            findall(x -> x ≈ -180.0, Array(parent(coordinates.long)))
+        @test all(≈(-180.0), view(diff_coordinates, inds_neg_180_end))
 
         # 3D space
         extrapolation_bc = (

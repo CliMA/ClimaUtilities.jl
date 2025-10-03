@@ -4,6 +4,20 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+#### Add heuristic to treat points as centers of cells. PR[#190](https://github.com/CliMA/ClimaUtilities.jl/pull/190)
+
+When using the `TimeVaryingInput`, `SpaceVaryingInput`, or
+`InterpolationsRegridder`, a heuristic is added to determine if the points of
+the data should be treated as centers of cells for the longitude dimension.
+Previously, the first and last points along the longitude dimension would be
+considered the same, which is not always the case. For example, if the
+longitudes span from 0.5 to 395.5 degrees, then the first and last points should
+not be colocated. In this case, the points are now treated correctly as the
+centers of cells.
+
+v0.1.25
+------
+
 #### Allow regridding 2D data onto 2D spaces with LatLongZ coordinates. PR[#176](https://github.com/CliMA/ClimaUtilities.jl/pull/176)
 
 Some 2D spaces use `LatLongPoint` coordinates and others use `LatLongZPoint`,
