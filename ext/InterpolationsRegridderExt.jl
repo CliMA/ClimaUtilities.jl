@@ -8,6 +8,8 @@ import ClimaCore.Fields: ClimaComms
 
 import ClimaUtilities.Regridders
 
+import ClimaUtilities.Utils: isequispaced
+
 struct InterpolationsRegridder{
     SPACE <: ClimaCore.Spaces.AbstractSpace,
     FIELD <: ClimaCore.Fields.Field,
@@ -79,6 +81,15 @@ The optional keyword argument `dim_names` provides dimension names for the input
 order: `dim_increasing[i]` applies to `dim_names[i]` and the i-th dimension. This is
 particularly important for Z-only spaces where vertical dimensions need to be identified
 by name.
+
+!!! note "Centers of cells heuristic for longitude dimension"
+    For the longitude dimension, the points along the dimension can either
+    represent the centers of cells or the edges of cells.
+    `InterpolationsRegridder` automatically detects whether the points represent
+    the centers of cells or the edges of cells by checking if the dimension is
+    equispaced and spans all 360 degrees. When this condition is met and a
+    periodic boundary condition is used, then the points are treated as the
+    centers of cells.
 """
 function Regridders.InterpolationsRegridder(
     target_space::ClimaCore.Spaces.AbstractSpace;
@@ -117,6 +128,18 @@ function Regridders.InterpolationsRegridder(
         dim_names,
     )
 end
+
+"""
+    find_lon_idx(field::ClimaCore.Fields.Field)
+
+Return the index of longitude dimension in the interpolation given the
+coordinate field of the space.
+"""
+find_lon_idx(field::ClimaCore.Fields.Field) = find_lon_idx(eltype(field))
+find_lon_idx(::Type{T}) where {T <: ClimaCore.Geometry.LatLongPoint} = 1
+find_lon_idx(::Type{T}) where {T <: ClimaCore.Geometry.LatLongZPoint} = 1
+find_lon_idx(::Type{T}) where {T <: ClimaCore.Geometry.XYZPoint} = nothing
+find_lon_idx(::Type{T}) where {T <: ClimaCore.Geometry.ZPoint} = nothing
 
 """
     regrid(regridder::InterpolationsRegridder, data, dimensions)::Field
@@ -194,7 +217,37 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
             Tuple([i for (i, d) in enumerate(regridder.dim_increasing) if !d])
         data_transformed = reverse(data, dims = decreasing_indices)
     end
-    # Make a linear spline
+
+    # This is a hack to determine if the points should be treated as centers of
+    # cells or edges of cells by seeing if the longitude dimension covers 360
+    # degrees and is equispaced
+    lon_dim_idx = find_lon_idx(coords)
+    lon_oncell =
+        if !isnothing(lon_dim_idx) && lon_dim_idx <= length(dimensions_FT)
+            dim = dimensions_FT[lon_dim_idx]
+            extp_bc = regridder.extrapolation_bc[lon_dim_idx]
+
+            extp_bc == Intp.Periodic() &&
+                length(dim) > 1 &&
+                begin
+                    d_dim = dim[2] - dim[1]
+                    span_all_360_degrees =
+                        last(dim) - first(dim) + d_dim ≈ 360.0
+                    span_all_360_degrees && isequispaced(dim)
+                end
+        else
+            false
+        end
+
+    # If needed, add virtual points at the end of the longitude dimension
+    if lon_oncell
+        data_transformed = _append_first_slice(data_transformed, lon_dim_idx)
+        lon = dimensions_FT[lon_dim_idx]
+        dlon = lon[2] - lon[1]
+        push!(lon, last(lon) + dlon)
+    end
+
+    # Make a spline
     itp = Intp.extrapolate(
         Intp.interpolate(
             dimensions_FT,
@@ -213,6 +266,18 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
 end
 
 """
+    _append_first_slice(data, dim_idx::Int)
+
+Append the first slice along the `dim_idx`th dimension to the end of the
+`dim_idx`th dimension of `data`.
+"""
+function _append_first_slice(data, dim_idx::Int)
+    slice_indices = ntuple(i -> i == dim_idx ? [1] : Colon(), ndims(data))
+    first_lon_slice = view(data, slice_indices...)
+    return cat(data, first_lon_slice, dims = dim_idx)
+end
+
+"""
      Regridders.regrid!(output, regridder::InterpolationsRegridder, data::AbstractArray{FT, N}, dimensions::NTuple{N, AbstractVector{FT}})
 
 Regrid the given data as defined on the given dimensions to the `target_space` in `regridder`, and store the result in `output`.
@@ -227,6 +292,36 @@ function Regridders.regrid!(
     all(regridder.dim_increasing) || error(
         "Dimensions must be monotonically increasing to use regrid!. Sort the dimensions first, or use regrid.",
     )
+
+    # This is a hack to determine if the points should be treated as centers of
+    # cells or edges of cells by seeing if the longitude dimension covers 360
+    # degrees and is equispaced
+    lon_dim_idx = find_lon_idx(regridder.coordinates)
+    lon_oncell = if !isnothing(lon_dim_idx) && lon_dim_idx <= length(dimensions)
+        dim = dimensions[lon_dim_idx]
+        extp_bc = regridder.extrapolation_bc[lon_dim_idx]
+
+        extp_bc == Intp.Periodic() &&
+            length(dim) > 1 &&
+            begin
+                d_dim = dim[2] - dim[1]
+                span_all_360_degrees =
+                    last(dim) - first(dim) + d_dim ≈ 360.0
+                span_all_360_degrees && isequispaced(dim)
+            end
+    else
+        false
+    end
+
+    # If needed, add virtual points at the end of the longitude dimension
+    if lon_oncell
+        data = _append_first_slice(data, lon_dim_idx)
+        dimensions = deepcopy(dimensions)
+        lon = dimensions[lon_dim_idx]
+        dlon = lon[2] - lon[1]
+        push!(lon, last(lon) + dlon)
+    end
+
     itp = Intp.extrapolate(
         Intp.interpolate(
             dimensions,
