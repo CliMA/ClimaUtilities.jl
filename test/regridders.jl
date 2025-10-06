@@ -372,6 +372,28 @@ end
             )
             @test isa(result, ClimaCore.Fields.Field)
 
+            # Test that wrongly ordered dimensions work with proper
+            # dim_increasing setting When dimensions are not monotonically
+            # increasing, we can still get correct interpolation by setting
+            # dim_increasing properly. The regridder will internally reverse the
+            # decreasing dimension and corresponding data slices, so the final
+            # result should be identical to using correctly ordered dimensions.
+            dim_increasing_wrong = (false, true, true)  # lon decreasing, lat/z increasing
+            reg_wrong = Regridders.InterpolationsRegridder(
+                hv_center_space;
+                dim_names = dim_names_correct,
+                dim_increasing = dim_increasing_wrong,
+            )
+
+            result_wrong = Regridders.regrid(
+                reg_wrong,
+                data_3D,
+                dimensions_wrongly_ordered,
+            )
+            @test isa(result_wrong, ClimaCore.Fields.Field)
+            # Results should be equivalent since we're handling dimension order
+            @test result_wrong == result
+
             # Test Z-space with 3D input data and dim_names
             z_space = make_z_only_space(FT; context)
             reg_z_with_names = Regridders.InterpolationsRegridder(
