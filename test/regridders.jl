@@ -1,7 +1,7 @@
 using Test
 
 import ClimaUtilities
-import ClimaUtilities: Regridders
+import ClimaUtilities: Regridders, DataHandling
 import NCDatasets
 import ClimaCore
 import ClimaComms
@@ -342,6 +342,158 @@ end
         @test all(x -> x == one(x), parent(regridded_2Ddata))
         @test all(x -> x == one(x), parent(regridded_3Ddata))
     end
+
+    @testset "InterpolationsRegridder dim_names and validation" begin
+        lon, lat, z =
+            collect(-180.0:1:180.0), collect(-90.0:1:90), collect(0.0:1:100.0)
+        dimensions_correctly_ordered = (lon, lat, z)
+        dimensions_wrongly_ordered = (reverse(lon), lat, z)  # lon decreasing, others increasing
+        size3D = (361, 181, 101)
+        data_3D = zeros(size3D)
+
+        for FT in (Float32, Float64)
+            spaces = make_spherical_space(FT; context)
+            hv_center_space = spaces.hybrid
+
+            # Test that properly ordered dim_names and dim_increasing work together
+            dim_names_correct = ("lon", "lat", "z")
+            dim_increasing_correct = (true, true, true)
+
+            reg_correct = Regridders.InterpolationsRegridder(
+                hv_center_space;
+                dim_names = dim_names_correct,
+                dim_increasing = dim_increasing_correct,
+            )
+
+            result = Regridders.regrid(
+                reg_correct,
+                data_3D,
+                dimensions_correctly_ordered,
+            )
+            @test isa(result, ClimaCore.Fields.Field)
+
+            # Test that wrongly ordered dimensions work with proper
+            # dim_increasing setting When dimensions are not monotonically
+            # increasing, we can still get correct interpolation by setting
+            # dim_increasing properly. The regridder will internally reverse the
+            # decreasing dimension and corresponding data slices, so the final
+            # result should be identical to using correctly ordered dimensions.
+            dim_increasing_wrong = (false, true, true)  # lon decreasing, lat/z increasing
+            reg_wrong = Regridders.InterpolationsRegridder(
+                hv_center_space;
+                dim_names = dim_names_correct,
+                dim_increasing = dim_increasing_wrong,
+            )
+
+            result_wrong = Regridders.regrid(
+                reg_wrong,
+                data_3D,
+                dimensions_wrongly_ordered,
+            )
+            @test isa(result_wrong, ClimaCore.Fields.Field)
+            # Results should be equivalent since we're handling dimension order
+            @test result_wrong == result
+
+            # Test Z-space with 3D input data and dim_names
+            z_space = make_z_only_space(FT; context)
+            reg_z_with_names = Regridders.InterpolationsRegridder(
+                z_space;
+                dim_names = ("lon", "lat", "z"),
+            )
+
+            # Should work with proper dim_names to identify z dimension
+            result_z = Regridders.regrid(
+                reg_z_with_names,
+                data_3D,
+                dimensions_correctly_ordered,
+            )
+            @test isa(result_z, ClimaCore.Fields.Field)
+
+            # Test Z-space WITHOUT dim_names 
+            reg_z_no_names = Regridders.InterpolationsRegridder(z_space)
+
+            # This should issue a warning about missing dim_names
+            @test_logs (
+                :warn,
+                r"dim_names not provided.*Assuming dimensions are ordered.*lon.*lat.*z",
+            ) begin
+                Regridders.regrid(
+                    reg_z_no_names,
+                    data_3D,
+                    dimensions_correctly_ordered,
+                )
+            end
+            # Test that regridder creation accepts dim_names parameter
+            reg_with_names_and_increasing = Regridders.InterpolationsRegridder(
+                hv_center_space;
+                dim_names = ("lon", "lat", "z"),
+                dim_increasing = (true, true, true),
+            )
+            @test reg_with_names_and_increasing.dim_names ===
+                  ("lon", "lat", "z")
+            @test reg_with_names_and_increasing.dim_increasing ===
+                  (true, true, true)
+        end
+    end
+
+    @testset "Z-only space functionality" begin
+        lon, lat, z =
+            collect(-180.0:1:180.0), collect(-90.0:1:90), collect(0.0:1:100.0)
+        dimensions3D = (lon, lat, z)
+        size3D = (361, 181, 101)
+        data_3D = zeros(size3D)
+
+        for FT in (Float32, Float64)
+            z_space = make_z_only_space(FT; context)
+
+            # Test Z-space regridder creation
+            reg_z = Regridders.InterpolationsRegridder(z_space)
+            @test reg_z.target_space === z_space
+            @test reg_z.dim_names === nothing
+            @test reg_z.dim_increasing === (true,)
+
+            # Test regridding with dim_names to identify vertical dimension
+            reg_z_with_names = Regridders.InterpolationsRegridder(
+                z_space;
+                dim_names = ("lon", "lat", "z"),
+            )
+
+            result = Regridders.regrid(reg_z_with_names, data_3D, dimensions3D)
+            @test isa(result, ClimaCore.Fields.Field)
+
+            # Test with different dimension orders in dim_names
+            # Should work regardless of horizontal dimension order
+            for dim_names_test in [("lat", "lon", "z"), ("lon", "lat", "z")]
+                reg_test = Regridders.InterpolationsRegridder(
+                    z_space;
+                    dim_names = dim_names_test,
+                )
+                result_test = Regridders.regrid(reg_test, data_3D, dimensions3D)
+                @test isa(result_test, ClimaCore.Fields.Field)
+            end
+
+            # Test valid vertical dimension names
+            for z_name in ["z", "lev", "level", "plev", "height", "altitude"]
+                reg_valid_z = Regridders.InterpolationsRegridder(
+                    z_space;
+                    dim_names = ("lon", "lat", z_name),
+                )
+                result_valid_z =
+                    Regridders.regrid(reg_valid_z, data_3D, dimensions3D)
+                @test isa(result_valid_z, ClimaCore.Fields.Field)
+            end
+
+            # Test error case: no vertical dimension name found
+            @test_throws "Could not identify vertical dimension" begin
+                reg_no_z = Regridders.InterpolationsRegridder(
+                    z_space;
+                    dim_names = ("latitude", "longitude", "pressure"),
+                )
+                Regridders.regrid(reg_no_z, data_3D, dimensions3D)
+            end
+        end
+    end
+
 end
 
 @testset "InterpolationsRegridderXYZPoint" begin
