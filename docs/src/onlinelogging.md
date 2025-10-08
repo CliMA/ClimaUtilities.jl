@@ -29,7 +29,7 @@ timing information with [`report_walltime`](@ref ClimaUtilities.OnlineLogging.re
 `WallTimeInfo` keeps track and accumulates how much time has elapsed since the
 last time it was updated. In this, `WallTimeInfo` tries to automatically remove
 the compilation overhead that your simulation might run into in the first step
-(this is accomplished by ignoring the first step and doubling the cost of the
+(this is accomplished by ignoring the first step and scaling the cost of the
 second step to compensate).
 
 The simplest way to use `WallTimeInfo` is to make `report_walltime` a callback.
