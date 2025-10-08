@@ -50,6 +50,7 @@ totuple(pt::ClimaCore.Geometry.ZPoint) = pt.z
     InterpolationsRegridder(target_space::ClimaCore.Spaces.AbstractSpace
                             [; extrapolation_bc::Tuple,
                                dim_increasing::Union{Nothing, Tuple},
+                               dim_names::Union{Nothing, Tuple}
                                interpolation_method = Interpolations.Linear()])
 
 An online regridder that uses Interpolations.jl
