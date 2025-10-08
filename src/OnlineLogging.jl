@@ -21,11 +21,15 @@ struct WallTimeInfo
     # steps
     """Sum of elapsed walltime all the calls to `_update!`"""
     ∑Δt_wall::Base.RefValue{Float64}
+
+    """Simulation time at previous call to `_update!`"""
+    t_simulation_last::Base.RefValue{Float64}
     function WallTimeInfo()
         n_calls = Ref(0)
         t_wall_last = Ref(-1.0)
         ∑Δt_wall = Ref(0.0)
-        return new(n_calls, t_wall_last, ∑Δt_wall)
+        t_simulation_last = Ref(-1.0)
+        return new(n_calls, t_wall_last, ∑Δt_wall, t_simulation_last)
     end
 end
 
@@ -37,26 +41,53 @@ Update the timing information stored in the `WallTimeInfo` struct `wt`.
 This function tracks the wall time elapsed since the last call to `update!`. It handles the
 initial calls specially to exclude compilation time from the overall timing measurements.
 """
-function _update!(wt::WallTimeInfo)
-    # - The very first call (when `n_calls == 0`), there's no elapsed times to report (and
-    #   this is called during initialization, before `step!` has been called).
-    # - The second call (`n_calls == 1`) is after `step!` is called for the first time, but
-    #   we don't want to include this since it includes compilation time.
-    # - In the third call (`n_calls == 2`), we account for 2Δt_wall to compensate for the first
-    #   call that we didn't include (to exclude compilation time).
+function _update!(wt::WallTimeInfo, integrator)
+    # - For the very first call (when `n_calls == 0`), there's no elapsed times to report. The
+    #   first call can happen during callback initialization, or the first time the callback
+    #   condition is `true`.
+    # - If the first call is during initialization, then the second call will include
+    #   compilation time. In this case, we do not use the time between the first and second call,
+    #   and instead scale the time between the second and third call to account for the steps
+    #   from simulation start to the second call.
+    # - If the first call is after the simulation has started, compilation time is included in the first rather than the second call.  
+    #   The time between the first and second call is scaled to account for the steps before  
+    #   the first call.
     # - All the other calls are included without any special operation.
 
-    if wt.n_calls[] == 0 || wt.n_calls[] == 1
+    if wt.n_calls[] == 0 # no walltime to compare to on first call
         Δt_wall = 0.0
     else
         # How much walltime elapsed since list time we called `update!`?
         Δt_wall = time() - wt.t_wall_last[]
 
-        # If this is our third call, we need to compensate for the one call we didn't
-        # include to exclude compilation time
-        wt.n_calls[] == 2 && (Δt_wall = 2Δt_wall)
+        # If there hasn't been a measurement without compilation time yet, total measured time is zero
+        # When the first call was during init, this implies n_calls == 1
+        # When the first call is after sim has started, this implies n_calls is 1 or 2
+        if wt.∑Δt_wall[] == 0.0
+            t_start, _ = float.(integrator.sol.prob.tspan)
+            # check if previous call was after sim started
+            if t_start < wt.t_simulation_last[]
+                simulation_time_since_last =
+                    float(integrator.t) - wt.t_simulation_last[]
+                # account for steps before previous call to _update
+                simulation_time_missed = wt.t_simulation_last[] - t_start
+                # estimate the walltime the steps during the skipped measurements would have taken
+                # if there was no compilation by scaling the latest measurement
+                estimated_walltime_missed_without_compilation =
+                    (simulation_time_missed / simulation_time_since_last) *
+                    Δt_wall
+                Δt_wall =
+                    Δt_wall + estimated_walltime_missed_without_compilation
+            else
+                # if t_simulation_last == t_start, then the previous call was during init, so
+                # the measured time would include compilation. We instead set the measured time
+                # to zero, and compensate by scaling the next measurement
+                Δt_wall = 0.0
+            end
+        end
     end
 
+    wt.t_simulation_last[] = float(integrator.t)
     wt.n_calls[] += 1
     wt.t_wall_last[] = time()
     wt.∑Δt_wall[] += Δt_wall
@@ -138,7 +169,7 @@ report_callback = SciMLBase.DiscreteCallback(every10steps, report)
 TODO: Discuss/link `Schedules` when we move them to `ClimaUtilities`.
 """
 function report_walltime(wt, integrator)
-    _update!(wt)
+    _update!(wt, integrator)
     t_start, t_end = float.(integrator.sol.prob.tspan)
     dt = float(integrator.dt)
     t = float(integrator.t)

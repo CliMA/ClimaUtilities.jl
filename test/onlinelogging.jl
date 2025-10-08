@@ -20,35 +20,117 @@ import ClimaUtilities.OnlineLogging:
     end
 
     @testset "_update!" begin
+        # compile everything
         wt = WallTimeInfo()
-
+        integrator = MockIntegrator(;
+            sol = (; prob = (; tspan = (0.0, 10.0))),
+            dt = 1.0,
+            t = 1.0,
+            step = 1,
+        )
+        _update!(wt, integrator)
+        sleep(0.1)
+        _update!(wt, integrator)
+        sleep(0.1)
+        _update!(wt, integrator)
+        ##### Test if first call is after sim has started
         # First call
-        _update!(wt)
+        wt = WallTimeInfo()
+        integrator = MockIntegrator(;
+            sol = (; prob = (; tspan = (0.0, 10.0))),
+            dt = 1.0,
+            t = 1.0,
+            step = 1,
+        )
+        _update!(wt, integrator)
         @test wt.n_calls[] == 1
         @test wt.∑Δt_wall[] == 0.0
+        @test wt.t_simulation_last[] == 1.0
 
-        # Second call
-        _update!(wt)
-        @test wt.n_calls[] == 2
-        @test wt.∑Δt_wall[] == 0.0
-
-        # Third call (compilation time compensation)
-        t1 = time()
-        sleep(0.1) # Introduce a small delay to simulate elapsed time
-        _update!(wt)
-        t2 = time()
-        @test wt.n_calls[] == 3
-        @test wt.∑Δt_wall[] ≈ 2 * (t2 - t1) atol = 0.1
-
-        # Fourth call (normal update)
+        # Second call (update compensates for un-timed steps)
+        integrator = MockIntegrator(;
+            sol = (; prob = (; tspan = (0.0, 10.0))),
+            dt = 1.0,
+            t = 3.0,
+            step = 3,
+        )
         t1 = time()
         sleep(0.1)
-        _update!(wt)
+        _update!(wt, integrator)
         t2 = time()
+        @test wt.n_calls[] == 2
+        @test wt.∑Δt_wall[] ≈ 1.5 * (t2 - t1) atol = 0.075
+        @test wt.t_simulation_last[] == 3.0
 
+        # Third call (normal update)
+        integrator = MockIntegrator(;
+            sol = (; prob = (; tspan = (0.0, 10.0))),
+            dt = 1.0,
+            t = 8.0,
+            step = 8,
+        )
+        t1 = time()
+        sleep(0.1)
+        _update!(wt, integrator)
+        t2 = time()
+        @test wt.n_calls[] == 3
+        @test isapprox(wt.∑Δt_wall[], 2.5 * (t2 - t1), atol = 0.075)
+        @test wt.t_simulation_last[] == 8.0
+
+        ##### Test if first call is during initialization
+        wt = WallTimeInfo()
+        integrator = MockIntegrator(;
+            sol = (; prob = (; tspan = (0.0, 10.0))),
+            dt = 1.0,
+            t = 0.0,
+            step = 0,
+        )
+        _update!(wt, integrator)
+        @test wt.n_calls[] == 1
+        @test wt.∑Δt_wall[] == 0.0
+        @test wt.t_simulation_last[] == 0.0
+
+        # second call
+        integrator = MockIntegrator(;
+            sol = (; prob = (; tspan = (0.0, 10.0))),
+            dt = 1.0,
+            t = 1.0,
+            step = 1,
+        )
+        _update!(wt, integrator)
+        @test wt.n_calls[] == 2
+        @test wt.∑Δt_wall[] == 0.0
+        @test wt.t_simulation_last[] == 1.0
+
+        # third call (compensates for missed steps)
+        integrator = MockIntegrator(;
+            sol = (; prob = (; tspan = (0.0, 10.0))),
+            dt = 1.0,
+            t = 3.0,
+            step = 3,
+        )
+        t1 = time()
+        sleep(0.1)
+        _update!(wt, integrator)
+        t2 = time()
+        @test wt.n_calls[] == 3
+        @test isapprox(wt.∑Δt_wall[], 1.5 * (t2 - t1), atol = 0.075)
+        @test wt.t_simulation_last[] == 3.0
+
+        # fourth call (normal update)
+        integrator = MockIntegrator(;
+            sol = (; prob = (; tspan = (0.0, 10.0))),
+            dt = 1.0,
+            t = 8.0,
+            step = 8,
+        )
+        t1 = time()
+        sleep(0.1)
+        _update!(wt, integrator)
+        t2 = time()
         @test wt.n_calls[] == 4
-        @test isapprox(wt.∑Δt_wall[], 2 * (time() - t1) + (t2 - t1), atol = 0.1)
-
+        @test isapprox(wt.∑Δt_wall[], 2.5 * (t2 - t1), atol = 0.075)
+        @test wt.t_simulation_last[] == 8.0
     end
 
     @testset "report_walltime" begin
