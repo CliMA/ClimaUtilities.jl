@@ -68,3 +68,7 @@ end
 @safetestset "ClimaArtifacts tests" begin
     include("clima_artifacts.jl")
 end
+
+@safetestset "OnlineLogging tests" begin
+    include("onlinelogging.jl")
+end
