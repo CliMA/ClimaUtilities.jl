@@ -137,6 +137,16 @@ the duration of the period that has to be repeated. The `repeat_date` defines
 what date range needs to be repeated. For example, if `period = Dates.Month(1)`
 and `repeat_date = Dates.Date(1993, 11)`, November 1993 will be repeated.
 
+!!! warn
+
+    While `PeriodicCalendar` is described as an extrapolation boundary condition,
+    it may also change the data used during the time period where data is available.
+    For example, take the case where data from 2000 to 2020 is available, and we have
+    `period = Dates.Year(1)` and `repeat_date = Dates.Date(2000)`. The data from 2000
+    will be repeated for *every year of the simulation* - outside of the 2000-2020
+    range where data is available, but also for every year within that range.
+    In this sense, `PeriodicCalendar` is not a true boundary condition only.
+
 The two inputs are not required. When they are not provided, `ClimaUtilities`
 will assume that the input data constitutes one period and use that. For
 example, if the data is defined from `t0` to `t1` (e.g., 1 and 5), interpolating

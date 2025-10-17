@@ -81,13 +81,21 @@ Repeat data periodically.
 
 `PeriodicCalendar` has two modes of operation:
 
-First, when provided with a `period` (described a `DatePeriod`, e.g., `Dates.Month(1)` or
-`Dates.Year(1)`), assume that the provided data is repeated over that calendar period. A
-`date` can be passed too, indicating what data to use. Only simple periods (e.g.,
+First, when provided with a `period` (a `Dates.DatePeriod`, e.g., `Dates.Month(1)` or
+`Dates.Year(1)`), assume that the provided data is repeated over that calendar period,
+even during dates of the simulation when other data is available.
+A `date` can be passed too, indicating what data to use. Only simple periods (e.g.,
 `Dates.Month(1)`) are supported. When provided a period, a `repeat_date` is required too.
 This is the period of time that is repeated. For example, if `period = Dates.Month(1)` and
 `repeat_date = Dates.Date(1993, 11)`, November 1993 is repeated (if available in the input
 data).
+
+!!! warn
+
+    In the case described above, `PeriodicCalendar` does not act as strictly a boundary
+    condition. It rather acts as a filter on the input data, selecting only data
+    corresponding to the given period and date and reusing this data repeatedly. This changes
+    the data that is used during the simulation, even within the time range of the input data.
 
 !!! note
 
@@ -103,7 +111,7 @@ identification is `t1 = t0`.
 
 This second mode of operation `PeriodicCalendar` requires data to be uniformly sampled in time.
 
-If the data is defined on a calendar year, this second mode of operation is equivalent to
+If the data is defined on a single calendar year, this second mode of operation is equivalent to
 using the first mode with `period = Dates.Year` (same with other periods).
 """
 struct PeriodicCalendar{
