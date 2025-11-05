@@ -4,6 +4,8 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+v0.1.27
+------
 #### Add heuristic to treat points as centers of cells. PR[#190](https://github.com/CliMA/ClimaUtilities.jl/pull/190)
 
 When using the `TimeVaryingInput`, `SpaceVaryingInput`, or
@@ -14,6 +16,28 @@ considered the same, which is not always the case. For example, if the
 longitudes span from 0.5 to 395.5 degrees, then the first and last points should
 not be colocated. In this case, the points are now treated correctly as the
 centers of cells.
+
+#### Support for Z-only spaces in InterpolationsRegridder. PR[#189](https://github.com/CliMA/ClimaUtilities.jl/pull/189)
+
+`InterpolationsRegridder` now supports regridding onto Z-only spaces (single
+column simulations) using `ClimaCore.Geometry.ZPoint` coordinates. This enables
+interpolation of 1D vertical data onto column spaces. The regridder also now
+accepts an optional `dim_names` keyword argument to explicitly specify dimension
+names (e.g., `("lon", "lat", "z")`), which is particularly useful for Z-only
+spaces where vertical dimensions need to be identified by name.
+
+#### Improved WallTimeInfo support. PR[#193](https://github.com/CliMA/ClimaUtilities.jl/pull/193)
+
+`WallTimeInfo` now works correctly when the progress reporting callback is not
+called during initialization, and properly supports non-periodic reporting
+schedules. The timing calculations now correctly account for steps that occurred
+before the first call to `report_progress`, ensuring accurate wall time
+estimates regardless of when reporting begins.
+
+v0.1.26
+------
+
+#### Remove LatLongZ regridding warning. PR[#184](https://github.com/CliMA/ClimaUtilities.jl/pull/184)
 
 v0.1.25
 ------
