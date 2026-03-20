@@ -61,23 +61,17 @@ regridded_u = Regridders.regrid(reg, target_date)
 
 > This extension is loaded when loading `ClimaCore` and `Interpolations`
 
-`InterpolationsRegridder` performs linear interpolation of input data (linear
+By default, `InterpolationsRegridder` performs linear interpolation of input data (linear
 along each direction) and returns a `ClimaCore` `Field` defined on the
 `target_space`.
 
-!!! note "Did you know?"
-    With versions of ClimaUtilities after v0.1.24, you can choose the mode of
-    the gridded interpolation with the keyword argument `interpolation_method`.
-    For example, to do constant interpolation, you can pass
-    `interpolation_method = Interpolations.Constant()` as a keyword argument
-    when constructing the regridder.
+Nearest neighbor spatial interpolation is also supported, and is
+chosen by passing `interpolation_method = Interpolations.Constant()`
+to the `InterpolationsRegridder` constructor. This feature is available
+in versions of ClimaUtilities after v0.1.24.
 
 Currently, `InterpolationsRegridder` only supports spherical shells and extruded
 spherical shells (but it could be easily extended to other domains).
-
-!!! note
-
-    It is easy to change the spatial interpolation type if needed.
 
 `InterpolationsRegridder` are created once, they are tied to a `target_space`,
 but can be used with any input data. With MPI runs, every process computes the
