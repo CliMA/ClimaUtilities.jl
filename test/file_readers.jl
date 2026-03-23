@@ -116,6 +116,17 @@ end
         defVar(nc, "date", times, ("date",))
         @test read_dates_func(nc) == DateTime.(string.(times), "yyyymmdd")
     end
+
+    NCDataset(joinpath(@__DIR__, "test_data", "reinterpret_time_dim.nc")) do nc
+        @test read_dates_func(nc) == Dates.DateTime.(
+            [
+                "1850-01-15T12:00:00"
+                "1850-02-14T00:00:00"
+                "1850-03-15T12:00:00"
+                "1850-04-15T00:00:00"
+            ],
+        )
+    end
 end
 
 @testset "read_missing_dims" begin

@@ -4,6 +4,11 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+### Bug fixes
+
+- Fixed a bug where reading dates from a NetCDF file would fail when using
+  CFTime v0.2.7.
+
 v0.1.27
 ------
 #### Add heuristic to treat points as centers of cells. PR[#190](https://github.com/CliMA/ClimaUtilities.jl/pull/190)
