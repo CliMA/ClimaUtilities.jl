@@ -1,7 +1,12 @@
 using Test
 import Logging
 import ClimaUtilities.OnlineLogging:
-    WallTimeInfo, _update!, report_walltime, _time_and_units_str, _trunc_time
+    WallTimeInfo,
+    _update!,
+    report_walltime,
+    _time_and_units_str,
+    _trunc_time,
+    sypd_str_from_ssps
 
 @testset "OnlineLogging Tests" begin
     # Mock integrator struct for testing
@@ -12,28 +17,16 @@ import ClimaUtilities.OnlineLogging:
         step::Any
     end
 
-    @testset "WallTimeInfo" begin
+    @testset "WallTimeInfo default args" begin
         wt = WallTimeInfo()
         @test wt.n_calls[] == 0
         @test wt.t_wall_last[] == -1.0
         @test wt.∑Δt_wall[] == 0.0
+        @test wt.first_update_after_n_calls == 2
+        @test wt.first_update_after_t_simulation == -Inf
     end
 
-    @testset "_update!" begin
-        # compile everything
-        wt = WallTimeInfo()
-        integrator = MockIntegrator(;
-            sol = (; prob = (; tspan = (0.0, 10.0))),
-            dt = 1.0,
-            t = 1.0,
-            step = 1,
-        )
-        _update!(wt, integrator)
-        sleep(0.1)
-        _update!(wt, integrator)
-        sleep(0.1)
-        _update!(wt, integrator)
-        ##### Test if first call is after sim has started
+    @testset "_update! with default args" begin
         # First call
         wt = WallTimeInfo()
         integrator = MockIntegrator(;
@@ -44,10 +37,12 @@ import ClimaUtilities.OnlineLogging:
         )
         _update!(wt, integrator)
         @test wt.n_calls[] == 1
-        @test wt.∑Δt_wall[] == 0.0
+        @test iszero(wt.∑Δt_wall[])
         @test wt.t_simulation_last[] == 1.0
 
-        # Second call (update compensates for un-timed steps)
+        # Second call (should not record measurement)
+        _update!(wt, integrator)
+        # Third call (update compensates for un-timed steps)
         integrator = MockIntegrator(;
             sol = (; prob = (; tspan = (0.0, 10.0))),
             dt = 1.0,
@@ -58,11 +53,11 @@ import ClimaUtilities.OnlineLogging:
         sleep(0.1)
         _update!(wt, integrator)
         t2 = time()
-        @test wt.n_calls[] == 2
+        @test wt.n_calls[] == 3
         @test wt.∑Δt_wall[] ≈ 1.5 * (t2 - t1) atol = 0.075
         @test wt.t_simulation_last[] == 3.0
 
-        # Third call (normal update)
+        # Fourth call (normal update)
         integrator = MockIntegrator(;
             sol = (; prob = (; tspan = (0.0, 10.0))),
             dt = 1.0,
@@ -70,68 +65,50 @@ import ClimaUtilities.OnlineLogging:
             step = 8,
         )
         t1 = time()
-        sleep(0.1)
-        _update!(wt, integrator)
-        t2 = time()
-        @test wt.n_calls[] == 3
-        @test isapprox(wt.∑Δt_wall[], 2.5 * (t2 - t1), atol = 0.075)
-        @test wt.t_simulation_last[] == 8.0
-
-        ##### Test if first call is during initialization
-        wt = WallTimeInfo()
-        integrator = MockIntegrator(;
-            sol = (; prob = (; tspan = (0.0, 10.0))),
-            dt = 1.0,
-            t = 0.0,
-            step = 0,
-        )
-        _update!(wt, integrator)
-        @test wt.n_calls[] == 1
-        @test wt.∑Δt_wall[] == 0.0
-        @test wt.t_simulation_last[] == 0.0
-
-        # second call
-        integrator = MockIntegrator(;
-            sol = (; prob = (; tspan = (0.0, 10.0))),
-            dt = 1.0,
-            t = 1.0,
-            step = 1,
-        )
-        _update!(wt, integrator)
-        @test wt.n_calls[] == 2
-        @test wt.∑Δt_wall[] == 0.0
-        @test wt.t_simulation_last[] == 1.0
-
-        # third call (compensates for missed steps)
-        integrator = MockIntegrator(;
-            sol = (; prob = (; tspan = (0.0, 10.0))),
-            dt = 1.0,
-            t = 3.0,
-            step = 3,
-        )
-        t1 = time()
-        sleep(0.1)
-        _update!(wt, integrator)
-        t2 = time()
-        @test wt.n_calls[] == 3
-        @test isapprox(wt.∑Δt_wall[], 1.5 * (t2 - t1), atol = 0.075)
-        @test wt.t_simulation_last[] == 3.0
-
-        # fourth call (normal update)
-        integrator = MockIntegrator(;
-            sol = (; prob = (; tspan = (0.0, 10.0))),
-            dt = 1.0,
-            t = 8.0,
-            step = 8,
-        )
-        t1 = time()
-        sleep(0.1)
+        sleep(0.2)
         _update!(wt, integrator)
         t2 = time()
         @test wt.n_calls[] == 4
-        @test isapprox(wt.∑Δt_wall[], 2.5 * (t2 - t1), atol = 0.075)
+        @test wt.∑Δt_wall[] ≈ ((1.5 / 2) + 1) * (t2 - t1) atol = 0.075
         @test wt.t_simulation_last[] == 8.0
+        current_wall_time_per_step = (t2 - t1) / 5 # 5 steps between t=3 and t=8
     end
+
+    @testset "_update! with args" begin
+        # First and second call should not record measurement
+        wt_n_calls = WallTimeInfo(; first_update_after_n_calls = 2)
+        wt_t_sim = WallTimeInfo(; first_update_after_t_simulation = 5.0)
+        wt_both = WallTimeInfo(;
+            first_update_after_n_calls = 2,
+            first_update_after_t_simulation = 3.0,
+        )
+        for wt in (wt_n_calls, wt_t_sim, wt_both)
+            integrator = MockIntegrator(;
+                sol = (; prob = (; tspan = (0.0, 10.0))),
+                dt = 1.0,
+                t = 5.0,
+                step = 5,
+            )
+            _update!(wt, integrator)
+            _update!(wt, integrator)
+            @test wt.n_calls[] == 2
+            @test iszero(wt.∑Δt_wall[])
+            # Third call (update compensates for un-timed steps)
+            integrator = MockIntegrator(;
+                sol = (; prob = (; tspan = (0.0, 10.0))),
+                dt = 1.0,
+                t = 6.0,
+                step = 6,
+            )
+            t1 = time()
+            sleep(0.1)
+            _update!(wt, integrator)
+            t2 = time()
+            @test wt.n_calls[] == 3
+            @test wt.∑Δt_wall[] ≈ 6 * (t2 - t1) atol = 0.075
+        end
+    end
+
 
     @testset "report_walltime" begin
         wt = WallTimeInfo()
@@ -188,6 +165,10 @@ import ClimaUtilities.OnlineLogging:
         last_rep = split(output_string, "Info:")[end]
         reported_sypd =
             parse(Int, match(r"estimated_sypd = (\d*)", last_rep).captures[1])
+        inst_sypd = parse(
+            Int,
+            match(r"instantaneous_sypd = (\d*)", last_rep).captures[1],
+        )
         time_remaining_s, time_remaining_ms = match(
             r"wall_time_remaining = (\d*) seconds, (\d*) milliseconds",
             last_rep,
@@ -219,6 +200,7 @@ import ClimaUtilities.OnlineLogging:
         )
         @test isapprox(reported_time_total, theoretical_time_total; rtol = 0.1)
         @test isapprox(reported_sypd, theoretical_sypd; rtol = 0.1)
+        @test isapprox(inst_sypd, theoretical_sypd; rtol = 0.1)
     end
 
     @testset "_time_and_units_str" begin
@@ -233,5 +215,11 @@ import ClimaUtilities.OnlineLogging:
         @test _trunc_time("1 hour, 1 minute, 1 second") == "1 hour, 1 minute"
         @test _trunc_time("1 minute, 1 second") == "1 minute, 1 second"
         @test _trunc_time("1 second") == "1 second"
+    end
+
+    @testset "sypd_str_from_ssps" begin
+        @test sypd_str_from_ssps(0.0) == "0.0 (sdpd_estimate = 0.0)"
+        @test sypd_str_from_ssps(1.0) == "0.003 (sdpd_estimate = 1.0)"
+        @test sypd_str_from_ssps(365.25) == "1.0"
     end
 end
