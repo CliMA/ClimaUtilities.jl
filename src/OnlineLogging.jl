@@ -12,86 +12,95 @@ struct WallTimeInfo
     intended to be call at the end of every timestep with a callback. This field is
     primarily used to exclude compilation from the timings."""
     n_calls::Base.RefValue{Int}
-
     """Wall time of the previous call to update `WallTimeInfo`."""
     t_wall_last::Base.RefValue{Float64}
-
     # We don't save t_wall_init, but ∑Δt_wall because we want to avoid including the
     # compilation time in here. update_progress_reporter! will skip the first couple of
     # steps
     """Sum of elapsed walltime all the calls to `_update!`"""
     ∑Δt_wall::Base.RefValue{Float64}
-
     """Simulation time at previous call to `_update!`"""
     t_simulation_last::Base.RefValue{Float64}
-    function WallTimeInfo()
-        n_calls = Ref(0)
-        t_wall_last = Ref(-1.0)
-        ∑Δt_wall = Ref(0.0)
-        t_simulation_last = Ref(-1.0)
-        return new(n_calls, t_wall_last, ∑Δt_wall, t_simulation_last)
-    end
+    """The `n_calls` after which the first call to `_update!` will be included in the overall
+    timing measurements, if the simulation time is also past `first_update_after_t_simulation`."""
+    first_update_after_n_calls::Int
+    """The simulation time after which the first call to `_update!` will be included in the
+    overall timing measurements, if the number of calls is also past `first_update_after_n_calls`."""
+    first_update_after_t_simulation::Float64
 end
 
 """
+    WallTimeInfo(;
+        first_update_after_n_calls = 2,
+        first_update_after_t_simulation = typemin(Float64))
+    )
+
+Constructor for `WallTimeInfo` struct. The default value for `first_update_after_n_calls` is
+set to 2 to exclude the first sim step, even when called once before the first step.
+"""
+function WallTimeInfo(;
+    first_update_after_n_calls = 2,
+    first_update_after_t_simulation = typemin(Float64),
+)
+    n_calls = Ref(0)
+    t_wall_last = Ref(-1.0)
+    ∑Δt_wall = Ref(0.0)
+    t_simulation_last = Ref(-1.0)
+    return WallTimeInfo(
+        n_calls,
+        t_wall_last,
+        ∑Δt_wall,
+        t_simulation_last,
+        first_update_after_n_calls,
+        first_update_after_t_simulation,
+    )
+end
+"""
     _update!(wt::WallTimeInfo)
 
-Update the timing information stored in the `WallTimeInfo` struct `wt`.
+Update the timing information stored in the `WallTimeInfo` struct `wt`, and return
+the wall time per step for the current measurement.
 
 This function tracks the wall time elapsed since the last call to `update!`. It handles the
 initial calls specially to exclude compilation time from the overall timing measurements.
+Measurements are only included in the overall timing after both of the following conditions are met:
+1. The number of calls to `_update!` exceeds `wt.first_update_after_n_calls`.
+2. The current simulation time exceeds `wt.first_update_after_t_simulation`.
 """
 function _update!(wt::WallTimeInfo, integrator)
-    # - For the very first call (when `n_calls == 0`), there's no elapsed times to report. The
-    #   first call can happen during callback initialization, or the first time the callback
-    #   condition is `true`.
-    # - If the first call is during initialization, then the second call will include
-    #   compilation time. In this case, we do not use the time between the first and second call,
-    #   and instead scale the time between the second and third call to account for the steps
-    #   from simulation start to the second call.
-    # - If the first call is after the simulation has started, compilation time is included in the first rather than the second call.  
-    #   The time between the first and second call is scaled to account for the steps before  
-    #   the first call.
-    # - All the other calls are included without any special operation.
-
-    if wt.n_calls[] == 0 # no walltime to compare to on first call
-        Δt_wall = 0.0
-    else
-        # How much walltime elapsed since list time we called `update!`?
-        Δt_wall = time() - wt.t_wall_last[]
-
-        # If there hasn't been a measurement without compilation time yet, total measured time is zero
-        # When the first call was during init, this implies n_calls == 1
-        # When the first call is after sim has started, this implies n_calls is 1 or 2
+    wt.n_calls[] += 1
+    t = float(integrator.t)
+    t_start, _ = float.(integrator.sol.prob.tspan)
+    should_record_measurement =
+        wt.n_calls[] > wt.first_update_after_n_calls &&
+        t > wt.first_update_after_t_simulation
+    Δt_wall = time() - wt.t_wall_last[]
+    dt = float(integrator.dt)
+    n_steps_this_measurement = ceil(Int, (t - wt.t_simulation_last[]) / dt)
+    wall_time_per_step_this_measurement = Δt_wall / n_steps_this_measurement
+    # The first recorded measurement is scaled to account for the steps before  
+    # All the other calls are included without any special operation.
+    if should_record_measurement
+        # the first time we record a measurement we compensate for the skipped measurements
+        # by estimating how long they would have taken without the compilation time, and adding
+        # that to the total wall time.
         if wt.∑Δt_wall[] == 0.0
-            t_start, _ = float.(integrator.sol.prob.tspan)
-            # check if previous call was after sim started
-            if t_start < wt.t_simulation_last[]
-                simulation_time_since_last =
-                    float(integrator.t) - wt.t_simulation_last[]
-                # account for steps before previous call to _update
-                simulation_time_missed = wt.t_simulation_last[] - t_start
-                # estimate the walltime the steps during the skipped measurements would have taken
-                # if there was no compilation by scaling the latest measurement
-                estimated_walltime_missed_without_compilation =
-                    (simulation_time_missed / simulation_time_since_last) *
-                    Δt_wall
-                Δt_wall =
-                    Δt_wall + estimated_walltime_missed_without_compilation
-            else
-                # if t_simulation_last == t_start, then the previous call was during init, so
-                # the measured time would include compilation. We instead set the measured time
-                # to zero, and compensate by scaling the next measurement
-                Δt_wall = 0.0
-            end
+            simulation_time_since_last =
+                float(integrator.t) - wt.t_simulation_last[]
+            # account for steps before previous call to _update
+            simulation_time_missed = wt.t_simulation_last[] - t_start
+            # estimate the walltime the steps during the skipped measurements would have taken
+            # if there was no compilation by scaling the latest measurement
+            estimated_walltime_missed_without_compilation =
+                (simulation_time_missed / simulation_time_since_last) * Δt_wall
+            Δt_wall += estimated_walltime_missed_without_compilation
         end
+        wt.∑Δt_wall[] += Δt_wall
     end
 
     wt.t_simulation_last[] = float(integrator.t)
-    wt.n_calls[] += 1
     wt.t_wall_last[] = time()
-    wt.∑Δt_wall[] += Δt_wall
-    return nothing
+    return wall_time_per_step_this_measurement
 end
 
 """
@@ -118,6 +127,8 @@ Prints a summary of the simulation progress to the console, including:
 - `estimated_sypd`: Estimated simulated years per day (or simulated days per day if sypd is
                     very small). You should expect this to be unreliable until the number of
                     completed steps is large.
+- `instantaneous_sypd`: Simulated years per day (or simulated days per day if sypd is very
+                        small) for the most recent measurement.
 - `date_now`: The current date and time.
 - `estimated_finish_date`: The estimated date and time of simulation completion. You should
                            expect this to be unreliable until the number of completed steps
@@ -169,7 +180,7 @@ report_callback = SciMLBase.DiscreteCallback(every10steps, report)
 TODO: Discuss/link `Schedules` when we move them to `ClimaUtilities`.
 """
 function report_walltime(wt, integrator)
-    _update!(wt, integrator)
+    inst_wall_time_per_step = _update!(wt, integrator)
     t_start, t_end = float.(integrator.sol.prob.tspan)
     dt = float(integrator.dt)
     t = float(integrator.t)
@@ -189,27 +200,19 @@ function report_walltime(wt, integrator)
     wall_time_spent = _time_and_units_str(wt.∑Δt_wall[])
     simulation_time = _time_and_units_str(float(t))
 
-    simulated_seconds_per_second = (t - t_start) / wt.∑Δt_wall[]
-    simulated_seconds_per_day = simulated_seconds_per_second * 86400
-    simulated_days_per_day = simulated_seconds_per_day / 86400
-    simulated_years_per_day = simulated_days_per_day / 365.25
-
-    sypd_estimate = string(round(simulated_years_per_day; digits = 3))
-    # When simulated_years_per_day is too small, also report the simulated_days_per_day
-    if simulated_years_per_day < 0.01
-        sdpd_estimate = round(simulated_days_per_day, digits = 3)
-        sypd_estimate *= " (sdpd_estimate = $sdpd_estimate)"
-    end
-
+    overall_simulated_seconds_per_second = (t - t_start) / wt.∑Δt_wall[]
+    inst_simulated_seconds_per_second = dt / inst_wall_time_per_step
+    overall_sypd_estimate =
+        sypd_str_from_ssps(overall_simulated_seconds_per_second)
+    inst_sypd = sypd_str_from_ssps(inst_simulated_seconds_per_second)
     estimated_finish_date =
         Dates.now() + Dates.Second(ceil(wall_time_remaining))
-
     @info "Progress" simulation_time = simulation_time n_steps_completed =
         n_steps wall_time_per_step = wall_time_ave_per_step_str wall_time_total =
         wall_time_total wall_time_remaining = wall_time_remaining_str wall_time_spent =
         wall_time_spent percent_complete = "$percent_complete%" estimated_sypd =
-        sypd_estimate date_now = Dates.now() estimated_finish_date =
-        estimated_finish_date
+        overall_sypd_estimate instantaneous_sypd = inst_sypd date_now =
+        Dates.now() estimated_finish_date = estimated_finish_date
 
     return nothing
 end
@@ -228,4 +231,21 @@ function _time_and_units_str(seconds)
 end
 _trunc_time(s::String) = count(',', s) > 1 ? join(split(s, ",")[1:2], ",") : s
 
+"""
+    sypd_str_from_ssps(simulated_seconds_per_second)
+Given a simulated seconds per second, return a string of simulated years per day (sypd).
+When sypd is very small, sdpd is appended to the string.
+"""
+function sypd_str_from_ssps(simulated_seconds_per_second)
+    simulated_seconds_per_day = simulated_seconds_per_second * 86400
+    simulated_days_per_day = simulated_seconds_per_day / 86400
+    simulated_years_per_day = simulated_days_per_day / 365.25
+    # When simulated_years_per_day is too small, also report the simulated_days_per_day
+    sypd_estimate = string(round(simulated_years_per_day; digits = 3))
+    if simulated_years_per_day < 0.01
+        sdpd_estimate = round(simulated_days_per_day, digits = 3)
+        sypd_estimate *= " (sdpd_estimate = $sdpd_estimate)"
+    end
+    return sypd_estimate
+end
 end
