@@ -13,9 +13,10 @@ function read_available_dates(ds::NetCDFDataset)
     # Check for time dimensions in order of preference
     for time_dim in ("time", "t", "valid_time")
         if time_dim in keys(ds.dim)
-            return Dates.DateTime.(
-                reinterpret.(Ref(NCDatasets.DateTimeStandard), ds[time_dim][:]),
-            )
+            # NCDatasets.jl uses CFTime.jl, which supports a time resolution of
+            # an attosecond, whereas Dates.DateTime only supports a time
+            # resolution of a millisecond.
+            return reinterpret.(Ref(Dates.DateTime), ds[time_dim][:])
         end
     end
     if "date" in keys(ds.dim)
