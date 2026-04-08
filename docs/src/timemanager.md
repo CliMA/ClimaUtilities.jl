@@ -291,7 +291,7 @@ are not considered for this reason.
 
 ```@docs
 ClimaUtilities.TimeManager.ITime
-ClimaUtilities.TimeManager.ITime(counter::Union{Integer, Rational}; period::Dates.FixedPeriod = Dates.Second(1), epoch = nothing)
+ClimaUtilities.TimeManager.ITime(counter::Integer; period = nothing, epoch = nothing)
 ClimaUtilities.TimeManager.ITime(t; epoch = nothing)
 ClimaUtilities.TimeManager.seconds
 ClimaUtilities.TimeManager.counter
