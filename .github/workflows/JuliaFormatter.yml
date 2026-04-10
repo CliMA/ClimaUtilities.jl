@@ -34,7 +34,7 @@ jobs:
       with:
         version: "1.10"
 
-    - uses: julia-actions/cache@v2
+    - uses: julia-actions/cache@v3
       if: steps.filter.outputs.julia_file_change == 'true'
 
     - name: Apply JuliaFormatter
