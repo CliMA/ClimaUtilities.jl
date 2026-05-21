@@ -4,6 +4,19 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+v0.1.29
+------
+### Online logging
+
+The constructor for `WallTimeInfo` type in the `OnlineLogging` module now accepts the kwargs
+`first_update_after_n_calls` and `first_update_after_t_simulation`, which allow users to
+specify when the first update should occur based on either the number of calls and/or the
+amount of simulation time that has elapsed. If both kwargs are provided,
+the first update will occur after both conditions is met. The callback also now reports
+"instantaneous" SYPD, which is the raw SYPD between the previous call and the current call.
+
+v0.1.28
+------
 ### Bug fixes
 
 - Fixed a bug where reading dates from a NetCDF file would fail when using
