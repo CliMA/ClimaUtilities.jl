@@ -326,14 +326,7 @@ extension_fns = [
     :CUDA => [:TimeVaryingInput, :evaluate!],
 ]
 
-"""
-    is_pkg_loaded(pkg::Symbol)
 
-Check if `pkg` is loaded or not.
-"""
-function is_pkg_loaded(pkg::Symbol)
-    return any(k -> Symbol(k.name) == pkg, keys(Base.loaded_modules))
-end
 
 function __init__()
     # Register error hint if a package is not loaded

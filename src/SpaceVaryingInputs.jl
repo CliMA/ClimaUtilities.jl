@@ -15,20 +15,12 @@
 # - analytic (functions of the coordinates of the space)
 
 module SpaceVaryingInputs
-
+import ClimaUtilities.Utils: is_pkg_loaded
 function SpaceVaryingInput end
 
 extension_fns =
     [:ClimaCore => [:SpaceVaryingInput], :NCDatasets => [:SpaceVaryingInput]]
 
-"""
-    is_pkg_loaded(pkg::Symbol)
-
-Check if `pkg` is loaded or not.
-"""
-function is_pkg_loaded(pkg::Symbol)
-    return any(k -> Symbol(k.name) == pkg, keys(Base.loaded_modules))
-end
 
 function __init__()
     # Register error hint if a package is not loaded

@@ -412,4 +412,13 @@ function sort_by_creation_time(files)
     return sort(files, by = x -> stat(x).ctime)
 end
 
+"""
+    is_pkg_loaded(pkg::Symbol)
+
+Check if `pkg` is loaded or not.
+"""
+function is_pkg_loaded(pkg::Symbol)
+    return any(k -> Symbol(k.name) == pkg, keys(Base.loaded_modules))
+end
+
 end

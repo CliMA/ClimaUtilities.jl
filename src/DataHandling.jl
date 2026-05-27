@@ -40,6 +40,7 @@ in the cache is removed when it reaches its maximum size (128 by default).
 While the reading backend could be generic, at the moment, this module uses only the NCFileReader.
 """
 module DataHandling
+import ClimaUtilities.Utils: is_pkg_loaded
 
 function DataHandler end
 
@@ -95,15 +96,6 @@ extension_fns = [
         :date_to_time,
     ],
 ]
-
-"""
-    is_pkg_loaded(pkg::Symbol)
-
-Check if `pkg` is loaded or not.
-"""
-function is_pkg_loaded(pkg::Symbol)
-    return any(k -> Symbol(k.name) == pkg, keys(Base.loaded_modules))
-end
 
 function __init__()
     # Register error hint if a package is not loaded
