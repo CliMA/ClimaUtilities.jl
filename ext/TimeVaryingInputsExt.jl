@@ -16,7 +16,8 @@ import ClimaUtilities.Utils:
     beginningofperiod,
     endofperiod,
     period_to_seconds_float,
-    unique_periods
+    unique_periods,
+    is_pkg_loaded
 
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:

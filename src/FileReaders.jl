@@ -10,6 +10,7 @@ The FileReaders module contains a global cache of all the NCDatasets that are cu
 This allows multiple NCFileReader to share the underlying file without overhead.
 """
 module FileReaders
+import ClimaUtilities.Utils: is_pkg_loaded
 
 abstract type AbstractFileReader end
 
@@ -33,15 +34,6 @@ extension_fns = [
         :close,
     ],
 ]
-
-"""
-    is_pkg_loaded(pkg::Symbol)
-
-Check if `pkg` is loaded or not.
-"""
-function is_pkg_loaded(pkg::Symbol)
-    return any(k -> Symbol(k.name) == pkg, keys(Base.loaded_modules))
-end
 
 function __init__()
     # Register error hint if a package is not loaded
