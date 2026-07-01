@@ -306,8 +306,17 @@ end
 
 A struct to read and process NetCDF files for multiple columns.
 """
-struct MultiColumnNCFileReader{VSTR, STR2, DIMS, DATES, NC, PREP, CACHE, VEC} <:
-       FileReaders.AbstractFileReader
+struct MultiColumnNCFileReader{
+    VSTR,
+    STR2,
+    HDIMS,
+    VDIM,
+    DATES,
+    NC,
+    PREP,
+    CACHE,
+    VEC,
+} <: FileReaders.AbstractFileReader
 
     """Path of the NetCDF file(s)"""
     file_paths::VSTR
@@ -315,9 +324,13 @@ struct MultiColumnNCFileReader{VSTR, STR2, DIMS, DATES, NC, PREP, CACHE, VEC} <:
     """Name of the dataset in the NetCDF files"""
     varname::STR2
 
-    """A tuple of arrays with the various physical dimensions where the data is defined
-    (e.g., lon/lat)"""
-    lonlatz_dimensions::DIMS
+    """A tuple of arrays with the horizontal physical dimensions where the data is
+    defined (e.g., (lons, lats))"""
+    horizontal_dimensions::HDIMS
+
+    """The per-column vertical levels where the data is defined (e.g., zs), or an
+    empty collection when the data has no vertical dimension"""
+    vertical_dimension::VDIM
 
     """A vector of DateTime collecting all the available dates in the files"""
     available_dates::DATES
@@ -338,6 +351,45 @@ struct MultiColumnNCFileReader{VSTR, STR2, DIMS, DATES, NC, PREP, CACHE, VEC} <:
     time_index::VEC
 end
 
+# TODO: Check this
+function _standardize_column_file_paths(file_paths)
+    file_paths isa AbstractString && (file_paths = [file_paths])
+    isempty(file_paths) &&
+        error("`file_paths` must contain at least one column")
+    column_file_paths =
+        first(file_paths) isa AbstractString ? [[String(f)] for f in file_paths] :
+        [collect(String, col) for col in file_paths]
+    any(isempty, column_file_paths) &&
+        error("Each column must have at least one file path")
+    return column_file_paths
+end
+
+# TODO: Check this
+function _open_multicolumn_dataset(column_paths::Vector{String}, varname)
+    only_one_file = length(column_paths) == 1
+    aggtime_kwarg = ()
+    if !only_one_file
+        # Identify the time dimension from the first file so NCDatasets can join
+        # the files along it.
+        NCDatasets.NCDataset(first(column_paths)) do first_dataset
+            is_time = x -> x == "time" || x == "date" || x == "t"
+            time_dims = filter(is_time, NCDatasets.dimnames(first_dataset))
+            isempty(time_dims) && error(
+                "Multiple files given for a column, but no temporal dimension found. Combining multiple files is only possible along the temporal dimension.",
+            )
+            aggtime_kwarg = (:aggdim => first(time_dims),)
+        end
+    end
+    # A single file is opened by its path; aggregated columns are opened from the
+    # collection with the `aggdim` keyword.
+    ncdataset_arg = only_one_file ? first(column_paths) : column_paths
+    dataset, open_varnames = get!(OPEN_NCFILES, column_paths) do
+        (NCDatasets.NCDataset(ncdataset_arg; aggtime_kwarg...), Set([varname]))
+    end
+    push!(open_varnames, varname)
+    return dataset
+end
+
 """
     FileReaders.MultiColumnNCFileReader(
         file_paths,
@@ -348,7 +400,13 @@ end
 
 Create a `MultiColumnNCFileReader` to read `varname` for multiple columns from `file_paths`.
 
-It is assumed that each file path in `file_paths` correspond to a single column.
+`file_paths` can be given in one of the following forms:
+- a single path (`"a.nc"`): a single column read from a single file;
+- a vector of paths (`["a.nc", "b.nc"]`): one column per path, each read from a
+  single file;
+- a vector of vectors of paths (`[["a1.nc", "a2.nc"], ["b.nc"]]`): one column per
+  inner vector, where the files of each inner vector are aggregated along the
+  time dimension (mirroring the single-column `NCFileReader`).
 """
 function FileReaders.MultiColumnNCFileReader(
     file_paths,
@@ -356,22 +414,15 @@ function FileReaders.MultiColumnNCFileReader(
     preprocess_func = identity,
     cache_size::Int = 128, # TODO: This won't be a LRU cache and probably will be a ring buffer
 )
-    # file_paths could be a vector/tuple or a string. Let's start by
-    # standarizing to a vector
-    file_paths isa AbstractString && (file_paths = [file_paths])
-    isempty(file_paths) &&
-        error("`file_paths` must contain at least one column file")
+    # TODO: Better to specify the name of the horizontal dimensions (e.g. x and
+    # y or lat and lon) as an argument, then DataHandler can handle it
 
-    # Open all the datasets that we need (one per column). The lazy `get!` only
-    # opens a file when it is not already tracked, so a shared/repeated path does
-    # not leak a dataset handle.
-    datasets = map(file_paths) do file_path
-        dataset, open_varnames = get!(OPEN_NCFILES, file_path) do
-            (NCDatasets.NCDataset(file_path), Set([varname]))
-        end
-        push!(open_varnames, varname)
-        return dataset
-    end
+    file_paths = _standardize_column_file_paths(file_paths)
+
+    # Open all the datasets that we need (one per column, aggregating along time
+    # when a column spans multiple files).
+    datasets =
+        map(column_paths -> _open_multicolumn_dataset(column_paths, varname), file_paths)
 
     # Per-column longitude, latitude, and z levels. Each column file is assumed to
     # hold a single (lon, lat) location.
@@ -417,7 +468,8 @@ function FileReaders.MultiColumnNCFileReader(
     return MultiColumnNCFileReader(
         file_paths,
         varname,
-        (lons, lats, zs),
+        (lons, lats),
+        zs,
         available_dates,
         datasets,
         preprocess_func,
@@ -439,18 +491,19 @@ Close `MultiColumnNCFileReader`. For each underlying file, if no other reader is
 using it, close the NetCDF dataset.
 """
 function Base.close(file_reader::MultiColumnNCFileReader)
-    # Each column's file is registered separately in `OPEN_NCFILES` (keyed by the
-    # individual path), so we release them one at a time. This is the single-column
-    # `close` wrapped in a loop over columns.
-    for (file_path, dataset) in
+    # Each column's dataset is registered in `OPEN_NCFILES` keyed by that column's
+    # file collection (a single-file column is keyed by its one-element vector),
+    # so we release them one at a time. This is the single-column `close` wrapped
+    # in a loop over columns.
+    for (column_paths, dataset) in
         zip(file_reader.file_paths, file_reader.datasets)
         # If we don't have the key, the file is already closed; skip it
-        haskey(OPEN_NCFILES, file_path) || continue
-        open_variables = OPEN_NCFILES[file_path][end]
+        haskey(OPEN_NCFILES, column_paths) || continue
+        open_variables = OPEN_NCFILES[column_paths][end]
         delete!(open_variables, file_reader.varname)
         if isempty(open_variables)
             NCDatasets.close(dataset)
-            delete!(OPEN_NCFILES, file_path)
+            delete!(OPEN_NCFILES, column_paths)
         end
     end
     return nothing

@@ -6,14 +6,21 @@ import Dates: Second
 import ClimaCore
 import ClimaCore: ClimaComms
 
+import NCDatasets
+
 import ClimaUtilities.DataStructures
 import ClimaUtilities.Regridders
-import ClimaUtilities.FileReaders: AbstractFileReader, NCFileReader, read, read!
+import ClimaUtilities.FileReaders:
+    AbstractFileReader, NCFileReader, MultiColumnNCFileReader, read, read!
 import ClimaUtilities.Regridders: AbstractRegridder, regrid
 
 import ClimaUtilities.Utils: isequispaced, period_to_seconds_float
 
 import ClimaUtilities.DataHandling
+
+# TEMPORARY: placeholder regridder used by `MultiColumnDataHandler` until a real
+# column regridder exists.
+include("temp_regridder.jl")
 
 """
     DataHandler{
@@ -654,9 +661,58 @@ end
     MultiColumnDataHandler
 
 A data handler that reads and remaps data column-by-column onto a multi-column
-space. Currently an empty placeholder.
+space. Mirrors `DataHandler`, but keeps the horizontal and vertical dimensions
+separate (there is no horizontal interpolation; only the vertical is regridded).
 """
-struct MultiColumnDataHandler end
+struct MultiColumnDataHandler{
+    FR <: AbstractDict{<:AbstractString, <:AbstractFileReader},
+    REG <: AbstractRegridder,
+    SPACE <: ClimaCore.Spaces.AbstractSpace,
+    HDIMS,
+    VDIM,
+    DATES <: AbstractArray{Dates.DateTime},
+    TIMES <: AbstractArray{<:AbstractFloat},
+    CACHE <: DataStructures.LRUCache{Dates.DateTime, ClimaCore.Fields.Field},
+    FUNC <: Function,
+    NAMES <: AbstractArray{<:AbstractString},
+    PR <: AbstractDict{<:AbstractString, <:AbstractArray},
+}
+    """Dictionary of variable names and objects responsible for getting the input data from disk to memory"""
+    file_readers::FR
+
+    """Object responsible for resampling the column data to the simulation grid"""
+    regridder::REG
+
+    """ClimaCore Space over which the data has to be resampled"""
+    target_space::SPACE
+
+    """Tuple of per-column horizontal coordinates (e.g., (lons, lats))"""
+    horizontal_dimensions::HDIMS
+
+    """Per-column vertical levels (e.g., zs), empty when there is no z dimension"""
+    vertical_dimension::VDIM
+
+    """Calendar dates over which the data is defined"""
+    available_dates::DATES
+
+    """Reference calendar date at the beginning of the simulation."""
+    start_date::Dates.DateTime
+
+    """Timesteps over which the data is defined (in seconds)"""
+    available_times::TIMES
+
+    """Private field where cached regridded fields are stored"""
+    _cached_regridded_fields::CACHE
+
+    """Function to combine multiple input variables into a single data variable"""
+    compose_function::FUNC
+
+    """Names of the datasets in the NetCDF that have to be read and processed"""
+    varnames::NAMES
+
+    """Preallocated memory for storing read dataset"""
+    preallocated_read_data::PR
+end
 
 """
     MultiColumnDataHandler(file_paths, varnames, target_space; kwargs...)
@@ -669,17 +725,244 @@ function DataHandling.MultiColumnDataHandler(
     varnames,
     target_space::ClimaCore.Spaces.AbstractSpace; # TODO: This will only work for a specific space
     start_date::Union{Dates.DateTime, Dates.Date} = Dates.DateTime(1979, 1, 1),
-    regridder_type = nothing,
     cache_max_size::Int = 2,
-    file_reader_kwargs = (),
     compose_function = identity,
+    file_reader_kwargs = (),
 )
-    # TODO: build the (multi-column) file readers, regridder, shared time axis,
-    # preallocated read buffers, and field cache, then populate the struct.
+    is_point_cloud(target_space) || error(
+        "The horizontal space of the target_space must be a PointCloudLevelSpace",
+    )
 
-    # TODO: For data handler, I need a permute_cols! functions for permuting the
-    # columns one time instead of many time
-    return MultiColumnDataHandler()
+    # Convert `file_paths` and `varnames` to arrays if they are not already
+    # After this point, we assume that `file_paths` and `varnames` are arrays, possibly with only one element
+    if file_paths isa AbstractString
+        # This case is only triggered for a single column case
+        file_paths = [file_paths]
+    end
+    if varnames isa AbstractString
+        varnames = [varnames]
+    end
+
+    # Verify that a `compose_function` is provided when combining multiple
+    # variables
+    if length(varnames) > 1 && compose_function == identity
+        error(
+            "`compose_function` must be specified when using multiple input variables",
+        )
+    end
+
+    # TODO: Check this (written by Claude)
+    # Massage `file_paths` into a per-variable list, so that afterwards
+    # `file_paths[i]` is the column specification for `varnames[i]`, i.e. exactly
+    # what `MultiColumnNCFileReader` expects: a flat list of column files, or a
+    # list of per-column file lists to aggregate along time.
+    #
+    # NOTE: this deliberately differs from the regular `DataHandler`. There, a
+    # flat list of files is split *along variables* using the
+    # `length(file_paths) == length(varnames)` heuristic. Here files index
+    # *columns*, not variables, so that heuristic is meaningless (the number of
+    # columns is unrelated to the number of variables, and could coincidentally
+    # equal it). We split only along the variable dimension and let the file
+    # reader interpret the column/time-chunk structure.
+    isempty(file_paths) && error("`file_paths` must not be empty")
+    is_file_paths_list_of_lists = !(first(file_paths) isa AbstractString)
+
+    if length(varnames) == 1
+        # Single variable: the entire `file_paths` is that variable's column
+        # specification, passed straight through to the reader (which interprets
+        # a flat list as one file per column, and a list of lists as columns with
+        # time chunks to aggregate).
+        file_paths = [file_paths]
+    elseif !is_file_paths_list_of_lists
+        # Multiple variables, one flat list of column files: every variable is
+        # read (by name) from the same set of column files. This is the common
+        # case where each column file contains all the variables.
+        file_paths = [copy(file_paths) for _ in varnames]
+    else
+        # Multiple variables with an explicit per-variable column specification:
+        # `file_paths[i]` is the column specification for `varnames[i]`, so the
+        # number of entries must match the number of variables.
+        length(file_paths) == length(varnames) || error(
+            "When passing per-variable file paths for multiple variables, the number of entries ($(length(file_paths))) must match the number of variables ($(length(varnames)))",
+        )
+    end
+    # Now `file_paths[i]` is the column specification for `varnames[i]`.
+
+    # For the horizontal direction, we will not do any horizontal interpolation.
+    # In the future, we may do nearest neighbor interpolation.
+
+    # Construct the file readers, one per variable, reading each variable's
+    # columns in the target space's column order.
+    file_paths = find_file_paths_for_cols(file_paths, target_space)
+    file_readers = Dict(
+        varname =>
+            MultiColumnNCFileReader(paths, varname; file_reader_kwargs...) for
+        (paths, varname) in zip(file_paths, varnames)
+    )
+
+    # For the vertical direction (if it exists), we will always use
+    # linear interpolation via ClimaInterpolations.jl.
+
+    # The horizontal dimensions are already verifed by constructing the file
+    # readers, so the only check now is to verify the vertical dimension
+    @assert length(
+        Set(file_reader.vertical_dimension for file_reader in values(file_readers)),
+    ) == 1 "Variables have inconsistent vertical dimensions"
+
+    # Verify the time dimension is the same for all variables: the available
+    # dates and time index between all file readesr must match.
+    @assert length(
+        Set(file_reader.available_dates for file_reader in values(file_readers)),
+    ) == 1 "Variables have inconsistent available dates"
+    # TODO: Do we really need this?
+    @assert length(
+        Set(file_reader.time_index for file_reader in values(file_readers)),
+    ) == 1 "Variables have inconsistent time indices"
+
+    # Get all the relevant fields for the struct
+    file_reader = first(values(file_readers))
+    available_dates = file_reader.available_dates
+    available_times =
+        period_to_seconds_float.(available_dates .- Dates.DateTime(start_date))
+    horizontal_dimensions = file_reader.horizontal_dimensions
+    vertical_dimension = file_reader.vertical_dimension
+
+    # Make the regridder here!
+    # TEMPORARY: a placeholder regridder that does no vertical interpolation.
+    regridder = TempRegridder(target_space)
+
+    # Use LRU cache to store regridded fields
+    _cached_regridded_fields =
+        DataStructures.LRUCache{Dates.DateTime, ClimaCore.Fields.Field}(
+            max_size = cache_max_size,
+        )
+
+    # Preallocate space for each variable to be read
+    one_date = isempty(available_dates) ? () : (first(available_dates),)
+    preallocated_read_data = Dict(
+        varname => read(file_readers[varname], one_date...) for
+        varname in varnames
+    )
+
+
+    # How clever should this struct be?
+    return MultiColumnDataHandler(
+        file_readers,
+        regridder,
+        target_space,
+        horizontal_dimensions,
+        vertical_dimension,
+        available_dates,
+        Dates.DateTime(start_date),
+        available_times,
+        _cached_regridded_fields,
+        compose_function,
+        varnames,
+        preallocated_read_data,
+    )
+end
+
+"""
+    is_point_cloud(space::ClimsCore.Spaces.AbstractSpace)
+
+Return true if the horizontal part of the `space` is a `PointCloudLevelSpace`.
+"""
+is_point_cloud(space::ClimaCore.Spaces.AbstractSpace) =
+    ClimaCore.Spaces.horizontal_space(space) isa
+    ClimaCore.Spaces.PointCloudLevelSpace
+is_point_cloud(::ClimaCore.Spaces.PointCloudLevelSpace) = true
+is_point_cloud(::ClimaCore.Spaces.AbstractPointSpace) = false
+
+"""
+    get_horizontal_space(space::ClimaCore.Spaces.AbstractSpace)
+
+Return the horizontal space of `space`. If `space` is already a horizontal
+(point) space, return it unchanged (`horizontal_space` is not defined on those,
+so we treat this as a no-op).
+"""
+get_horizontal_space(space::ClimaCore.Spaces.AbstractSpace) =
+    ClimaCore.Spaces.horizontal_space(space)
+get_horizontal_space(space::ClimaCore.Spaces.PointCloudLevelSpace) = space
+
+"""
+    find_file_paths_for_cols(file_paths, target_space; atol = 1e-3)
+
+Reorder the columns of `file_paths` so that, for every variable, column `i`
+corresponds to the `i`-th column of `target_space` (matched by horizontal
+location).
+
+`file_paths` is a per-variable list: `file_paths[i]` is the column specification
+for variable `i`, which is itself a list of columns. Each column is either a
+single path or a list of paths (the temporal chunks of that column). A column's
+location is read from the scalar `longitude`/`latitude` variables of its (first)
+file and matched against the `(long, lat)` of the target space's columns.
+Longitudes are compared modulo 360, so the "degrees east" and `[-180, 180)`
+conventions agree.
+
+Every variable is reordered independently (variables may live in different files
+with different column orderings). Errors if any variable's column count does not
+match the number of columns in the target space, or if a space column has no (or
+more than one) matching file column within `atol` (in degrees).
+"""
+function find_file_paths_for_cols(file_paths, target_space; atol = 1e-3)
+    # Map a longitude to the [-180, 180) convention, so that files stored in
+    # "degrees east" ([0, 360)) and spaces using [-180, 180) compare equal.
+    wrap_longitude(long) = mod(long + 180, 360) - 180
+    # The representative file of a column (used to read its location): a bare
+    # path, or the first temporal chunk when the column is split across files.
+    representative_file(column) =
+        column isa AbstractString ? column : first(column)
+
+    # Per-column (long, lat) of the target space, in the space's column order.
+    horz_space = get_horizontal_space(target_space)
+    coords = ClimaCore.Fields.coordinate_field(horz_space)
+    space_longs = wrap_longitude.(vec(collect(parent(coords.long))))
+    space_lats = vec(collect(parent(coords.lat)))
+    n_space_cols = length(space_lats)
+
+    # `file_paths` is indexed by variable first, so reorder each variable's
+    # columns to the target space's column order.
+    return map(file_paths) do column_spec
+        length(column_spec) == n_space_cols || error(
+            "Number of column files ($(length(column_spec))) does not match the number of columns in the target space ($n_space_cols)",
+        )
+
+        # Read each column's (wrapped longitude, latitude) from its (first) file,
+        # in file order. TODO: only longitude/latitude is supported (not x/y).
+        col_longs = zeros(n_space_cols)
+        col_lats = zeros(n_space_cols)
+        for (j, column) in enumerate(column_spec)
+            first_file = representative_file(column)
+            col_longs[j], col_lats[j] = NCDatasets.NCDataset(first_file) do ds
+                (haskey(ds, "longitude") && haskey(ds, "latitude")) || error(
+                    "File $first_file must contain scalar `longitude` and `latitude` variables",
+                )
+                (
+                    wrap_longitude(only(ds["longitude"][:])),
+                    only(ds["latitude"][:]),
+                )
+            end
+        end
+
+        # For each space column, find the unique file column at the same location.
+        perm = map(1:n_space_cols) do i
+            matches = findall(
+                j ->
+                    isapprox(col_longs[j], space_longs[i]; atol) &&
+                        isapprox(col_lats[j], space_lats[i]; atol),
+                1:n_space_cols,
+            )
+            isempty(matches) && error(
+                "No column file matches target space column $i at (long, lat) = ($(space_longs[i]), $(space_lats[i]))",
+            )
+            length(matches) == 1 || error(
+                "Multiple column files ($matches) match target space column $i at (long, lat) = ($(space_longs[i]), $(space_lats[i])); locations may be closer than `atol` = $atol",
+            )
+            only(matches)
+        end
+
+        column_spec[perm]
+    end
 end
 
 """
@@ -688,7 +971,8 @@ end
 Close all files associated to the given `data_handler`.
 """
 function Base.close(data_handler::MultiColumnDataHandler)
-    error("`close` not yet implemented for `MultiColumnDataHandler`")
+    foreach(close, values(data_handler.file_readers))
+    return nothing
 end
 
 """
@@ -697,7 +981,7 @@ end
 Return the times (in seconds) of the snapshots in the data.
 """
 function DataHandling.available_times(data_handler::MultiColumnDataHandler)
-    error("`available_times` not yet implemented for `MultiColumnDataHandler`")
+    return data_handler.available_times
 end
 
 """
@@ -706,7 +990,7 @@ end
 Return the dates of the snapshots in the data.
 """
 function DataHandling.available_dates(data_handler::MultiColumnDataHandler)
-    error("`available_dates` not yet implemented for `MultiColumnDataHandler`")
+    return data_handler.available_dates
 end
 
 """
@@ -715,7 +999,10 @@ end
 Return the time interval between data points (requires an equispaced temporal mesh).
 """
 function DataHandling.dt(data_handler::MultiColumnDataHandler)
-    error("`dt` not yet implemented for `MultiColumnDataHandler`")
+    isequispaced(DataHandling.available_times(data_handler)) ||
+        error("dt not defined for non equispaced data")
+    return DataHandling.available_times(data_handler)[begin + 1] -
+           DataHandling.available_times(data_handler)[begin]
 end
 
 """
@@ -727,7 +1014,13 @@ function DataHandling.time_to_date(
     data_handler::MultiColumnDataHandler,
     time::AbstractFloat,
 )
-    error("`time_to_date` not yet implemented for `MultiColumnDataHandler`")
+    # We go through milliseconds to allow fractions of a second (otherwise, Second(0.8)
+    # would fail). Milliseconds is the level of resolution that one gets when taking the
+    # difference between two DateTimes. In addition to this, we add a round to account for
+    # floating point errors. If the floating point error is small enough, round will correct
+    # it.
+    time_ms = Dates.Millisecond(round(1_000 * time))
+    return data_handler.start_date + time_ms
 end
 
 """
@@ -739,7 +1032,7 @@ function DataHandling.date_to_time(
     data_handler::MultiColumnDataHandler,
     date::Dates.DateTime,
 )
-    error("`date_to_time` not yet implemented for `MultiColumnDataHandler`")
+    return period_to_seconds_float(date - data_handler.start_date)
 end
 
 """
@@ -752,14 +1045,22 @@ function DataHandling.previous_time(
     data_handler::MultiColumnDataHandler,
     time::AbstractFloat,
 )
-    error("`previous_time` not yet implemented for `MultiColumnDataHandler`")
+    date = DataHandling.time_to_date(data_handler, time)
+    return DataHandling.previous_time(data_handler, date)
 end
 
 function DataHandling.previous_time(
     data_handler::MultiColumnDataHandler,
     date::Dates.DateTime,
 )
-    error("`previous_time` not yet implemented for `MultiColumnDataHandler`")
+    # We have to handle separately what happens when we are on the node
+    if date in data_handler.available_dates
+        index = searchsortedfirst(data_handler.available_dates, date)
+    else
+        index = searchsortedfirst(data_handler.available_dates, date) - 1
+    end
+    index < 1 && error("Date $date is before available dates")
+    return data_handler.available_times[index]
 end
 
 """
@@ -772,14 +1073,23 @@ function DataHandling.next_time(
     data_handler::MultiColumnDataHandler,
     time::AbstractFloat,
 )
-    error("`next_time` not yet implemented for `MultiColumnDataHandler`")
+    date = DataHandling.time_to_date(data_handler, time)
+    return DataHandling.next_time(data_handler, date)
 end
 
 function DataHandling.next_time(
     data_handler::MultiColumnDataHandler,
     date::Dates.DateTime,
 )
-    error("`next_time` not yet implemented for `MultiColumnDataHandler`")
+    # We have to handle separately what happens when we are on the node
+    if date in data_handler.available_dates
+        index = searchsortedfirst(data_handler.available_dates, date) + 1
+    else
+        index = searchsortedfirst(data_handler.available_dates, date)
+    end
+    index > length(data_handler.available_dates) &&
+        error("Date $date is after available dates")
+    return data_handler.available_times[index]
 end
 
 """
@@ -791,7 +1101,13 @@ function DataHandling.previous_date(
     data_handler::MultiColumnDataHandler,
     date::Dates.TimeType,
 )
-    error("`previous_date` not yet implemented for `MultiColumnDataHandler`")
+    if date in data_handler.available_dates
+        index = searchsortedfirst(data_handler.available_dates, date)
+    else
+        index = searchsortedfirst(data_handler.available_dates, date) - 1
+    end
+    index < 1 && error("Date $date is before available dates")
+    return data_handler.available_dates[index]
 end
 
 """
@@ -803,7 +1119,14 @@ function DataHandling.next_date(
     data_handler::MultiColumnDataHandler,
     date::Dates.TimeType,
 )
-    error("`next_date` not yet implemented for `MultiColumnDataHandler`")
+    if date in data_handler.available_dates
+        index = searchsortedfirst(data_handler.available_dates, date) + 1
+    else
+        index = searchsortedfirst(data_handler.available_dates, date)
+    end
+    index > length(data_handler.available_dates) &&
+        error("Date $date is after available dates")
+    return data_handler.available_dates[index]
 end
 
 """
@@ -817,18 +1140,56 @@ function DataHandling.regridded_snapshot(
     data_handler::MultiColumnDataHandler,
     date::Dates.DateTime,
 )
-    error("`regridded_snapshot` not yet implemented for `MultiColumnDataHandler`")
+    varnames = data_handler.varnames
+    compose_function = data_handler.compose_function
+
+    # Dates.DateTime(0) is the cache key for static maps
+    if date != Dates.DateTime(0)
+        file_paths = data_handler.file_readers[first(varnames)].file_paths
+        date in data_handler.available_dates ||
+            error("Date $date not available in files $(file_paths)")
+    end
+
+    # DIFFERENT: unlike `DataHandler`, there is no regridder-type branching (the
+    # column regridder is always used), and the regrid target is the vertical
+    # dimension rather than the full horizontal grid.
+    return get!(data_handler._cached_regridded_fields, date) do
+        for varname in varnames
+            read!(
+                data_handler.preallocated_read_data[varname],
+                data_handler.file_readers[varname],
+                date,
+            )
+        end
+        data_composed = compose_function(
+            (
+                data_handler.preallocated_read_data[varname] for
+                varname in varnames
+            )...,
+        )
+        regrid(
+            data_handler.regridder,
+            data_composed,
+            data_handler.vertical_dimension,
+        )
+    end
 end
 
 function DataHandling.regridded_snapshot(
     data_handler::MultiColumnDataHandler,
     time::AbstractFloat,
 )
-    error("`regridded_snapshot` not yet implemented for `MultiColumnDataHandler`")
+    date = DataHandling.time_to_date(data_handler, time)
+    return DataHandling.regridded_snapshot(data_handler, date)
 end
 
 function DataHandling.regridded_snapshot(data_handler::MultiColumnDataHandler)
-    error("`regridded_snapshot` not yet implemented for `MultiColumnDataHandler`")
+    # This function can be called only when there are no dates (ie, the dataset is static)
+    isempty(data_handler.available_dates) ||
+        error("DataHandler is function of time")
+
+    # In this case, we use as cache key `Dates.DateTime(0)`
+    return DataHandling.regridded_snapshot(data_handler, Dates.DateTime(0))
 end
 
 end

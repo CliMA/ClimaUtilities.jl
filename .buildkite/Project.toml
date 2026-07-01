@@ -1,0 +1,4 @@
+[deps]
+ClimaCore = "d414da3d-4745-48bb-8d80-42e94e092884"
+ClimaUtilities = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
