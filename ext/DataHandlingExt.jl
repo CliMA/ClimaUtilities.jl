@@ -650,4 +650,185 @@ function DataHandling.regridded_snapshot!(dest, data_handler, time)
     return nothing
 end
 
+"""
+    MultiColumnDataHandler
+
+A data handler that reads and remaps data column-by-column onto a multi-column
+space. Currently an empty placeholder.
+"""
+struct MultiColumnDataHandler end
+
+"""
+    MultiColumnDataHandler(file_paths, varnames, target_space; kwargs...)
+
+Create a `MultiColumnDataHandler` to read `varnames` from `file_paths` and remap
+them to `target_space`, column-by-column. Mirrors `DataHandler`.
+"""
+function DataHandling.MultiColumnDataHandler(
+    file_paths,
+    varnames,
+    target_space::ClimaCore.Spaces.AbstractSpace; # TODO: This will only work for a specific space
+    start_date::Union{Dates.DateTime, Dates.Date} = Dates.DateTime(1979, 1, 1),
+    regridder_type = nothing,
+    cache_max_size::Int = 2,
+    file_reader_kwargs = (),
+    compose_function = identity,
+)
+    # TODO: build the (multi-column) file readers, regridder, shared time axis,
+    # preallocated read buffers, and field cache, then populate the struct.
+
+    # TODO: For data handler, I need a permute_cols! functions for permuting the
+    # columns one time instead of many time
+    return MultiColumnDataHandler()
+end
+
+"""
+    close(data_handler::MultiColumnDataHandler)
+
+Close all files associated to the given `data_handler`.
+"""
+function Base.close(data_handler::MultiColumnDataHandler)
+    error("`close` not yet implemented for `MultiColumnDataHandler`")
+end
+
+"""
+    available_times(data_handler::MultiColumnDataHandler)
+
+Return the times (in seconds) of the snapshots in the data.
+"""
+function DataHandling.available_times(data_handler::MultiColumnDataHandler)
+    error("`available_times` not yet implemented for `MultiColumnDataHandler`")
+end
+
+"""
+    available_dates(data_handler::MultiColumnDataHandler)
+
+Return the dates of the snapshots in the data.
+"""
+function DataHandling.available_dates(data_handler::MultiColumnDataHandler)
+    error("`available_dates` not yet implemented for `MultiColumnDataHandler`")
+end
+
+"""
+    dt(data_handler::MultiColumnDataHandler)
+
+Return the time interval between data points (requires an equispaced temporal mesh).
+"""
+function DataHandling.dt(data_handler::MultiColumnDataHandler)
+    error("`dt` not yet implemented for `MultiColumnDataHandler`")
+end
+
+"""
+    time_to_date(data_handler::MultiColumnDataHandler, time::AbstractFloat)
+
+Convert the given time (in seconds) to a calendar date.
+"""
+function DataHandling.time_to_date(
+    data_handler::MultiColumnDataHandler,
+    time::AbstractFloat,
+)
+    error("`time_to_date` not yet implemented for `MultiColumnDataHandler`")
+end
+
+"""
+    date_to_time(data_handler::MultiColumnDataHandler, date::Dates.DateTime)
+
+Convert the given calendar date to a time (in seconds).
+"""
+function DataHandling.date_to_time(
+    data_handler::MultiColumnDataHandler,
+    date::Dates.DateTime,
+)
+    error("`date_to_time` not yet implemented for `MultiColumnDataHandler`")
+end
+
+"""
+    previous_time(data_handler::MultiColumnDataHandler, time::AbstractFloat)
+    previous_time(data_handler::MultiColumnDataHandler, date::Dates.DateTime)
+
+Return the time (in seconds) of the snapshot at or before the given `time`/`date`.
+"""
+function DataHandling.previous_time(
+    data_handler::MultiColumnDataHandler,
+    time::AbstractFloat,
+)
+    error("`previous_time` not yet implemented for `MultiColumnDataHandler`")
+end
+
+function DataHandling.previous_time(
+    data_handler::MultiColumnDataHandler,
+    date::Dates.DateTime,
+)
+    error("`previous_time` not yet implemented for `MultiColumnDataHandler`")
+end
+
+"""
+    next_time(data_handler::MultiColumnDataHandler, time::AbstractFloat)
+    next_time(data_handler::MultiColumnDataHandler, date::Dates.DateTime)
+
+Return the time (in seconds) of the snapshot after the given `time`/`date`.
+"""
+function DataHandling.next_time(
+    data_handler::MultiColumnDataHandler,
+    time::AbstractFloat,
+)
+    error("`next_time` not yet implemented for `MultiColumnDataHandler`")
+end
+
+function DataHandling.next_time(
+    data_handler::MultiColumnDataHandler,
+    date::Dates.DateTime,
+)
+    error("`next_time` not yet implemented for `MultiColumnDataHandler`")
+end
+
+"""
+    previous_date(data_handler::MultiColumnDataHandler, date::Dates.TimeType)
+
+Return the date of the snapshot at or before the given `date`.
+"""
+function DataHandling.previous_date(
+    data_handler::MultiColumnDataHandler,
+    date::Dates.TimeType,
+)
+    error("`previous_date` not yet implemented for `MultiColumnDataHandler`")
+end
+
+"""
+    next_date(data_handler::MultiColumnDataHandler, date::Dates.TimeType)
+
+Return the date of the snapshot after the given `date`.
+"""
+function DataHandling.next_date(
+    data_handler::MultiColumnDataHandler,
+    date::Dates.TimeType,
+)
+    error("`next_date` not yet implemented for `MultiColumnDataHandler`")
+end
+
+"""
+    regridded_snapshot(data_handler::MultiColumnDataHandler, date::Dates.DateTime)
+    regridded_snapshot(data_handler::MultiColumnDataHandler, time::AbstractFloat)
+    regridded_snapshot(data_handler::MultiColumnDataHandler)
+
+Return the regridded snapshot associated to the given `time`/`date` (if relevant).
+"""
+function DataHandling.regridded_snapshot(
+    data_handler::MultiColumnDataHandler,
+    date::Dates.DateTime,
+)
+    error("`regridded_snapshot` not yet implemented for `MultiColumnDataHandler`")
+end
+
+function DataHandling.regridded_snapshot(
+    data_handler::MultiColumnDataHandler,
+    time::AbstractFloat,
+)
+    error("`regridded_snapshot` not yet implemented for `MultiColumnDataHandler`")
+end
+
+function DataHandling.regridded_snapshot(data_handler::MultiColumnDataHandler)
+    error("`regridded_snapshot` not yet implemented for `MultiColumnDataHandler`")
+end
+
 end

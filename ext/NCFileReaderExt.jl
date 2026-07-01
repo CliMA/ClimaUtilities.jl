@@ -404,15 +404,15 @@ function FileReaders.MultiColumnNCFileReader(
         error("Some columns have a time dimension and some do not")
 
     # Dates common to all columns, sorted (the DataHandler relies on ordering)
-    available_dates = sort(reduce(intersect, map(read_available_dates, datasets)))
+    available_dates =
+        sort(reduce(intersect, map(read_available_dates, datasets)))
     if all(!=(-1), time_indices) && isempty(available_dates)
         error("Columns are time-varying but share no common dates")
     end
 
     # TODO: Temporary use of LRU cache (will replace with ring buffer)
-    _cached_reads = DataStructures.LRUCache{Dates.DateTime, Array}(
-        max_size = cache_size,
-    )
+    _cached_reads =
+        DataStructures.LRUCache{Dates.DateTime, Array}(max_size = cache_size)
 
     return MultiColumnNCFileReader(
         file_paths,
@@ -442,7 +442,8 @@ function Base.close(file_reader::MultiColumnNCFileReader)
     # Each column's file is registered separately in `OPEN_NCFILES` (keyed by the
     # individual path), so we release them one at a time. This is the single-column
     # `close` wrapped in a loop over columns.
-    for (file_path, dataset) in zip(file_reader.file_paths, file_reader.datasets)
+    for (file_path, dataset) in
+        zip(file_reader.file_paths, file_reader.datasets)
         # If we don't have the key, the file is already closed; skip it
         haskey(OPEN_NCFILES, file_path) || continue
         open_variables = OPEN_NCFILES[file_path][end]
@@ -460,7 +461,9 @@ end
 # `DateTime(0)` sentinel path.
 function _read_all_columns(file_reader::MultiColumnNCFileReader)
     per_column = map(file_reader.datasets) do dataset
-        file_reader.preprocess_func.(Array(dataset[file_reader.varname]))
+        # Each column is a single (lon, lat) point, so the data flattens to its
+        # `Nz`-long profile (or length 1 when there is no z).
+        vec(file_reader.preprocess_func.(Array(dataset[file_reader.varname])))
     end
     return stack(per_column)
 end
@@ -469,7 +472,7 @@ end
     read(file_reader::MultiColumnNCFileReader, date::Dates.DateTime)
 
 Read and preprocess the data at the given `date` for every column, returning a
-single array stacked along a trailing column axis.
+`(Nz, Ncolumn)` array (`Nz` is the number of z levels, or 1 when there is no z).
 """
 function FileReaders.read(
     file_reader::MultiColumnNCFileReader,
@@ -505,7 +508,12 @@ function FileReaders.read(
             i == time_index ? only(index) : Colon() for
             i in 1:length(NCDatasets.dimnames(var))
         ]
-        file_reader.preprocess_func.(var[slicer...])
+        # Each column is a single (lon, lat) point, so the slice flattens to its
+        # `Nz`-long profile (or length 1 when there is no z); stacking the columns
+        # then gives `(Nz, Ncolumn)`.
+        # TODO: A better way of doing this is to allocate the array up front
+        # and fill it up
+        vec(file_reader.preprocess_func.(var[slicer...]))
     end
     return stack(per_column)
 end
@@ -540,6 +548,9 @@ end
 Read and preprocess data (for static datasets), saving the output to `dest`.
 """
 function FileReaders.read!(dest, file_reader::MultiColumnNCFileReader)
+    # TODO: This is strange to me, since read! is suppose to be the full
+    # implementation and the implementation of read allocate an array and read!
+    # fill it out
     dest .= FileReaders.read(file_reader)
     return nothing
 end

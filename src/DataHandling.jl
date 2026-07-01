@@ -43,6 +43,8 @@ module DataHandling
 
 function DataHandler end
 
+function MultiColumnDataHandler end
+
 function available_times end
 
 function available_dates end
@@ -68,6 +70,7 @@ function date_to_time end
 extension_fns = [
     :ClimaCore => [
         :DataHandler,
+        :MultiColumnDataHandler,
         :available_times,
         :available_dates,
         :previous_time,
@@ -82,6 +85,7 @@ extension_fns = [
     ],
     :NCDatasets => [
         :DataHandler,
+        :MultiColumnDataHandler,
         :available_times,
         :available_dates,
         :previous_time,
@@ -116,7 +120,7 @@ function __init__()
                     print(io, "\nImport $pkg to enable `$(exc.f)`.";)
                 end
             end
-            if Symbol(exc.f) == :DataHandler
+            if Symbol(exc.f) in (:DataHandler, :MultiColumnDataHandler)
                 print(
                     io,
                     "\nYou might also need a regridder to use `$(exc.f)`.",
