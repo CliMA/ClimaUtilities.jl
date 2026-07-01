@@ -27,6 +27,7 @@ column ordering is guaranteed upstream by `find_file_paths_for_cols`.
 """
 function Regridders.regrid(regridder::TempRegridder, data, _dimensions...)
     field = zeros(regridder.target_space)
-    ClimaCore.Fields.field2array(field) .= vec(data)
+    ClimaCore.Fields.field2array(field) .=
+        ClimaComms.array_type(regridder.target_space)(vec(data))
     return field
 end
