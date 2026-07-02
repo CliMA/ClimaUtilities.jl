@@ -71,7 +71,6 @@ import ClimaUtilities.OnlineLogging:
         @test wt.n_calls[] == 4
         @test wt.∑Δt_wall[] ≈ ((1.5 / 2) + 1) * (t2 - t1) atol = 0.075
         @test wt.t_simulation_last[] == 8.0
-        current_wall_time_per_step = (t2 - t1) / 5 # 5 steps between t=3 and t=8
     end
 
     @testset "_update! with args" begin

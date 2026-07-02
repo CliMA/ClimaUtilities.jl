@@ -46,7 +46,6 @@ end
 @testset "wrap_time" begin
     t_init = 10
     t_end = 20
-    dt = 1
 
     @test wrap_time(15, t_init, t_end) == 15
     @test wrap_time(25, t_init, t_end) == 15
