@@ -18,16 +18,6 @@ AT = ClimaComms.array_type(ClimaComms.device())
 # This tests the analytic and 1d cases of the SpaceVaryingInput function
 @testset "SpaceVaryingInput" begin
     FT = Float32
-    zmin = FT(-1.0)
-    zmax = FT(0.0)
-    xlim = FT.((0.0, 10.0))
-    ylim = FT.((0.0, 1.0))
-    zlim = FT.((zmin, zmax))
-    nelements = (1, 1, 10)
-    radius = FT(100)
-    depth = FT(30)
-    n_elements_sphere = (6, 20)
-    npoly_sphere = 3
 
     spaces = make_spherical_space(FT; context)
     column = spaces.vertical

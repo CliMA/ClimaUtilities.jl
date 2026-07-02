@@ -209,7 +209,6 @@ end
 
     var1 = "var1"
     var2 = "var2"
-    var3 = "var3"
 
     # Construct space
     FT = Float32
@@ -376,7 +375,7 @@ end
                     available_dates[1] + Second(1),
                 ) == available_dates[1]
 
-                # Previous time with time, boundaries (return the node)
+                # Previous date with date, boundaries (return the node)
                 @test DataHandling.previous_date(
                     data_handler,
                     available_dates[1],
@@ -438,8 +437,8 @@ end
                 ) == available_dates[11]
                 @test DataHandling.next_date(
                     data_handler,
-                    available_dates[10],
-                ) == available_dates[11]
+                    available_dates[1],
+                ) == available_dates[2]
 
                 # Asking for a regridded_snapshot without specifying the time
                 @test_throws ErrorException DataHandling.regridded_snapshot(

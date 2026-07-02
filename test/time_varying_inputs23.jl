@@ -486,9 +486,6 @@ include("TestTools.jl")
                 end
 
                 # LinearInterpolation with PeriodicCalendar
-                time_delta = 0.1dt
-                target_time = available_times[end] + time_delta
-
                 left_value = DataHandling.regridded_snapshot(
                     data_handler,
                     available_times[end],
@@ -500,8 +497,6 @@ include("TestTools.jl")
 
                 time_delta = 0.1dt
                 target_time = available_times[end] + time_delta
-                left_time = available_times[10]
-                right_time = available_times[11]
 
                 expected = Fields.zeros(target_space)
                 expected .=

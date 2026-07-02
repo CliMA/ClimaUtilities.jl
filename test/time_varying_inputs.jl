@@ -356,7 +356,7 @@ end
                     input_periodic_calendar_linear,
                     time_to_input(times[end] + 0.1dt),
                 )
-                eltype(time) <: Number &&
+                eltype(times) <: Number &&
                     @test Array(parent(dest))[1] ≈ expected
             end
         end

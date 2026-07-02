@@ -54,15 +54,11 @@ end
         data_lon2D[:, i] .= lon
     end
     for i in 1:length(lon)
-        for j in 1:length(z)
-            data_lat3D_reversed[i, :, :] .= reverse(lat)
-            data_lat3D[i, :, :] .= lat
-        end
+        data_lat3D_reversed[i, :, :] .= reverse(lat)
+        data_lat3D[i, :, :] .= lat
     end
     for i in 1:length(lat)
-        for j in 1:length(z)
-            data_lon3D[:, i, :] .= lon
-        end
+        data_lon3D[:, i, :] .= lon
     end
     for i in 1:length(lon)
         for j in 1:length(lat)
@@ -167,14 +163,10 @@ end
     data_lon3D = zeros(size3D)
     data_z3D = zeros(size3D)
     for i in 1:length(lon)
-        for j in 1:length(z)
-            data_lat3D[i, :, :] .= lat
-        end
+        data_lat3D[i, :, :] .= lat
     end
     for i in 1:length(lat)
-        for j in 1:length(z)
-            data_lon3D[:, i, :] .= lon
-        end
+        data_lon3D[:, i, :] .= lon
     end
     for i in 1:length(lon)
         for j in 1:length(lat)
@@ -607,9 +599,9 @@ end
     @test regridded_y == regridded_y_inplace
     @test regridded_z == regridded_z_inplace
 
-    err_x = reg_box.coordinates.x .- regridded_x
-    err_y = reg_box.coordinates.y .- regridded_y
-    err_z = reg_box.coordinates.z .- regridded_z
+    err_x = abs.(reg_box.coordinates.x .- regridded_x)
+    err_y = abs.(reg_box.coordinates.y .- regridded_y)
+    err_z = abs.(reg_box.coordinates.z .- regridded_z)
 
     @test maximum(err_x) < 1e-5
     @test maximum(err_y) < 1e-5
