@@ -37,6 +37,12 @@ using NCDatasets
         @test FileReaders.read(ncreader_u, DateTime(2021, 01, 01, 01)) ==
               nc["u10n"][:, :, 2]
 
+        # Mutating a read should not corrupt the cache
+        first_read = FileReaders.read(ncreader_u, DateTime(2021, 01, 01, 02))
+        fill!(first_read, NaN)
+        @test FileReaders.read(ncreader_u, DateTime(2021, 01, 01, 02)) ==
+              nc["u10n"][:, :, 3]
+
         # Test read!
         dest = copy(nc["u10n"][:, :, 2])
         fill!(dest, 0)
@@ -82,6 +88,12 @@ end
         @test ncreader.dimensions[1] == nc["lon"][:]
         @test ncreader.dimensions[2] == nc["lat"][:]
 
+        # This first read is a cache miss (using the DateTime(0) sentinel)
+        first_read = FileReaders.read(ncreader)
+        @test first_read == nc["u10n"][:, :]
+
+        # Mutating a read should not corrupt the cache
+        fill!(first_read, NaN)
         @test FileReaders.read(ncreader) == nc["u10n"][:, :]
 
         # Test read!

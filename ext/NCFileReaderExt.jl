@@ -233,31 +233,31 @@ function FileReaders.read(file_reader::NCFileReader, date::Dates.DateTime)
     # return _cached_reads[date], modifying the return value would modify the private state
     # of the file reader)
 
-    if haskey(file_reader._cached_reads, date)
-        return copy(file_reader._cached_reads[date])
-    end
-
     # DateTime(0) is the sentinel value for static datasets
     if date == Dates.DateTime(0)
-        return get!(file_reader._cached_reads, date) do
-            file_reader.preprocess_func.(
-                Array(file_reader.dataset[file_reader.varname]),
-            )
-        end
+        return copy(
+            get!(file_reader._cached_reads, date) do
+                file_reader.preprocess_func.(
+                    Array(file_reader.dataset[file_reader.varname]),
+                )
+            end,
+        )
     end
 
-    index = findall(d -> d == date, file_reader.available_dates)
-    length(index) == 1 ||
-        error("Problem with date $date in one of $(file_reader.file_paths)")
-    index = index[]
-
-    var = file_reader.dataset[file_reader.varname]
-    slicer = [
-        i == file_reader.time_index ? index : Colon() for
-        i in 1:length(NCDatasets.dimnames(var))
-    ]
-    return file_reader.preprocess_func.(
-        file_reader.dataset[file_reader.varname][slicer...],
+    return copy(
+        get!(file_reader._cached_reads, date) do
+            index = findall(d -> d == date, file_reader.available_dates)
+            length(index) == 1 || error(
+                "Problem with date $date in one of $(file_reader.file_paths)",
+            )
+            index = index[]
+            var = file_reader.dataset[file_reader.varname]
+            slicer = [
+                i == file_reader.time_index ? index : Colon() for
+                i in 1:length(NCDatasets.dimnames(var))
+            ]
+            file_reader.preprocess_func.(var[slicer...])
+        end,
     )
 end
 
@@ -280,11 +280,13 @@ function FileReaders.read(file_reader::NCFileReader)
         error("File contains temporal data, date required")
 
     # When there's no dates, we use DateTime(0) as key
-    return get!(file_reader._cached_reads, Dates.DateTime(0)) do
-        return file_reader.preprocess_func.(
-            Array(file_reader.dataset[file_reader.varname]),
-        )
-    end
+    return copy(
+        get!(file_reader._cached_reads, Dates.DateTime(0)) do
+            file_reader.preprocess_func.(
+                Array(file_reader.dataset[file_reader.varname]),
+            )
+        end,
+    )
 end
 
 """
