@@ -129,14 +129,13 @@ function FileReaders.NCFileReader(
 
     # Get dataset from global dictionary. If not available, open the new dataset and add
     # entry to global dictionary
-    dataset, open_varnames = get!(
-        OPEN_NCFILES,
-        file_paths,  # We map the collection of files to the dataset
+    # We map the collection of files to the dataset
+    dataset, open_varnames = get!(OPEN_NCFILES, file_paths) do
         (
             NCDatasets.NCDataset(file_path_to_ncdataset; aggtime_kwarg...),
             Set([varname]),
-        ),
-    )
+        )
+    end
     # push! will do nothing when file is opened for the first time
     push!(open_varnames, varname)
 
