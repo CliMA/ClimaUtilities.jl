@@ -65,6 +65,9 @@ struct NCFileReader{
 
     """Index of the time dimension in the array (typically first). -1 for static datasets"""
     time_index::Int
+
+    """Size of the output array. This is used by read to initialize an array."""
+    output_size::Tuple{Vararg{Int}}
 end
 
 """
@@ -171,10 +174,26 @@ function FileReaders.NCFileReader(
         )
     end
 
+    # Preprocess the first time point to get the size and element type of the output array
+    sample_date =
+        isempty(available_dates) ? Dates.DateTime(0) : first(available_dates)
+    sample = if time_index == -1
+        preprocess_func.(Array(dataset[varname]))
+    else
+        var = dataset[varname]
+        slicer = [
+            i == time_index ? 1 : Colon() for
+            i in 1:length(NCDatasets.dimnames(var))
+        ]
+        preprocess_func.(var[slicer...])
+    end
+    output_size = size(sample)
+
     # Use an LRU cache to store regridded fields
-    _cached_reads = DataStructures.LRUCache{Dates.DateTime, Array}(
+    _cached_reads = DataStructures.LRUCache{Dates.DateTime, typeof(sample)}(
         max_size = cache_max_size,
     )
+    _cached_reads[sample_date] = sample
 
     return NCFileReader(
         file_paths,
@@ -186,6 +205,7 @@ function FileReaders.NCFileReader(
         preprocess_func,
         _cached_reads,
         time_index,
+        output_size,
     )
 end
 
@@ -228,36 +248,9 @@ end
 Read and preprocess the data at the given `date`.
 """
 function FileReaders.read(file_reader::NCFileReader, date::Dates.DateTime)
-    # For cache hits, return a copy to give away ownership of the data (if we were to just
-    # return _cached_reads[date], modifying the return value would modify the private state
-    # of the file reader)
-
-    # DateTime(0) is the sentinel value for static datasets
-    if date == Dates.DateTime(0)
-        return copy(
-            get!(file_reader._cached_reads, date) do
-                file_reader.preprocess_func.(
-                    Array(file_reader.dataset[file_reader.varname]),
-                )
-            end,
-        )
-    end
-
-    return copy(
-        get!(file_reader._cached_reads, date) do
-            index = findall(d -> d == date, file_reader.available_dates)
-            length(index) == 1 || error(
-                "Problem with date $date in one of $(file_reader.file_paths)",
-            )
-            index = index[]
-            var = file_reader.dataset[file_reader.varname]
-            slicer = [
-                i == file_reader.time_index ? index : Colon() for
-                i in 1:length(NCDatasets.dimnames(var))
-            ]
-            file_reader.preprocess_func.(var[slicer...])
-        end,
-    )
+    dest = valtype(file_reader._cached_reads)(undef, file_reader.output_size...)
+    FileReaders.read!(dest, file_reader, date)
+    return dest
 end
 
 """
@@ -275,17 +268,9 @@ end
 Read and preprocess data (for static datasets).
 """
 function FileReaders.read(file_reader::NCFileReader)
-    isempty(file_reader.available_dates) ||
-        error("File contains temporal data, date required")
-
-    # When there's no dates, we use DateTime(0) as key
-    return copy(
-        get!(file_reader._cached_reads, Dates.DateTime(0)) do
-            file_reader.preprocess_func.(
-                Array(file_reader.dataset[file_reader.varname]),
-            )
-        end,
-    )
+    dest = valtype(file_reader._cached_reads)(undef, file_reader.output_size...)
+    FileReaders.read!(dest, file_reader)
+    return dest
 end
 
 """
@@ -294,7 +279,13 @@ end
 Read and preprocess data (for static datasets), saving the output to `dest`.
 """
 function FileReaders.read!(dest, file_reader::NCFileReader)
-    dest .= FileReaders.read(file_reader)
+    isempty(file_reader.available_dates) ||
+        error("File contains temporal data, date required")
+    dest .= get!(file_reader._cached_reads, Dates.DateTime(0)) do
+        file_reader.preprocess_func.(
+            Array(file_reader.dataset[file_reader.varname]),
+        )
+    end
     return nothing
 end
 
@@ -308,7 +299,29 @@ function FileReaders.read!(
     file_reader::NCFileReader,
     date::Dates.DateTime,
 )
-    dest .= FileReaders.read(file_reader, date)
+    # DateTime(0) is the sentinel value for static datasets
+    if date == Dates.DateTime(0)
+        dest .= get!(file_reader._cached_reads, date) do
+            file_reader.preprocess_func.(
+                Array(file_reader.dataset[file_reader.varname]),
+            )
+        end
+        return nothing
+    end
+
+    dest .= get!(file_reader._cached_reads, date) do
+        index = findall(d -> d == date, file_reader.available_dates)
+        length(index) == 1 || error(
+            "Problem with date $date in one of $(file_reader.file_paths)",
+        )
+        index = index[]
+        var = file_reader.dataset[file_reader.varname]
+        slicer = [
+            i == file_reader.time_index ? index : Colon() for
+            i in 1:length(NCDatasets.dimnames(var))
+        ]
+        file_reader.preprocess_func.(var[slicer...])
+    end
     return nothing
 end
 
