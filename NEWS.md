@@ -3,6 +3,9 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+### Minor additions
+
+- Remove unnecessary allocations in `FileReaders.read` and `FileReaders.read!`.
 
 v0.1.29
 ------
