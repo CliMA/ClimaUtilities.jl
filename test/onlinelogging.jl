@@ -134,7 +134,7 @@ import ClimaUtilities.OnlineLogging:
         io = IOBuffer()
         dt = 3600.0
         n_steps = 32
-        tf = n_steps*dt
+        tf = n_steps * dt
         delay_s = 0.2
         reporting_times = (1, 2, 8, 16)
         Logging.with_logger(Logging.SimpleLogger(io)) do
@@ -186,15 +186,15 @@ import ClimaUtilities.OnlineLogging:
             s_and_ms_to_s(time_remaining_s, time_remaining_ms)
         reported_time_total = s_and_ms_to_s(time_total_s, time_total_ms)
         theoretical_time_total = delay_s * n_steps
-        theoretical_sypd = (24*3600) / (delay_s * 365 * 24 * 3600.0 / dt)
+        theoretical_sypd = (24 * 3600) / (delay_s * 365 * 24 * 3600.0 / dt)
         @test isapprox(
             reported_time_remaining,
-            theoretical_time_total/2;
+            theoretical_time_total / 2;
             rtol = 0.1,
         )
         @test isapprox(
             reported_time_spent,
-            theoretical_time_total/2;
+            theoretical_time_total / 2;
             rtol = 0.1,
         )
         @test isapprox(reported_time_total, theoretical_time_total; rtol = 0.1)
