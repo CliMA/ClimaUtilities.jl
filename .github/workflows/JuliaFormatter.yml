@@ -40,7 +40,7 @@ jobs:
     - name: Apply JuliaFormatter
       if: steps.filter.outputs.julia_file_change == 'true'
       run: |
-        julia -e 'using Pkg; Pkg.add("JuliaFormatter"); using JuliaFormatter; format(".")'
+        julia -e 'using Pkg; Pkg.add(name="JuliaFormatter", version="2.10.1"); using JuliaFormatter; format(".")'
 
     - name: Check formatting diff
       if: steps.filter.outputs.julia_file_change == 'true'

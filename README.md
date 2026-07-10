@@ -120,7 +120,7 @@ consistent formatting. Here's how to use it:
 
 You can either install in your base environment with
 ``` sh
-julia -e 'using Pkg; Pkg.add("JuliaFormatter")'
+julia -e 'using Pkg; Pkg.add(name="JuliaFormatter", version="2.10.1")'
 ```
 or use it from within the `TestEnv` or the `.buildkite` environments (see previous section).
 
