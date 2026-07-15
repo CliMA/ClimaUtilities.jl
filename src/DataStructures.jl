@@ -246,7 +246,7 @@ end
 """
     Base.delete!(cache::LRUCache{K, V}, key::K)
 
-Delete mapping for `key`, if it is in`cache`, and return `cache`
+Delete mapping for `key`, if it is in `cache`, and return `cache`.
 """
 function Base.delete!(cache::LRUCache{K, V}, key::K) where {K, V}
     value = delete!(cache.cache, key)

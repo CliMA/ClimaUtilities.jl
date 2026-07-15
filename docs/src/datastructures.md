@@ -13,7 +13,7 @@ they're needed, the previously-computed information is saved in the cache and
 retrieved directly from it. To prevent the cache from growing so large that it
 takes up significant memory, the least-recently-used (LRU) scheme maintains
 a maximum cache size: every time adding an element to the cache would
-lead its size to grow larger thant the maximum allowed, the element that was
+lead its size to grow larger than the maximum allowed, the element that was
 accessed the least recently is deleted first.
 
 !!! note

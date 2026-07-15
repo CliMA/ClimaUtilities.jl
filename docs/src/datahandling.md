@@ -11,10 +11,11 @@ This is no trivial task. Among the challenges:
 
 The `DataHandling` takes the divide-and-conquer approach: the various core tasks
 and features and split into other independent modules (chiefly
-[`FileReaders`](@ref file_reader_module), and [`Regridders`](@ref regridder_module) regridder_module). Such modules can be developed,
-tested, and extended independently (as long as they maintain a consistent
-interface). For instance, if need arises, the `DataHandler` can be used (almost)
-directly to process files with a different format from NetCDF.
+[`FileReaders`](@ref file_reader_module), and [`Regridders`](@ref
+regridder_module)). Such modules can be developed, tested, and extended
+independently (as long as they maintain a consistent interface). For instance,
+if need arises, the `DataHandler` can be used (almost) directly to process files
+with a different format from NetCDF.
 
 The key struct in `DataHandling` is the `DataHandler`. The `DataHandler`
 contains one or more `FileReader`(s), a `Regridder`, and other metadata
@@ -83,7 +84,7 @@ the following:
   split along variables if the number of files is the same the number of
   variables, otherwise, it will assume that each file contains all the variables
   for a portion of the total time.
-- When the above assumption is incorrect, you can pass a list of list of files
+- When the above assumption is incorrect, you can pass a list of lists of files
   that fully specifies variables and times.
 
 For example,
@@ -143,8 +144,8 @@ function linear_interpolation(data_handler, time)
     time_of_prev_snapshot = DataHandling.previous_time(data_handler, time)
     time_of_next_snapshot = DataHandling.next_time(data_handler, time)
 
-    prev_snapshot = DataHandling.regridded_snaphsot(data_handler, time_of_prev_snapshot)
-    next_snapshot = DataHandling.regridded_snaphsot(data_handler, time_of_next_snapshot)
+    prev_snapshot = DataHandling.regridded_snapshot(data_handler, time_of_prev_snapshot)
+    next_snapshot = DataHandling.regridded_snapshot(data_handler, time_of_next_snapshot)
 
     # prev and next snapshots are ClimaCore.Fields defined on the target_space
 

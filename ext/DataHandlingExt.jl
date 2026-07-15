@@ -108,7 +108,7 @@ function _check_file_paths_varnames(
 )
     # Verify that the number of file paths and variable names are consistent
     if length(varnames) == 1
-        # Multiple files are not not supported by TempestRegridder
+        # Multiple files are not supported by TempestRegridder
         (length(file_paths) > 1 && regridder_type == :TempestRegridder) &&
             error("TempestRegridder does not support multiple input files")
     else

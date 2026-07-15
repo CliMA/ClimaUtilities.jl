@@ -145,7 +145,7 @@ function TimeVaryingInputs.TimeVaryingInput(
     )
 end
 
-function _evalulate_flat!(dest, itp::InterpolatingTimeVaryingInput0D, time)
+function _evaluate_flat!(dest, itp::InterpolatingTimeVaryingInput0D, time)
     t_init, t_end = itp.range
     if time >= t_end
         dest .= itp.vals[end]
@@ -172,7 +172,7 @@ function TimeVaryingInputs.evaluate!(
     # Nearest neighbor interpolation: just pick the values corresponding to the entry in
     # itp.times that is closest to the given time.
     if extrapolation_bc(itp.method) isa Flat
-        _evalulate_flat!(dest, itp, time)
+        _evaluate_flat!(dest, itp, time)
         return nothing
     elseif extrapolation_bc(itp.method) isa PeriodicCalendar{Nothing}
         t_init, t_end, time, dt = _time_range_target_time_dt(itp, time)
@@ -206,7 +206,7 @@ function TimeVaryingInputs.evaluate!(
     ::LinearInterpolation,
 )
     if extrapolation_bc(itp.method) isa Flat
-        _evalulate_flat!(dest, itp, time)
+        _evaluate_flat!(dest, itp, time)
         return nothing
     elseif extrapolation_bc(itp.method) isa PeriodicCalendar
         t_init, t_end, time, dt = _time_range_target_time_dt(itp, time)

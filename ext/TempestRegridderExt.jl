@@ -183,7 +183,7 @@ function swap_space(field, new_space)
 end
 
 """
-    read_from_hdf5(REGIRD_DIR, time, varname,
+    read_from_hdf5(REGRID_DIR, time, varname,
         space)
 
 Read in a variable `varname` from an HDF5 file onto the provided space.
@@ -280,7 +280,7 @@ Constructs a singleton space from a given space. This is not ideal, but
 necessary to use TempestRemap regridding, which is not MPI or GPU compatible.
 """
 function construct_singleton_space(space)
-    # If doesn't make sense to regrid with GPUs/MPI processes
+    # It doesn't make sense to regrid with GPUs/MPI processes
     cpu_context =
         ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded())
 
@@ -323,7 +323,7 @@ end
     )
 Reads and regrids data of all `varnames` variables from an input NetCDF file and
 saves it as another NetCDF file using Tempest Remap.
-The input NetCDF fileneeds to be `Exodus` formatted, and can contain
+The input NetCDF file needs to be `Exodus` formatted, and can contain
 time-dependent data. The output NetCDF file is then read back, the output
 arrays converted into Fields and saved as HDF5 files (one per time slice).
 This function should be called by the root process.
@@ -358,7 +358,7 @@ function hdwrite_regridfile_rll_to_cgll(
     meshfile_overlap = joinpath(REGRID_DIR, "mesh_overlap.g")
     weightfile = joinpath(REGRID_DIR, "remap_weights.nc")
 
-    # If doesn't make sense to regrid with GPUs/MPI processes
+    # It doesn't make sense to regrid with GPUs/MPI processes
     space_singleton = construct_singleton_space(space)
     topology_singleton = ClimaCore.Spaces.topology(space_singleton)
     cpu_context = ClimaCore.Spaces.topology(space_singleton).context

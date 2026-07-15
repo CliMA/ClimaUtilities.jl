@@ -25,7 +25,7 @@ abstract type OutputPathGeneratorStyle end
 Distributed filesystems might need some time to catch up a file/folder is created/removed.
 
 This function watches the given `path` with `check_func` and returns when `check_func(path)`
-returns true. This is done by trying up to `max_attempt` times and sleeping `sleep_time`
+returns true. This is done by trying up to `max_attempts` times and sleeping `sleep_time`
 seconds in between. `sleep_time` is increased by 50 % after each attempt.
 
 Example: when creating a file, we want to check that all the MPI processes see that new

@@ -40,7 +40,7 @@ the orbital parameters in
 
 Lazy artifacts are incompatible with MPI. In parallel runs, each process tries
 to download the same file, resulting in a race condition and corrupted files
-(not to mention tens of processing pinging the same server at the same time).
+(not to mention tens of processes pinging the same server at the same time).
 `ClimaArtifacts` implements a new macro, `@clima_artifact`, to solve this
 problem.
 

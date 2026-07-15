@@ -33,11 +33,11 @@ nearest neighbor interpolations.
 
 The `FileReaders` module provides a way to efficiently read data from files.
 Efficiently might mean chunked/threaded/cached/something else. Currently, this
-is mostly and interface barrier to provide a path for future improvements.
+is mostly an interface barrier to provide a path for future improvements.
 
 ### `Regridders`
 
-`ClimaUtilities` comes with two modules to map rectangular grids two (extruded)
+`ClimaUtilities` comes with two modules to map rectangular grids to (extruded)
 finite spectral elements, `InterpolationsRegridder` and [`TempestRegridder`](@ref tempest_regridder).
 These modules are primarily used to ingest data and resample it onto the
 computational grid.

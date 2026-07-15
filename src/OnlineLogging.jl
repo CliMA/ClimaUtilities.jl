@@ -87,7 +87,7 @@ function _update!(wt::WallTimeInfo, integrator)
         if wt.∑Δt_wall[] == 0.0
             simulation_time_since_last =
                 float(integrator.t) - wt.t_simulation_last[]
-            # account for steps before previous call to _update
+            # account for steps before previous call to _update!
             simulation_time_missed = wt.t_simulation_last[] - t_start
             # estimate the walltime the steps during the skipped measurements would have taken
             # if there was no compilation by scaling the latest measurement

@@ -38,7 +38,7 @@ This will load `ITime` as well as some other utilities. If you only wish to load
 import ClimaUtilities.TimeManager: ITime
 ```
 
-In these examples, we will stick with `using ClimaUtilites.TimeManager` because
+In these examples, we will stick with `using ClimaUtilities.TimeManager` because
 we will call other functions as well.
 
 By default, `ITime` assumes that the clock cycle is one second:

@@ -51,15 +51,15 @@ function linear_interpolation(indep_vars, dep_vars, indep_value)
 end
 
 """
-    isequispaced(v; tol::Real = sqrt(eps(eltype(v)))
+    isequispaced(v; tol = eltype(v) <: AbstractFloat ? sqrt(eps(eltype(v))) : eps())
 
 Check if the vector `v` has uniform spacing between its elements within a given tolerance
 `tol`.
 
 # Arguments
 - `v::AbstractVector{<:Number}`: A vector of numerical values.
-- `tol::Real`: A tolerance value to account for floating-point precision errors (default is
-  `sqrt(eps(eltype(v)))`).
+- `tol`: A tolerance value to account for floating-point precision errors (default is
+  `sqrt(eps(eltype(v)))` for floating-point element types, otherwise `eps()`).
 
 # Returns
 

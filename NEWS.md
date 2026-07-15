@@ -171,7 +171,7 @@ constructor.
 
 This capability is also available to `DataHandler`s and `TimeVaryingInput`s. To
 use this feature, just pass the list of files that contain your variable of
-interested, for example
+interest, for example
 ```julia
 timevaryinginput = TimeVaryingInputs.TimeVaryingInput(["era5_1980.nc", "era5_1981.nc"],
                                                       "u",
