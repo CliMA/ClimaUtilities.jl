@@ -3,9 +3,17 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
-### Minor additions
+
+v0.1.30
+------
+
+### Minor additions and bug fixes
 
 - Remove unnecessary allocations in `FileReaders.read` and `FileReaders.read!`.
+- `FileReaders.read` now caches reads for all dates (not just static datasets)
+  and returns a copy so that the cached, internal state cannot be mutated by
+  the caller.
+- Updated compat entries for `CUDA.jl` (to v6) and `Interpolations.jl` (to v0.16).
 
 v0.1.29
 ------
