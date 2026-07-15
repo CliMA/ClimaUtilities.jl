@@ -45,7 +45,7 @@ struct NCFileReader{
     (e.g., lon/lat)"""
     dimensions::DIMS
 
-    """A tuple with the names of the physcial dimensions, in the same order as `dimensions`"""
+    """A tuple with the names of the physical dimensions, in the same order as `dimensions`"""
     dim_names::Tuple
 
     """A vector of DateTime collecting all the available dates in the files"""
@@ -60,7 +60,7 @@ struct NCFileReader{
 
     """A place where to store values that have been already read. Uses an LRU cache,
     which contains a dictionary mapping dates to arrays, and has a fixed maximum size.
-    For static data sets, a sentinel data `DateTime(0)` is used as key."""
+    For static data sets, a sentinel date `DateTime(0)` is used as key."""
     _cached_reads::CACHE
 
     """Index of the time dimension in the array (typically first). -1 for static datasets"""
@@ -95,7 +95,7 @@ function FileReaders.NCFileReader(
     preprocess_func = identity,
     cache_max_size::Int = 128,
 )
-    # file_paths could be a vector/tuple or a string. Let's start by standarizing to a
+    # file_paths could be a vector/tuple or a string. Let's start by standardizing to a
     # vector
     file_paths isa AbstractString && (file_paths = [file_paths])
     only_one_file = length(file_paths) == 1

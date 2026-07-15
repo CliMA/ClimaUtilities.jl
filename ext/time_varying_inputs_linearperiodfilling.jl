@@ -137,7 +137,7 @@ Example
 ```
 julia> dates_period_left = [DateTime(1985, 1, 15), DateTime(1985, 2, 17), DateTime(1985, 12, 11)];
 
-julia> dates_period_right = [DateTime(1995, 1, 8), DateTime(199h5, 2, 18), DateTime(1995, 12, 18)];
+julia> dates_period_right = [DateTime(1995, 1, 8), DateTime(1995, 2, 18), DateTime(1995, 12, 18)];
 
 julia> period = Year(1);
 
@@ -278,7 +278,7 @@ function TimeVaryingInputs.evaluate!(
         # Linear interpolation: y = y0 * (1 - coeff) + coeff * y1
         #
         # coeff here is the period weight, for example, if we are interpolating in 1987
-        # from 1985 and 1985, it would be 2/10.
+        # from 1985 and 1995, it would be 2/10.
 
         # E.g., 730 days
         offset_periods_left =
@@ -336,7 +336,7 @@ function TimeVaryingInputs.evaluate!(
             )
         elseif minimum(dates_period_left) >= target_date_in_left_period ||
                minimum(dates_period_right) >= target_date_in_right_period
-            # Second case, the date is  than the interpolable region
+            # Second case, the date is earlier than the interpolable region
             #
             # E.g., Date(1987, 1, 1), in this case we interpolate with
             # Date(1986, 2, 17) and Date(1987, 1, 15)
@@ -357,7 +357,7 @@ function TimeVaryingInputs.evaluate!(
             error("We should not be here!")
         end
 
-        # y = y0 * (1 - coeff) + coff * y1
+        # y = y0 * (1 - coeff) + coeff * y1
         TimeVaryingInputs.evaluate!(dest, itp, date_pre, method)
         coeff = (time - date_pre) / (date_post - date_pre)
         dest .*= (1 - coeff)

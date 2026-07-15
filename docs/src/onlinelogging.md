@@ -52,7 +52,7 @@ report_callback = SciMLBase.DiscreteCallback(every10steps,
         integrator -> report_walltime(wt, integrator)
     end)
 
-# The let wt = wt is not strickly required, but it can improve type-stability and performance
+# The let wt = wt is not strictly required, but it can improve type-stability and performance
 
 # Now that we have the callback, we can pass it to the SciML constructor for the integrator
 ```

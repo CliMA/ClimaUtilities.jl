@@ -90,7 +90,7 @@ This is the period of time that is repeated. For example, if `period = Dates.Mon
 `repeat_date = Dates.Date(1993, 11)`, November 1993 is repeated (if available in the input
 data).
 
-!!! warn
+!!! warning
 
     In the case described above, `PeriodicCalendar` does not act as strictly a boundary
     condition. It rather acts as a filter on the input data, selecting only data
@@ -150,7 +150,7 @@ struct Flat <: AbstractInterpolationBoundaryMethod end
     TimeVaryingInput(func)
     TimeVaryingInput(times, vals; method, context)
 
-Construct on object that knows how to evaluate the given function/data on the model times.
+Construct an object that knows how to evaluate the given function/data on the model times.
 
 When passing a function
 =======================

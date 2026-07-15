@@ -17,8 +17,8 @@ import ClimaUtilities.SpaceVaryingInputs
 Returns the parameter field to be used in the model; appropriate when
 a parameter is defined using a function of the coordinates of the space.
 
-Pass the ``data" as a function `data_function` which takes coordinates as arguments,
-and  the ClimaCore space of the model simulation.
+Pass the `data` as a function `data_function` which takes coordinates as arguments,
+and the ClimaCore space of the model simulation.
 
 This returns a scalar field.
 Note that data_function is broadcasted over the coordinate field. Internally, inside

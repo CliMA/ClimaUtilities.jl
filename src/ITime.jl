@@ -11,7 +11,7 @@ having a fixed duration (`period`).
 Another way to think about this is that this is time with units.
 
 This type is currently using Dates, but one of the design goals is to try to be
-as agnostic as possible with respect to this so that in the future in will be
+as agnostic as possible with respect to this so that in the future it will be
 possible to use a different calendar.
 
 When using Dates, the minimum unit of time that can be represented is 1
@@ -206,7 +206,7 @@ end
 function Base.show(io::IO, time::ITime)
     # Hack to pretty print fractional times. We cannot just use Dates to print
     # them because they cannot be nicely converted to Periods, instead of
-    # reconstruct the string from the type name and the value (obtained my
+    # reconstruct the string from the type name and the value (obtained by
     # multiplying the counter and the number of units in the period)
     value = counter(time) * float(period(time).value)
     plural_s = abs(value) != 1 ? "s" : ""

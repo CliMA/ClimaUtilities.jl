@@ -1,9 +1,9 @@
-# `SpaceVaringInputs` and `TimeVaryingInputs`
+# `SpaceVaryingInputs` and `TimeVaryingInputs`
 
 Most models require external inputs to work. Examples of inputs are an analytic
 function that prescribes the sea-surface temperature in time, or a file that
 describes the types of plants on the surface of the globe. The
-`SpaceVaringInputs` and `TimeVaryingInputs` modules provide a unified
+`SpaceVaryingInputs` and `TimeVaryingInputs` modules provide a unified
 infrastructure to handle all these cases.
 
 ## [`TimeVaryingInputs`](@id timevaryinginput)
@@ -117,8 +117,8 @@ Read more about this feature in the page about [`DataHandler`](@ref datahandling
 default, the `Throw` condition is used, meaning that interpolating onto a point
 that is outside the range of definition of the data is not allowed. Other
 boundary conditions are allowed. With the `Flat` boundary condition, when
-interpolating outside of the range of definition, return the value of the of
-closest boundary is used instead.
+interpolating outside of the range of definition, the value of the closest
+boundary is used instead.
 
 To set these boundary conditions, construct the relevant method passing the
 argument. For example, to combine `NearestNeighbor` with `Flat`:
@@ -137,7 +137,7 @@ the duration of the period that has to be repeated. The `repeat_date` defines
 what date range needs to be repeated. For example, if `period = Dates.Month(1)`
 and `repeat_date = Dates.Date(1993, 11)`, November 1993 will be repeated.
 
-!!! warn
+!!! warning
 
     While `PeriodicCalendar` is described as an extrapolation boundary condition,
     it may also change the data used during the time period where data is available.
@@ -196,7 +196,7 @@ function evolve_model(albedo_tv, albedo_field)
     new_t = t + dt
     # First, we update the albedo to the new time
     evaluate!(albedo_field, albedo_tv, new_t)
-    # Now we can do all the operations we want we albedo_filed
+    # Now we can do all the operations we want with albedo_field
     # rhs = ...
 end
 
@@ -210,7 +210,7 @@ albedo_tv_an = TimeVaryingInput((t) -> 0.5)
 
 # start_date is the calendar date at the beginning of our simulation
 start_date = Dates.DateTime(2000, 1, 1)
-albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_space;
+albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesm_albedo.nc", "alb", target_space;
                                                start_date, regridder_kwargs = (; regrid_dir = "/tmp"))
 # When using data from files, the data is automatically interpolated to the correct
 # time
@@ -224,7 +224,7 @@ to other constructors. This often used to preprocess files that are being read
 (most commonly to change units). For example, if we want to multiply the albedo
 by a factor of 100, we would change `albedo_tv` with
 ```julia
-albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesem_albedo.nc", "alb", target_space;
+albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesm_albedo.nc", "alb", target_space;
                                                start_date, regridder_kwargs = (; regrid_dir = "/tmp"),
                                                file_reader_kwargs = (; preprocess_func = (x) -> 100x))
 ```

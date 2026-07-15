@@ -77,7 +77,7 @@ end
         Interpolations.Flat(),
         Interpolations.Flat(),
     )
-    # create one regirdder with no transformations to dimensions needed
+    # create one regridder with no transformations to dimensions needed
     # create another regridder that reverses the second dimension
     reg_horz = Regridders.InterpolationsRegridder(horzspace)
     reg_horz_reversed = Regridders.InterpolationsRegridder(
