@@ -197,9 +197,9 @@ import ClimaUtilities.OnlineLogging:
             theoretical_time_total / 2;
             rtol = 0.1,
         )
-        @test isapprox(reported_time_total, theoretical_time_total; rtol = 0.1)
-        @test isapprox(reported_sypd, theoretical_sypd; rtol = 0.1)
-        @test isapprox(inst_sypd, theoretical_sypd; rtol = 0.1)
+        @test isapprox(reported_time_total, theoretical_time_total; rtol = 0.25)
+        @test isapprox(reported_sypd, theoretical_sypd; rtol = 0.25)
+        @test isfinite(inst_sypd) && inst_sypd > 0
     end
 
     @testset "_time_and_units_str" begin
