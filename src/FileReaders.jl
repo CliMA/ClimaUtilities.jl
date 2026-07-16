@@ -16,6 +16,8 @@ abstract type AbstractFileReader end
 
 function NCFileReader end
 
+function DatasetSource end
+
 function read end
 
 function read! end
@@ -27,6 +29,8 @@ function close_all_ncfiles end
 extension_fns = [
     :NCDatasets => [
         :NCFileReader,
+        :MultiColumnNCFileReader,
+        :DataSource,
         :read,
         :read!,
         :available_dates,

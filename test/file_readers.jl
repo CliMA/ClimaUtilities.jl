@@ -6,6 +6,193 @@ import ClimaUtilities
 import ClimaUtilities.FileReaders
 using NCDatasets
 
+@testset "DataSource" begin
+    data_dir = mktempdir()
+    zs = Float64[1, 2, 3]
+    times = [DateTime(2000, 1, 1), DateTime(2000, 1, 2)]
+
+    # Write a single column file. `times === nothing` makes a static file (no
+    # time dimension); otherwise the file is time-varying with the given axis.
+    function make_source_file(name, times)
+        path = joinpath(data_dir, name)
+        NCDataset(path, "c") do nc
+            defDim(nc, "z", length(zs))
+            defVar(nc, "z", zs, ("z",))
+            if isnothing(times)
+                defVar(nc, "myvar", zs, ("z",))
+            else
+                defDim(nc, "time", length(times))
+                defVar(nc, "time", times, ("time",))
+                var = defVar(nc, "myvar", Float64, ("z", "time"))
+                for t in eachindex(times)
+                    var[:, t] = zs .* t
+                end
+            end
+        end
+        return path
+    end
+
+    # Static single file: no time dimension
+    static_path = make_source_file("ds_static.nc", nothing)
+    src = FileReaders.DataSource(static_path, "myvar")
+    @test src.file_paths == [static_path]
+    @test src.varname == "myvar"
+    @test isempty(src.available_dates)
+    @test src.time_index == -1
+    @test src.coord_names == (; z = "z")
+    @test src.dataset_kwargs == ()
+
+    # Time-varying single file
+    tv_path = make_source_file("ds_tv.nc", times)
+    src = FileReaders.DataSource(tv_path, "myvar")
+    @test src.available_dates == times
+    @test src.time_index == 2
+    @test src.dataset_kwargs == ()
+
+    # `time_transform` is applied elementwise to the dates
+    src = FileReaders.DataSource(
+        tv_path,
+        "myvar";
+        time_transform = d -> d + Day(1),
+    )
+    @test src.available_dates == times .+ Day(1)
+
+    # Multiple files joined along the time dimension
+    split_paths = map(eachindex(times)) do t
+        make_source_file("ds_split_t$t.nc", [times[t]])
+    end
+    src = FileReaders.DataSource(split_paths, "myvar")
+    @test src.available_dates == times
+    @test src.time_index == 2
+    @test src.dataset_kwargs == (:aggdim => "time", :deferopen => false)
+
+    # Coordinates must be consistent across files
+    mismatch_path = joinpath(data_dir, "ds_split_zmismatch.nc")
+    NCDataset(mismatch_path, "c") do nc
+        defDim(nc, "z", length(zs))
+        defVar(nc, "z", zs .+ 0.5, ("z",))
+        defDim(nc, "time", 1)
+        defVar(nc, "time", [times[2]], ("time",))
+        var = defVar(nc, "myvar", Float64, ("z", "time"))
+        var[:, 1] = zs
+    end
+    @test_throws contains("does not match") FileReaders.DataSource(
+        [first(split_paths), mismatch_path],
+        "myvar",
+    )
+
+    # File with date dimension
+    # Some datasets store their time axis as a "date" dimension holding integer
+    # yyyymmdd values instead of a CF "time" dimension
+    data_dir = mktempdir()
+    dates_int = [20000101, 20000102]
+    dates = [DateTime(2000, 1, 1), DateTime(2000, 1, 2)]
+    path = joinpath(data_dir, "ds_yyyymmdd.nc")
+    NCDataset(path, "c") do nc
+        defDim(nc, "date", length(dates_int))
+        defVar(nc, "date", dates_int, ("date",))
+        var = defVar(nc, "myvar", Float64, ("date",))
+        for t in eachindex(dates_int)
+            var[t] = t
+        end
+    end
+
+    src = FileReaders.DataSource(path, "myvar")
+    @test src.available_dates == dates
+    @test src.time_index == 1
+    @test isempty(src.dataset_kwargs)
+
+    # Error handling
+    @test_throws contains("must contain at least one path") FileReaders.DataSource(
+        String[],
+        "myvar",
+    )
+    @test_throws contains("is not available") FileReaders.DataSource(
+        static_path,
+        "nope",
+    )
+    unsorted_path = make_source_file("ds_unsorted.nc", reverse(times))
+    @test_throws contains("Dates are not sorted") FileReaders.DataSource(
+        unsorted_path,
+        "myvar",
+    )
+    duplicate_path = make_source_file("ds_duplicate.nc", [times[1], times[1]])
+    @test_throws contains("Dates are not unique") FileReaders.DataSource(
+        duplicate_path,
+        "myvar",
+    )
+end
+
+@testset "DataSource coordinate names" begin
+    data_dir = mktempdir()
+    zs = Float64[1, 2, 3]
+
+    # Write a single static column file whose coordinate variables use the
+    # given names.
+    function make_coord_file(name, lon_name, lat_name, z_name)
+        path = joinpath(data_dir, name)
+        NCDataset(path, "c") do nc
+            defDim(nc, z_name, length(zs))
+            defVar(nc, lon_name, 10.0, ())
+            defVar(nc, lat_name, 20.0, ())
+            defVar(nc, z_name, zs, (z_name,))
+            defVar(nc, "myvar", zs, (z_name,))
+        end
+        return path
+    end
+
+    # Coordinate names should match case-insensitively
+    detected_path =
+        make_coord_file("cn_detected.nc", "Longitude", "lat", "level")
+    src = FileReaders.DataSource(detected_path, "myvar")
+    @test src.coord_names == (; lon = "Longitude", lat = "lat", z = "level")
+
+    # Explicit names are validated against the file and stored as given
+    custom_path = make_coord_file("cn_custom.nc", "x_lon", "y_lat", "zed")
+    src = FileReaders.DataSource(
+        custom_path,
+        "myvar";
+        coord_names = (; lon = "x_lon", lat = "y_lat", z = "zed"),
+    )
+    @test src.coord_names == (; lon = "x_lon", lat = "y_lat", z = "zed")
+
+    # Detection omits the coordinate types it cannot identify
+    src = FileReaders.DataSource(custom_path, "myvar")
+    @test src.coord_names == (;)
+
+    # Two candidates for the same type of coordinate
+    ambiguous_path = joinpath(data_dir, "cn_ambiguous.nc")
+    NCDataset(ambiguous_path, "c") do nc
+        defDim(nc, "z", length(zs))
+        defVar(nc, "lon", 10.0, ())
+        defVar(nc, "longitude", 10.0, ())
+        defVar(nc, "latitude", 20.0, ())
+        defVar(nc, "z", zs, ("z",))
+        defVar(nc, "myvar", zs, ("z",))
+    end
+    @test_throws contains("multiple lon variables") FileReaders.DataSource(
+        ambiguous_path,
+        "myvar",
+    )
+
+    # Error handling for explicit names
+    @test_throws contains("is not available") FileReaders.DataSource(
+        custom_path,
+        "myvar";
+        coord_names = (; lon = "nope", lat = "y_lat"),
+    )
+    @test_throws contains("Unrecognized coordinate types") FileReaders.DataSource(
+        custom_path,
+        "myvar";
+        coord_names = (; long = "x_lon", lat = "y_lat"),
+    )
+    @test_throws contains("must be a NamedTuple") FileReaders.DataSource(
+        custom_path,
+        "myvar";
+        coord_names = ("x_lon", "y_lat"),
+    )
+end
+
 @testset "NCFileReader with time" begin
     # Start from a clean OPEN_NCFILES state
     FileReaders.close_all_ncfiles()
