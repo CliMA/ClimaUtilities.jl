@@ -4,6 +4,7 @@ using Test
 
 import ClimaUtilities
 import ClimaUtilities.DataHandling
+import ClimaUtilities.FileReaders
 
 import ClimaCore
 import ClimaComms
@@ -539,4 +540,397 @@ end
         )
 
     end
+end
+
+# The MultiColumnDataHandler reads one column per file and remaps onto a
+# PointColumnEnsembleSpace with ColumnRegridder (vertical interpolation via
+# ClimaInterpolations). The source files' z levels are chosen to coincide with
+# the target space's z levels (a uniform [0.5, nz + 0.5] mesh has cell centers
+# 1, 2, ..., nz), so the vertical interpolation is the identity and the column
+# profile is reproduced.
+@testset "MultiColumnDataHandler, static" begin
+    for FT in (Float32, Float64)
+        long, lat = FT(20), FT(10)
+        profile = FT[10, 20, 30, 40]
+        nz = length(profile)
+        target_space = make_column_space(
+            FT;
+            context,
+            points = [ClimaCore.Geometry.LatLongPoint(lat, long)],
+            z_elem = nz,
+            z_min = FT(0.5),
+            z_max = FT(nz + 0.5),
+        )
+
+        PATH = joinpath(mktempdir(), "static_col.nc")
+        NCDataset(PATH, "c") do nc
+            defDim(nc, "z", nz)
+            defVar(nc, "longitude", long, ())
+            defVar(nc, "latitude", lat, ())
+            defVar(nc, "z", FT[1, 2, 3, 4], ("z",))
+            defVar(nc, "sp", profile, ("z",))
+        end
+
+        data_handler = DataHandling.MultiColumnDataHandler(
+            [FileReaders.DataSource(PATH, "sp")],
+            target_space,
+        )
+
+        @test DataHandling.available_dates(data_handler) == DateTime[]
+
+        field = DataHandling.regridded_snapshot(data_handler)
+        @test field isa ClimaCore.Fields.Field
+        @test axes(field) == target_space
+        @test eltype(field) == FT
+        # Source and target z coincide, so the profile is reproduced
+        @test vec(Array(ClimaCore.Fields.field2array(field))) ≈ profile
+
+        close(data_handler)
+    end
+
+    # Test with different coordinate names
+    FT = Float32
+    long, lat = FT(20), FT(10)
+    profile = FT[10, 20, 30, 40]
+    nz = length(profile)
+    target_space = make_column_space(
+        FT;
+        context,
+        points = [ClimaCore.Geometry.LatLongPoint(lat, long)],
+        z_elem = nz,
+        z_min = FT(0.5),
+        z_max = FT(nz + 0.5),
+    )
+
+    PATH = joinpath(mktempdir(), "custom_names_col.nc")
+    NCDataset(PATH, "c") do nc
+        defDim(nc, "zed", nz)
+        defVar(nc, "x_lon", long, ())
+        defVar(nc, "y_lat", lat, ())
+        defVar(nc, "zed", FT[1, 2, 3, 4], ("zed",))
+        defVar(nc, "sp", profile, ("zed",))
+    end
+
+    source = FileReaders.DataSource(
+        PATH,
+        "sp";
+        coord_names = (; lon = "x_lon", lat = "y_lat", z = "zed"),
+    )
+    data_handler = DataHandling.MultiColumnDataHandler([source], target_space)
+
+    field = DataHandling.regridded_snapshot(data_handler)
+    @test vec(Array(ClimaCore.Fields.field2array(field))) ≈ profile
+
+    close(data_handler)
+end
+
+@testset "MultiColumnDataHandler, time data" begin
+    for FT in (Float32, Float64)
+        long, lat = FT(20), FT(10)
+        times =
+            [DateTime(2000, 1, 1), DateTime(2000, 1, 2), DateTime(2000, 1, 3)]
+        target_space = make_column_space(
+            FT;
+            context,
+            points = [ClimaCore.Geometry.LatLongPoint(lat, long)],
+            z_elem = 4,
+            z_min = FT(0.5),
+            z_max = FT(4.5),
+        )
+
+        PATH = joinpath(mktempdir(), "tv_col.nc")
+        NCDataset(PATH, "c") do nc
+            defDim(nc, "z", 4)
+            defDim(nc, "time", length(times))
+            defVar(nc, "longitude", long, ())
+            defVar(nc, "latitude", lat, ())
+            defVar(nc, "z", FT[1, 2, 3, 4], ("z",))
+            defVar(nc, "time", times, ("time",))
+            var = defVar(nc, "sp", FT, ("z", "time"))
+            # Profile of column at time t is [1, 2, 3, 4] * t
+            for t in eachindex(times)
+                var[:, t] = FT[1, 2, 3, 4] .* t
+            end
+        end
+
+        data_handler = DataHandling.MultiColumnDataHandler(
+            [FileReaders.DataSource(PATH, "sp")],
+            target_space;
+            start_date = DateTime(2000, 1, 1),
+        )
+
+        available_dates = DataHandling.available_dates(data_handler)
+        available_times = DataHandling.available_times(data_handler)
+        @test available_dates == times
+        @test data_handler.start_date .+ Second.(available_times) ==
+              available_dates
+
+        @test DataHandling.dt(data_handler) ==
+              available_times[2] - available_times[1]
+        @test DataHandling.time_to_date(data_handler, 0.0) ==
+              data_handler.start_date
+        @test DataHandling.date_to_time(
+            data_handler,
+            data_handler.start_date,
+        ) == 0.0
+
+        @test DataHandling.previous_date(
+            data_handler,
+            available_dates[2] + Second(1),
+        ) == available_dates[2]
+        @test DataHandling.next_date(
+            data_handler,
+            available_dates[1] + Second(1),
+        ) == available_dates[2]
+
+        # Source and target z coincide, so no interpolation is done
+        field =
+            DataHandling.regridded_snapshot(data_handler, available_times[2])
+        @test field isa ClimaCore.Fields.Field
+        @test axes(field) == target_space
+        @test eltype(field) == FT
+        @test vec(Array(ClimaCore.Fields.field2array(field))) ≈
+              FT[1, 2, 3, 4] .* 2
+
+        # In-place version of regridded_snapshot
+        dest = zeros(target_space)
+        DataHandling.regridded_snapshot!(dest, data_handler, available_times[2])
+        @test vec(Array(ClimaCore.Fields.field2array(dest))) ≈
+              FT[1, 2, 3, 4] .* 2
+
+        close(data_handler)
+    end
+end
+
+@testset "MultiColumnDataHandler, multiple variables and column ordering" begin
+    FT = Float64
+    lon1, lat1 = FT(20), FT(10)
+    lon2, lat2 = FT(40), FT(50)
+    nz = 4
+    target_space = make_column_space(
+        FT;
+        context,
+        points = [
+            ClimaCore.Geometry.LatLongPoint(lat1, lon1),
+            ClimaCore.Geometry.LatLongPoint(lat2, lon2),
+        ],
+        z_elem = nz,
+        z_min = FT(0.5),
+        z_max = FT(nz + 0.5),
+    )
+
+    dir = mktempdir()
+    function write_col(name, varname, lon, lat, profile)
+        path = joinpath(dir, name)
+        NCDataset(path, "c") do nc
+            defDim(nc, "z", nz)
+            defVar(nc, "longitude", lon, ())
+            defVar(nc, "latitude", lat, ())
+            defVar(nc, "z", FT[1, 2, 3, 4], ("z",))
+            defVar(nc, varname, profile, ("z",))
+        end
+        return path
+    end
+
+    a1, a2 = FT[1, 1, 1, 1], FT[2, 2, 2, 2]
+    b1, b2 = FT[10, 10, 10, 10], FT[20, 20, 20, 20]
+
+    # Columns are provided out of the target space's order; the handler matches
+    # them to the space by location
+    a_sources = [
+        FileReaders.DataSource(write_col("a2.nc", "a", lon2, lat2, a2), "a"),
+        FileReaders.DataSource(write_col("a1.nc", "a", lon1, lat1, a1), "a"),
+    ]
+    b_sources = [
+        FileReaders.DataSource(write_col("b1.nc", "b", lon1, lat1, b1), "b"),
+        FileReaders.DataSource(write_col("b2.nc", "b", lon2, lat2, b2), "b"),
+    ]
+
+    # Use compose_function where argument order matters
+    data_handler = DataHandling.MultiColumnDataHandler(
+        [a_sources, b_sources],
+        target_space;
+        compose_function = (a, b) -> a .- 2 .* b,
+    )
+
+    @test data_handler.varnames == ["a", "b"]
+
+    field = DataHandling.regridded_snapshot(data_handler)
+    arr = Array(ClimaCore.Fields.field2array(field))
+    coords = ClimaCore.Fields.coordinate_field(target_space)
+    lons = Array(ClimaCore.Fields.field2array(coords.long))[1, :]
+    for c in axes(arr, 2)
+        expected = isapprox(lons[c], lon1) ? a1 .- 2 .* b1 : a2 .- 2 .* b2
+        @test arr[:, c] ≈ expected
+    end
+
+    close(data_handler)
+end
+
+@testset "MultiColumnDataHandler, column matching" begin
+    FT = Float32
+    nz = 4
+    zs = FT[1, 2, 3, 4]
+    dir = mktempdir()
+    function write_col(name, lon, lat, profile)
+        path = joinpath(dir, name)
+        NCDataset(path, "c") do nc
+            defDim(nc, "z", nz)
+            defVar(nc, "longitude", lon, ())
+            defVar(nc, "latitude", lat, ())
+            defVar(nc, "z", zs, ("z",))
+            defVar(nc, "sp", profile, ("z",))
+        end
+        return path
+    end
+
+    lon1, lat1 = FT(20), FT(10)
+    lon2, lat2 = FT(40), FT(50)
+    target_space = make_column_space(
+        FT;
+        context,
+        points = [
+            ClimaCore.Geometry.LatLongPoint(lat1, lon1),
+            ClimaCore.Geometry.LatLongPoint(lat2, lon2),
+        ],
+        z_elem = nz,
+        z_min = FT(0.5),
+        z_max = FT(nz + 0.5),
+    )
+
+    # The sources do not cover every column of the target space
+    far_source = FileReaders.DataSource(
+        write_col("cm_far.nc", FT(100), FT(-60), zs),
+        "sp",
+    )
+    @test_throws contains("No column matches") DataHandling.MultiColumnDataHandler(
+        [far_source],
+        target_space,
+    )
+
+    # Two sources at locations closer than atol
+    near1 =
+        FileReaders.DataSource(write_col("cm_near1.nc", lon1, lat1, zs), "sp")
+    near2 = FileReaders.DataSource(
+        write_col("cm_near2.nc", lon1 + FT(1e-5), lat1, zs .+ 100),
+        "sp",
+    )
+    col2 = FileReaders.DataSource(write_col("cm_col2.nc", lon2, lat2, zs), "sp")
+    @test_throws contains("Multiple columns") DataHandling.MultiColumnDataHandler(
+        [near1, near2, col2],
+        target_space,
+    )
+
+    # Use smaller number for atol so near1 and col2 are matched with the columns
+    # in target_space
+    data_handler = DataHandling.MultiColumnDataHandler(
+        [near1, near2, col2],
+        target_space;
+        atol = 1e-7,
+    )
+    field = DataHandling.regridded_snapshot(data_handler)
+    arr = Array(ClimaCore.Fields.field2array(field))
+    for c in axes(arr, 2)
+        @test arr[:, c] ≈ zs
+    end
+    close(data_handler)
+
+    # Longitudes ranging from 0 to 360 degrees should map to -180 to 180 degrees
+    wrap_space = make_column_space(
+        FT;
+        context,
+        points = [ClimaCore.Geometry.LatLongPoint(lat1, FT(-20))],
+        z_elem = nz,
+        z_min = FT(0.5),
+        z_max = FT(nz + 0.5),
+    )
+    wrapped = FileReaders.DataSource(
+        write_col("cm_wrap.nc", FT(340), lat1, FT[10, 20, 30, 40]),
+        "sp",
+    )
+    extra = FileReaders.DataSource(
+        write_col("cm_extra.nc", FT(100), FT(-60), zs),
+        "sp",
+    )
+    data_handler =
+        DataHandling.MultiColumnDataHandler([wrapped, extra], wrap_space)
+    field = DataHandling.regridded_snapshot(data_handler)
+    @test vec(Array(ClimaCore.Fields.field2array(field))) ≈ FT[10, 20, 30, 40]
+    close(data_handler)
+end
+
+@testset "MultiColumnDataHandler errors" begin
+    FT = Float32
+    long, lat = FT(20), FT(10)
+    nz = 4
+    target_space = make_column_space(
+        FT;
+        context,
+        points = [ClimaCore.Geometry.LatLongPoint(lat, long)],
+        z_elem = nz,
+        z_min = FT(0.5),
+        z_max = FT(nz + 0.5),
+    )
+
+    dir = mktempdir()
+    function write_col(name, varname; zs = FT[1, 2, 3, 4])
+        path = joinpath(dir, name)
+        NCDataset(path, "c") do nc
+            defDim(nc, "z", length(zs))
+            defVar(nc, "longitude", long, ())
+            defVar(nc, "latitude", lat, ())
+            defVar(nc, "z", zs, ("z",))
+            defVar(nc, varname, zs, ("z",))
+        end
+        return path
+    end
+
+    a_source = FileReaders.DataSource(write_col("err_a.nc", "a"), "a")
+    b_source = FileReaders.DataSource(write_col("err_b.nc", "b"), "b")
+
+    # The horizontal part of the target space must be a PointCloudSpace
+    spherical_space = make_spherical_space(FT).hybrid
+    @test_throws contains("PointCloudSpace") DataHandling.MultiColumnDataHandler(
+        [a_source],
+        spherical_space,
+    )
+
+    # No sources at all
+    @test_throws contains("At least one DataSource") DataHandling.MultiColumnDataHandler(
+        [],
+        target_space,
+    )
+
+    # A mix of DataSources and vectors of DataSources
+    @test_throws contains("pass a DataSource") DataHandling.MultiColumnDataHandler(
+        [a_source, [b_source]],
+        target_space,
+    )
+
+    # Multiple variables require a compose_function
+    @test_throws contains("compose_function") DataHandling.MultiColumnDataHandler(
+        [[a_source], [b_source]],
+        target_space,
+    )
+
+    # Duplicate variable names across dataset_sources
+    a2_source = FileReaders.DataSource(write_col("err_a2.nc", "a"), "a")
+    @test_throws contains("Duplicate variable names") DataHandling.MultiColumnDataHandler(
+        [[a_source], [a2_source]],
+        target_space;
+        compose_function = (x, y) -> x .+ y,
+    )
+
+    # Variables with different vertical levels
+    c_source = FileReaders.DataSource(
+        write_col("err_c.nc", "c"; zs = FT[1, 2, 3, 5]),
+        "c",
+    )
+    @test_throws contains("inconsistent vertical dimensions") DataHandling.MultiColumnDataHandler(
+        [[a_source], [c_source]],
+        target_space;
+        compose_function = (x, y) -> x .+ y,
+    )
+
+    FileReaders.close_all_ncfiles()
 end
