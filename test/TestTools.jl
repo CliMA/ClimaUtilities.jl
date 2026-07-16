@@ -165,3 +165,42 @@ function make_z_only_space(FT; context = ClimaComms.context())
 
     return vert_center_space
 end
+
+function make_column_space(
+    FT;
+    context = ClimaComms.context(),
+    points = [ClimaCore.Geometry.LatLongPoint(FT(0), FT(0))],
+    z_elem = 10,
+    z_min = FT(0),
+    z_max = FT(1),
+    reverse_mode = false,
+)
+    # `reverse_mode` builds a mesh with descending faces so that the coordinate
+    # field's z-levels are stored in decreasing order (useful for exercising a
+    # target space with decreasing vertical levels). The default path is left
+    # untouched (it uses the space's `DefaultZMesh`).
+    extra = if reverse_mode
+        z_domain = ClimaCore.Domains.IntervalDomain(
+            ClimaCore.Geometry.ZPoint(FT(z_min)),
+            ClimaCore.Geometry.ZPoint(FT(z_max));
+            boundary_names = (:bottom, :top),
+        )
+        faces = [
+            ClimaCore.Geometry.ZPoint(FT(z)) for
+            z in range(FT(z_max), FT(z_min); length = z_elem + 1)
+        ]
+        (; z_mesh = ClimaCore.Meshes.IntervalMesh(z_domain, faces))
+    else
+        (;)
+    end
+    return CommonSpaces.PointColumnEnsembleSpace(
+        FT;
+        device = ClimaComms.device(context),
+        points,
+        z_elem,
+        z_min,
+        z_max,
+        extra...,
+        staggering = CommonSpaces.CellCenter(),
+    )
+end

@@ -4,7 +4,7 @@ Simulations often need to import external data directly onto the computational
 grid. The `Regridders` module implements different schemes to accomplish this
 goal.
 
-Currently, `Regridders` comes with two implementations:
+Currently, `Regridders` comes with three implementations:
 1. `TempestRegridder` uses
    [TempestRemap](https://github.com/ClimateGlobalChange/tempestremap) (through
    `ClimaCoreTempestRemap`) to perform conservative interpolation onto lat-long
@@ -14,6 +14,10 @@ Currently, `Regridders` comes with two implementations:
    [Interpolations.jl](https://github.com/JuliaMath/Interpolations.jl) to
    perform non-conservative linear interpolation onto lat-long(-z) and x-y-z grids.
    `InterpolationsRegridder` works directly with data.
+3. `ColumnRegridder` uses
+   [ClimaInterpolations.jl](https://github.com/CliMA/ClimaInterpolations.jl) to
+   perform vertical-only interpolation of column data. `ColumnRegridder` works
+   directly with data.
 
 !!! note
 
@@ -115,10 +119,24 @@ interpolated_data = Regridders.InterpolationsRegridder(reg, data, dimensions)
 interpolated_2data = Regridders.InterpolationsRegridder(reg, 2 .* data, dimensions)
 ```
 
+## `ColumnRegridder`
+
+> This extension is loaded when loading `ClimaCore` and `ClimaInterpolations`
+
+`ColumnRegridder` interpolates data defined on each column's vertical levels
+onto the vertical levels of a multi-column `target_space`. It performs no
+horizontal interpolation: the columns of the data are assumed to already be
+aligned with the columns of the target space.
+
+`ColumnRegridder` is special-purpose and is never selected by
+`default_regridder_type()`: it is used through `MultiColumnDataHandler`, which
+must be constructed explicitly (see the `DataHandling` documentation).
+
 ## API
 
 ```@docs
 ClimaUtilities.Regridders.TempestRegridder
 ClimaUtilities.Regridders.InterpolationsRegridder
+ClimaUtilities.Regridders.ColumnRegridder
 ClimaUtilities.Regridders.regrid
 ```

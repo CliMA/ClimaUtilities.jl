@@ -637,3 +637,211 @@ end
         @test original_min <= regridded_min
     end
 end
+
+@testset "ColumnRegridder" begin
+    latlong_points = [(0.0, 0.0), (10.0, 20.0), (-5.0, 90.0)]
+    ncolumns = length(latlong_points)
+
+    for FT in (Float32, Float64)
+        points = [
+            ClimaCore.Geometry.LatLongPoint(FT(lat), FT(long)) for
+            (lat, long) in latlong_points
+        ]
+        target_space = make_column_space(
+            FT;
+            context,
+            points,
+            z_elem = 10,
+            z_min = FT(0),
+            z_max = FT(10_000),
+        )
+        target_z = ClimaCore.Fields.field2array(
+            ClimaCore.Fields.coordinate_field(target_space).z,
+        )
+
+        # Source grid spanning the full target range, same for every column.
+        source_z = stack([FT[0, 5000, 10_000] for _ in 1:ncolumns])
+        reg = Regridders.ColumnRegridder(target_space, source_z)
+
+        # Interpolate with f(z) = z
+        field = Regridders.regrid(reg, source_z)
+        @test eltype(field) == FT
+        @test Array(ClimaCore.Fields.field2array(field)) ≈ Array(target_z)
+
+        # Interpolate with f_c(z) = c * z (different values for each column)
+        data = stack([FT(c) .* source_z[:, c] for c in 1:ncolumns])
+        field = Regridders.regrid(reg, data)
+        expected = stack([FT(c) .* target_z[:, c] for c in 1:ncolumns])
+        @test Array(ClimaCore.Fields.field2array(field)) ≈ Array(expected)
+
+        # Test flat extrapolation
+        source_z_narrow = stack([FT[2000, 5000, 8000] for _ in 1:ncolumns])
+        reg_narrow = Regridders.ColumnRegridder(target_space, source_z_narrow)
+        field = Regridders.regrid(reg_narrow, source_z_narrow)
+        @test Array(ClimaCore.Fields.field2array(field)) ≈
+              clamp.(Array(target_z), FT(2000), FT(8000))
+
+        # Decreasing source levels are detected automatically
+        source_z_dec = reverse(source_z, dims = 1)
+        reg_reversed = Regridders.ColumnRegridder(target_space, source_z_dec)
+        field_reversed = Regridders.regrid(reg_reversed, source_z_dec)
+        @test Array(ClimaCore.Fields.field2array(field_reversed)) ≈
+              Array(target_z)
+
+        # Surface data with no vertical levels
+        level_space = ClimaCore.Spaces.level(target_space, 1)
+        reg_surface = Regridders.ColumnRegridder(level_space)
+        surface_data = reshape(FT[1, 2, 3], 1, ncolumns)
+        field_surface = Regridders.regrid(reg_surface, surface_data)
+        @test vec(Array(ClimaCore.Fields.field2array(field_surface))) ==
+              FT[1, 2, 3]
+
+        # Test combination of increasing and decreasing vertical levels for
+        # spaces
+        for target_reverse in (false, true)
+            target_space = make_column_space(
+                FT;
+                context,
+                points,
+                z_elem = 10,
+                z_min = FT(0),
+                z_max = FT(10_000),
+                reverse_mode = target_reverse,
+            )
+            target_z = ClimaCore.Fields.field2array(
+                ClimaCore.Fields.coordinate_field(target_space).z,
+            )
+            # Confirm we actually built the intended target ordering
+            @test issorted(Array(target_z)[:, 1], rev = target_reverse)
+
+            # Source grid (increasing), spanning the full target range
+            source_z_inc =
+                stack([FT[0, 2500, 5000, 7500, 10_000] for _ in 1:ncolumns])
+
+            for source_reverse in (false, true)
+                source_z =
+                    source_reverse ? reverse(source_z_inc, dims = 1) :
+                    source_z_inc
+                reg = Regridders.ColumnRegridder(target_space, source_z)
+
+                # Interpolate with f(z) = z
+                field = Regridders.regrid(reg, source_z)
+                @test eltype(field) == FT
+                @test Array(ClimaCore.Fields.field2array(field)) ≈
+                      Array(target_z)
+
+                # Interpolate with f_c(z) = c * z (different values for each column)
+                data = stack([FT(c) .* source_z[:, c] for c in 1:ncolumns])
+                field = Regridders.regrid(reg, data)
+                expected = stack([FT(c) .* target_z[:, c] for c in 1:ncolumns])
+                @test Array(ClimaCore.Fields.field2array(field)) ≈
+                      Array(expected)
+            end
+        end
+
+        # Test with different spaces
+        # Interpolate with single-column FiniteDifferenceSpace
+        column_space = ClimaCore.CommonSpaces.ColumnSpace(
+            FT;
+            context,
+            z_elem = 10,
+            z_min = FT(0),
+            z_max = FT(10_000),
+            staggering = ClimaCore.CommonSpaces.CellCenter(),
+        )
+        target_z = ClimaCore.Fields.field2array(
+            ClimaCore.Fields.coordinate_field(column_space).z,
+        )
+        @test size(target_z, 2) == 1  # a single column
+
+        source_z = stack([FT[0, 2500, 5000, 7500, 10_000]])
+        reg = Regridders.ColumnRegridder(column_space, source_z)
+
+        # f(z) = z
+        field = Regridders.regrid(reg, source_z)
+        @test eltype(field) == FT
+        @test Array(ClimaCore.Fields.field2array(field)) ≈ Array(target_z)
+
+        # f(z) = 3 * z
+        data = FT(3) .* source_z
+        field = Regridders.regrid(reg, data)
+        @test Array(ClimaCore.Fields.field2array(field)) ≈
+              FT(3) .* Array(target_z)
+
+        # Flat extrapolation outside the (narrower) source range
+        source_z_narrow = stack([FT[2000, 5000, 8000]])
+        reg_narrow = Regridders.ColumnRegridder(column_space, source_z_narrow)
+        field = Regridders.regrid(reg_narrow, source_z_narrow)
+        @test Array(ClimaCore.Fields.field2array(field)) ≈
+              clamp.(Array(target_z), FT(2000), FT(8000))
+
+        # Interpolate onto PointSpace
+        point_space = ClimaCore.Spaces.level(column_space, 1)
+        reg_surface = Regridders.ColumnRegridder(point_space)
+        surface_data = reshape(FT[42], 1, 1)
+        field_surface = Regridders.regrid(reg_surface, surface_data)
+        @test vec(Array(ClimaCore.Fields.field2array(field_surface))) == FT[42]
+    end
+
+    # Error handling
+    FT = Float64
+    column_space = ClimaCore.CommonSpaces.ColumnSpace(
+        FT;
+        context,
+        z_elem = 10,
+        z_min = FT(0),
+        z_max = FT(10_000),
+        staggering = ClimaCore.CommonSpaces.CellCenter(),
+    )
+
+    # Non-monotone source levels
+    @test_throws contains("neither strictly increasing nor strictly decreasing") Regridders.ColumnRegridder(
+        column_space,
+        stack([FT[0, 5000, 2500, 10_000]]),
+    )
+
+    # Repeated source levels
+    @test_throws contains("neither strictly increasing nor strictly decreasing") Regridders.ColumnRegridder(
+        column_space,
+        stack([FT[0, 2500, 2500, 10_000]]),
+    )
+
+    # Wrong number of columns
+    @test_throws contains("columns") Regridders.ColumnRegridder(
+        column_space,
+        stack([FT[0, 5000, 10_000] for _ in 1:2]),
+    )
+
+    # Source levels given for a target space without vertical levels
+    point_space = ClimaCore.Spaces.level(column_space, 1)
+    @test_throws contains("Cannot regrid onto the target space") Regridders.ColumnRegridder(
+        point_space,
+        stack([FT[0, 5000, 10_000]]),
+    )
+
+    # Data size must match the source levels
+    source_z = stack([FT[0, 5000, 10_000]])
+    reg = Regridders.ColumnRegridder(column_space, source_z)
+    @test_throws contains("does not match") Regridders.regrid(
+        reg,
+        stack([FT[0, 10_000]]),
+    )
+
+    # Columns with inconsistent directions
+    two_col_space = make_column_space(
+        FT;
+        context,
+        points = [
+            ClimaCore.Geometry.LatLongPoint(FT(0), FT(0)),
+            ClimaCore.Geometry.LatLongPoint(FT(10), FT(20)),
+        ],
+        z_elem = 10,
+        z_min = FT(0),
+        z_max = FT(10_000),
+    )
+    mixed_z = stack([FT[0, 5000, 10_000], FT[10_000, 5000, 0]])
+    @test_throws contains("inconsistent directions") Regridders.ColumnRegridder(
+        two_col_space,
+        mixed_z,
+    )
+end
