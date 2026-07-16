@@ -16,7 +16,9 @@ abstract type AbstractFileReader end
 
 function NCFileReader end
 
-function DatasetSource end
+function MultiColumnNCFileReader end
+
+function DataSource end
 
 function read end
 

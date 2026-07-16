@@ -93,7 +93,8 @@ files in the correct order.
 
 ```@docs
 ClimaUtilities.FileReaders.NCFileReader
-ClimaUtilities.FileReaders.DatasetSource
+ClimaUtilities.FileReaders.MultiColumnNCFileReader
+ClimaUtilities.FileReaders.DataSource
 ClimaUtilities.FileReaders.read
 ClimaUtilities.FileReaders.read!
 ClimaUtilities.FileReaders.available_dates
