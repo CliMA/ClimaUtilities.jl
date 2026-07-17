@@ -145,6 +145,121 @@ using Test, Dates
         @test_throws ErrorException t6 + t7
     end
 
+    @testset "Divide an ITime by an integer" begin
+        # Exact at the current period, period and counter type preserved
+        t1 = ITime(10, period = Dates.Second(1))
+        @test t1 / 2 == ITime(5, period = Dates.Second(1))
+        @test (t1 / 2).period == Dates.Second(1)
+        @test 2 * float(t1 / 2) == float(t1)
+
+        # Result in the largest unit period where the division is exact
+        t2 = ITime(1, period = Dates.Second(1))
+        @test t2 / 4 == ITime(250, period = Dates.Millisecond(1))
+        @test (t2 / 4).period == Dates.Millisecond(1)
+        @test 4 * float(t2 / 4) == float(t2)
+
+        @test t2 / 2500 == ITime(400, period = Dates.Microsecond(1))
+        @test (t2 / 2500).period == Dates.Microsecond(1)
+
+        @test t2 / 2_000_000 == ITime(500, period = Dates.Nanosecond(1))
+        @test (t2 / 2_000_000).period == Dates.Nanosecond(1)
+
+        # Refinement from a sub-second period
+        t3 = ITime(1, period = Dates.Millisecond(1))
+        @test t3 / 2 == ITime(500, period = Dates.Microsecond(1))
+
+        # Refinement from periods coarser than a second
+        @test ITime(1, period = Dates.Week(1)) / 7 ==
+              ITime(1, period = Dates.Day(1))
+        @test ITime(1, period = Dates.Day(1)) / 2 ==
+              ITime(12, period = Dates.Hour(1))
+        @test (ITime(1, period = Dates.Hour(1)) / 2).period == Dates.Minute(1)
+        @test ITime(1, period = Dates.Hour(1)) / 2 ==
+              ITime(30, period = Dates.Minute(1))
+        @test ITime(1, period = Dates.Minute(1)) / 4 ==
+              ITime(15, period = Dates.Second(1))
+
+        # The result of a multiple-unit period is no coarser than its unit
+        @test ITime(3, period = Dates.Millisecond(100)) / 2 ==
+              ITime(150, period = Dates.Millisecond(1))
+        @test (ITime(3, period = Dates.Millisecond(100)) / 2).period ==
+              Dates.Millisecond(1)
+        @test ITime(3, period = Dates.Hour(2)) / 4 ==
+              ITime(90, period = Dates.Minute(1))
+
+        # Negative counters and divisors
+        @test ITime(-1, period = Dates.Second(1)) / 4 ==
+              ITime(-250, period = Dates.Millisecond(1))
+        @test ITime(1, period = Dates.Second(1)) / -4 ==
+              ITime(-250, period = Dates.Millisecond(1))
+        @test ITime(-1, period = Dates.Second(1)) / -4 ==
+              ITime(250, period = Dates.Millisecond(1))
+
+        # 500 years (of 365 days) exceed typemax(Int64) nanoseconds (see #232)
+        @test (
+            ITime(500 * 365, period = Dates.Day(1)) +
+            ITime(1, period = Dates.Second(1))
+        ) / 2 ==
+              ITime(250 * 365, period = Dates.Day(1)) +
+              ITime(500, period = Dates.Millisecond(1))
+
+        # 270 million years; the millisecond result still fits the counter (see #232)
+        @test (
+            ITime(270_000_000 * 365, period = Dates.Day(1)) +
+            ITime(1, period = Dates.Second(1))
+        ) / 2 ==
+              ITime(135_000_000 * 365, period = Dates.Day(1)) +
+              ITime(500, period = Dates.Millisecond(1))
+
+        # Not representable at any period down to the nanosecond
+        @test_throws ErrorException ITime(1, period = Dates.Second(1)) / 3
+        @test_throws ErrorException ITime(1, period = Dates.Nanosecond(1)) / 2
+        @test_throws DivideError ITime(1, period = Dates.Second(1)) / 0
+
+        # 30 billion years; the millisecond result overflows Int64
+        @test_throws OverflowError (
+            ITime(30_000_000_000 * 365, period = Dates.Day(1)) +
+            ITime(1, period = Dates.Second(1))
+        ) / 2
+        @test_throws OverflowError ITime(
+            typemin(Int64),
+            period = Dates.Second(1),
+        ) / -1
+
+        # Result does not fit the counter type
+        @test_throws ErrorException ITime(
+            Int32(2_000_000_001),
+            period = Dates.Second(1),
+        ) / 2
+
+        # Unsigned counters reject a negative result
+        @test ITime(UInt64(10), period = Dates.Second(1)) / 2 ==
+              ITime(UInt64(5), period = Dates.Second(1))
+        @test_throws OverflowError ITime(UInt64(10), period = Dates.Second(1)) /
+                                   -2
+
+        # BigInt counters
+        @test ITime(big(10), period = Dates.Second(1)) / 4 ==
+              ITime(big(2500), period = Dates.Millisecond(1))
+        @test typeof((ITime(big(10), period = Dates.Second(1)) / 4).counter) ==
+              BigInt
+        @test ITime(big(10), period = Dates.Second(1)) / -4 ==
+              ITime(big(-2500), period = Dates.Millisecond(1))
+
+        # Epoch preservation
+        epoch = Dates.DateTime(2020, 1, 1)
+        t4 = ITime(1, period = Dates.Second(1), epoch = epoch)
+        @test (t4 / 2).epoch == epoch
+        @test (t4 / 4).epoch == epoch
+
+        # Counter type preservation
+        t5 = ITime(Int32(4), period = Dates.Second(1))
+        @test typeof((t5 / 2).counter) == Int32
+        t6 = ITime(Int32(1), period = Dates.Second(1))
+        @test (t6 / 4) == ITime(Int32(250), period = Dates.Millisecond(1))
+        @test typeof((t6 / 4).counter) == Int32
+    end
+
     @testset "Float Conversion and Broadcasting" begin
         t1 = ITime(10, period = Dates.Millisecond(100))
         @test float(t1) == 1.0

@@ -4,6 +4,16 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+v0.1.31
+------
+
+### Exact integer division for `ITime`
+
+`ITime` now supports exact division by an integer, `t / num`.
+The result keeps the period of `t` when the counter is divisible, and is otherwise expressed in the largest unit period (week down to nanosecond) at which the division is exact.
+An error is thrown when no such period exists.
+This complements `div(t, num)`, which truncates the counter.
+
 v0.1.30
 ------
 
