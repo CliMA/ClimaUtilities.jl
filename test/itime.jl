@@ -145,6 +145,11 @@ using Test, Dates
         @test_throws ErrorException t6 + t7
     end
 
+    @testset "seconds of a Real" begin
+        @test TimeManager.seconds(2.5) === 2.5
+        @test TimeManager.seconds(3) === 3.0
+    end
+
     @testset "Divide an ITime by an integer" begin
         # Exact at the current period, period and counter type preserved
         t1 = ITime(10, period = Dates.Second(1))

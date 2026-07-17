@@ -90,12 +90,17 @@ end
 
 """
     seconds(t::ITime)
+    seconds(t::Real)
 
 Return the time represented by `t` in seconds, as a floating-point number.
+
+For a plain `Real`, the value is assumed to already be in seconds and is
+returned as a floating-point number.
 """
 function seconds(t::ITime)
     return float(t)
 end
+seconds(t::Real) = float(t)
 
 # Accessors
 """

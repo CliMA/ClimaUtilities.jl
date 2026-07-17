@@ -14,6 +14,10 @@ The result keeps the period of `t` when the counter is divisible, and is otherwi
 An error is thrown when no such period exists.
 This complements `div(t, num)`, which truncates the counter.
 
+### `seconds` accepts `Real`
+
+`seconds(t::Real)` returns `float(t)`, so code handling both `ITime` and floating-point times can call `seconds` uniformly.
+
 v0.1.30
 ------
 
