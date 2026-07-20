@@ -370,6 +370,51 @@ include("TestTools.jl")
                     )
                 end
 
+                # Flat, in range (exact snapshot)
+                target_time = available_times[10]
+                target_date = available_dates[10]
+                for t in (
+                    target_time,
+                    target_date,
+                    ITime(0, epoch = available_dates[10]),
+                )
+                    TimeVaryingInputs.evaluate!(dest, input_nearest_flat, t)
+
+                    @test isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[10],
+                                ),
+                            ),
+                        ),
+                    )
+                end
+
+                # Flat, in range (between snapshots)
+                dt = available_times[11] - available_times[10]
+                d_date = available_dates[11] - available_dates[10]
+                target_time = available_times[10] + 0.3dt
+                target_date = available_dates[10] + 0.3d_date
+                for t in
+                    (target_time, target_date, ITime(0, epoch = target_date))
+                    TimeVaryingInputs.evaluate!(dest, input_nearest_flat, t)
+
+                    @test isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[10],
+                                ),
+                            ),
+                        ),
+                    )
+                end
+
                 # Nearest periodic calendar
                 dt = available_times[2] - available_times[1]
                 target_time = available_times[end] + 0.1dt
@@ -445,6 +490,12 @@ include("TestTools.jl")
 
                 # Now testing LinearInterpolation
                 input_linear = TimeVaryingInputs.TimeVaryingInput(data_handler)
+                input_linear_flat = TimeVaryingInputs.TimeVaryingInput(
+                    data_handler;
+                    method = TimeVaryingInputs.LinearInterpolation(
+                        TimeVaryingInputs.Flat(),
+                    ),
+                )
 
                 # Time outside of range
                 @test_throws ErrorException TimeVaryingInputs.evaluate!(
@@ -482,6 +533,9 @@ include("TestTools.jl")
                 for t in
                     (target_time, target_date, ITime(0, epoch = target_date))
                     TimeVaryingInputs.evaluate!(dest, input_linear, t)
+                    @test parent(dest) ≈ parent(expected)
+
+                    TimeVaryingInputs.evaluate!(dest, input_linear_flat, t)
                     @test parent(dest) ≈ parent(expected)
                 end
 
@@ -537,6 +591,7 @@ include("TestTools.jl")
                 close(input_multiple_vars)
                 close(input_nearest)
                 close(input_linear)
+                close(input_linear_flat)
                 close(input_nearest_flat)
                 close(input_nearest_periodic_calendar)
                 close(input_linear_periodic_calendar)

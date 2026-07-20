@@ -3,6 +3,11 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+### Bug fixes
+
+- Fix bug where 0D and 2D/3D `TimeVaryingInput`s using the `Flat()`
+  extrapolation boundary condition did not interpolate correctly for dates
+  within the range of available dates.
 
 v0.1.30
 ------

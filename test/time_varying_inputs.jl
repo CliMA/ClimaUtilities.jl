@@ -181,6 +181,15 @@ end
                 ),
             )
 
+            # Linear interpolation with Flat
+            input_flat_linear = TimeVaryingInputs.TimeVaryingInput(
+                times,
+                vals;
+                method = TimeVaryingInputs.LinearInterpolation(
+                    TimeVaryingInputs.Flat(),
+                ),
+            )
+
             # Nearest neighbor interpolation with PeriodicCalendar
             input_periodic_calendar = TimeVaryingInputs.TimeVaryingInput(
                 times,
@@ -234,6 +243,22 @@ end
                     ft_to_input(FT(400)),
                 )
                 @test Array(parent(dest))[1] == vals[end]
+
+                # Time inside of range with Flat
+                TimeVaryingInputs.evaluate!(
+                    dest,
+                    input_clamp,
+                    time_to_input(times[10]),
+                )
+                @test Array(parent(dest))[1] == vals[10]
+
+                # Time inside of range, between snapshots, with Flat
+                TimeVaryingInputs.evaluate!(
+                    dest,
+                    input_clamp,
+                    time_to_input(times[10] + 0.3dt),
+                )
+                @test Array(parent(dest))[1] == vals[10]
 
                 # Time outside of range with PeriodicCalendar
                 TimeVaryingInputs.evaluate!(
@@ -289,6 +314,15 @@ end
                 input = TimeVaryingInputs.TimeVaryingInput(times, vals)
 
                 TimeVaryingInputs.evaluate!(dest, input, ft_to_input(FT(10)))
+                linear_in_range = Array(parent(dest))[1]
+
+                # Time in range with Flat
+                TimeVaryingInputs.evaluate!(
+                    dest,
+                    input_flat_linear,
+                    ft_to_input(FT(10)),
+                )
+                @test Array(parent(dest))[1] ≈ linear_in_range
 
                 if eltype(time) <: Number
                     # searchsortedfirst only needs to work with floats, as TVI0d will
