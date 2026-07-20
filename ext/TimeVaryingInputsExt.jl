@@ -214,9 +214,10 @@ function TimeVaryingInputs.evaluate!(
         itp.data_handler.available_dates[end]
         if time >= date_end
             regridded_snapshot!(dest, itp.data_handler, date_end)
-        else
-            time <= date_init
+        elseif time <= date_init
             regridded_snapshot!(dest, itp.data_handler, date_init)
+        else
+            TimeVaryingInputs.evaluate!(dest, itp, time, itp.method)
         end
     else
         TimeVaryingInputs.evaluate!(dest, itp, time, itp.method)
