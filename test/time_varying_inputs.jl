@@ -4,6 +4,7 @@ using Artifacts
 
 import ClimaUtilities
 import ClimaUtilities: DataHandling
+import ClimaUtilities: FileReaders
 import ClimaUtilities: TimeVaryingInputs
 using ClimaUtilities.TimeManager
 
@@ -410,5 +411,215 @@ end
                 start_date,
             )
         end
+    end
+end
+
+@testset "TimeVaryingInput with MultiColumnDataHandler" begin
+    for FT in (Float32, Float64)
+        lon1, lat1 = FT(20), FT(10)
+        lon2, lat2 = FT(40), FT(50)
+        nz = 4
+        dates = [DateTime(2000, 1, 1) + Day(t) for t in 0:2]
+        start_date = dates[1]
+
+        target_space = make_column_space(
+            FT;
+            context,
+            points = [
+                Geometry.LatLongPoint(lat1, lon1),
+                Geometry.LatLongPoint(lat2, lon2),
+            ],
+            z_elem = nz,
+            z_min = FT(0.5),
+            z_max = FT(nz + 0.5),
+        )
+
+        # The source z levels coincide with the cell centers of the target
+        # space, so the vertical interpolation reproduces the profiles exactly.
+        # The profile of a column with scale c at the t-th date is
+        # c * t * [1, 2, 3, 4].
+        dir = mktempdir()
+        function write_col(name, lon, lat, scale)
+            path = joinpath(dir, name)
+            NCDatasets.NCDataset(path, "c") do nc
+                NCDatasets.defDim(nc, "z", nz)
+                NCDatasets.defDim(nc, "time", length(dates))
+                NCDatasets.defVar(nc, "longitude", lon, ())
+                NCDatasets.defVar(nc, "latitude", lat, ())
+                NCDatasets.defVar(nc, "z", FT[1, 2, 3, 4], ("z",))
+                NCDatasets.defVar(nc, "time", dates, ("time",))
+                var = NCDatasets.defVar(nc, "sp", FT, ("z", "time"))
+                for t in eachindex(dates)
+                    var[:, t] = scale .* t .* FT[1, 2, 3, 4]
+                end
+            end
+            return path
+        end
+
+        scale1, scale2 = FT(1), FT(10)
+        sources = [
+            FileReaders.DataSource(
+                write_col("col1.nc", lon1, lat1, scale1),
+                "sp",
+            ),
+            FileReaders.DataSource(
+                write_col("col2.nc", lon2, lat2, scale2),
+                "sp",
+            ),
+        ]
+
+        data_handler = DataHandling.MultiColumnDataHandler(
+            sources,
+            target_space;
+            start_date,
+        )
+
+        # The handler matches the columns to the space by location, so order
+        # the scales by the space's longitudes
+        coords = Fields.coordinate_field(target_space)
+        lons = Array(Fields.field2array(coords.long))[1, :]
+        scales = [isapprox(lon, lon1) ? scale1 : scale2 for lon in lons]
+        expected(t) = stack([scale .* t .* FT[1, 2, 3, 4] for scale in scales])
+
+        dest = Fields.zeros(target_space)
+        one_day = 86400.0
+
+        input = TimeVaryingInputs.TimeVaryingInput(data_handler)
+
+        @test one_day in input
+        @test !(-one_day in input)
+
+        # On the second snapshot
+        TimeVaryingInputs.evaluate!(dest, input, one_day)
+        @test Array(Fields.field2array(dest)) ≈ expected(2)
+
+        # Halfway between the first two snapshots
+        # The data is linear in time, so linear interpolation is exact
+        TimeVaryingInputs.evaluate!(dest, input, one_day / 2)
+        @test Array(Fields.field2array(dest)) ≈ expected(1.5)
+
+        # Same, with the time as a DateTime and as an ITime
+        TimeVaryingInputs.evaluate!(dest, input, DateTime(2000, 1, 1, 12))
+        @test Array(Fields.field2array(dest)) ≈ expected(1.5)
+
+        TimeVaryingInputs.evaluate!(
+            dest,
+            input,
+            ITime(43200; epoch = start_date),
+        )
+        @test Array(Fields.field2array(dest)) ≈ expected(1.5)
+
+        # Out of range
+        @test_throws ErrorException TimeVaryingInputs.evaluate!(
+            dest,
+            input,
+            -one_day,
+        )
+
+        input_nearest = TimeVaryingInputs.TimeVaryingInput(
+            data_handler;
+            method = TimeVaryingInputs.NearestNeighbor(),
+        )
+        TimeVaryingInputs.evaluate!(dest, input_nearest, 0.7 * one_day)
+        @test Array(Fields.field2array(dest)) ≈ expected(2)
+
+        # Out of range with Flat, on both sides
+        input_flat = TimeVaryingInputs.TimeVaryingInput(
+            data_handler;
+            method = TimeVaryingInputs.LinearInterpolation(
+                TimeVaryingInputs.Flat(),
+            ),
+        )
+        TimeVaryingInputs.evaluate!(dest, input_flat, -one_day)
+        @test Array(Fields.field2array(dest)) ≈ expected(1)
+        TimeVaryingInputs.evaluate!(dest, input_flat, 10 * one_day)
+        @test Array(Fields.field2array(dest)) ≈ expected(3)
+
+        close(input)
+    end
+end
+
+@testset "TimeVaryingInput with MultiColumnDataHandler, vertical interp" begin
+    for FT in (Float32, Float64), source_reverse in (false, true)
+        lon1, lat1 = FT(20), FT(10)
+        lon2, lat2 = FT(40), FT(50)
+        dates = [DateTime(2000, 1, 1) + Day(t) for t in 0:2]
+        start_date = dates[1]
+
+        # Target cell centers are 1.0, 3.0, 5.0, 7.0 (z_elem = 4 over [0, 8])
+        target_space = make_column_space(
+            FT;
+            context,
+            points = [
+                Geometry.LatLongPoint(lat1, lon1),
+                Geometry.LatLongPoint(lat2, lon2),
+            ],
+            z_elem = 4,
+            z_min = FT(0),
+            z_max = FT(8),
+        )
+
+        # Each column has its own linear profile a + b * z
+        src_z1, src_z2 = FT[0, 4, 8], FT[0, 5, 8]
+        profile1(z) = FT(2) + FT(3) * z
+        profile2(z) = FT(5) + FT(1) * z
+
+        dir = mktempdir()
+        function write_col(name, lon, lat, src_z, profile)
+            zs = source_reverse ? reverse(src_z) : src_z
+            path = joinpath(dir, name)
+            NCDatasets.NCDataset(path, "c") do nc
+                NCDatasets.defDim(nc, "z", length(zs))
+                NCDatasets.defDim(nc, "time", length(dates))
+                NCDatasets.defVar(nc, "longitude", lon, ())
+                NCDatasets.defVar(nc, "latitude", lat, ())
+                NCDatasets.defVar(nc, "z", zs, ("z",))
+                NCDatasets.defVar(nc, "time", dates, ("time",))
+                var = NCDatasets.defVar(nc, "sp", FT, ("z", "time"))
+                for t in eachindex(dates)
+                    var[:, t] = t .* profile.(zs)
+                end
+            end
+            return path
+        end
+
+        sources = [
+            FileReaders.DataSource(
+                write_col("col1.nc", lon1, lat1, src_z1, profile1),
+                "sp",
+            ),
+            FileReaders.DataSource(
+                write_col("col2.nc", lon2, lat2, src_z2, profile2),
+                "sp",
+            ),
+        ]
+
+        data_handler = DataHandling.MultiColumnDataHandler(
+            sources,
+            target_space;
+            start_date,
+        )
+
+        # Columns follow the target points: column 1 is profile1 (2 + 3z),
+        # column 2 is profile2 (5 + z), sampled at the cell centers 1, 3, 5, 7.
+        # The values below scale those profiles by the time factor (2 on the
+        # second snapshot, 1.5 midway) and do not depend on `source_reverse`.
+        expected_snapshot = FT[10 12; 22 16; 34 20; 46 24]
+        expected_halfway = FT[7.5 9; 16.5 12; 25.5 15; 34.5 18]
+
+        dest = Fields.zeros(target_space)
+        one_day = 86400.0
+        input = TimeVaryingInputs.TimeVaryingInput(data_handler)
+
+        # On the second snapshot: only vertical interpolation happens
+        TimeVaryingInputs.evaluate!(dest, input, one_day)
+        @test Array(Fields.field2array(dest)) ≈ expected_snapshot
+
+        # Between snapshots: the data is linear in both z and time, so the
+        # combined interpolation is still exact
+        TimeVaryingInputs.evaluate!(dest, input, one_day / 2)
+        @test Array(Fields.field2array(dest)) ≈ expected_halfway
+
+        close(input)
     end
 end
