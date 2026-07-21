@@ -70,6 +70,9 @@ struct NCFileReader{
 
     """Size of the output array. This is used by read to initialize an array."""
     output_size::Tuple{Vararg{Int}}
+
+    """Whether this reader has not been closed yet. Used to make `close` idempotent."""
+    is_open::Base.RefValue{Bool}
 end
 
 """
@@ -213,6 +216,7 @@ function FileReaders.NCFileReader(
             _cached_reads,
             time_index,
             output_size,
+            Ref(true),
         )
     catch
         _release_file(file_paths, varname)
@@ -260,6 +264,13 @@ end
 Close `NCFileReader`. If no other `NCFileReader` is using the same file, close the NetCDF file.
 """
 function Base.close(file_reader::NCFileReader)
+    file_reader.is_open[] || return nothing
+    file_reader.is_open[] = false
+    # After close_all_ncfiles, the same paths may map to a new dataset opened by
+    # other readers; only release the file if the registered dataset is ours
+    haskey(OPEN_NCFILES, file_reader.file_paths) || return nothing
+    dataset, _ = OPEN_NCFILES[file_reader.file_paths]
+    dataset === file_reader.dataset || return nothing
     _release_file(file_reader.file_paths, file_reader.varname)
     return nothing
 end
