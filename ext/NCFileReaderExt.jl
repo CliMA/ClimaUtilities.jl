@@ -9,13 +9,15 @@ import NCDatasets
 include("nc_common.jl")
 
 # We allow multiple NCFileReader to share the same underlying NCDataset. For this, we put
-# all the NCDataset into a dictionary where we keep track of them. OPEN_NCFILES is
+# all the NCDataset into a dictionary where we keep track of them. OPEN_NCFILES is a
 # dictionary that maps Vector of file paths (or a single string) to a Tuple with the first
-# element being the NCDataset and the second element being a Set of Strings, the variables
-# that are being read from that file. Every time a NCFileReader is created, this Set is
-# modified by adding or removing a varname.
-const OPEN_NCFILES =
-    Dict{Union{String, Vector{String}}, Tuple{NetCDFDataset, Set{String}}}()
+# element being the NCDataset and the second element being a Dict counting, per variable
+# name, how many readers are currently reading that variable from the file. The dataset
+# is closed when the last reader using it is closed.
+const OPEN_NCFILES = Dict{
+    Union{String, Vector{String}},
+    Tuple{NetCDFDataset, Dict{String, Int}},
+}()
 
 """
     NCFileReader
@@ -136,77 +138,120 @@ function FileReaders.NCFileReader(
     dataset, open_varnames = get!(OPEN_NCFILES, file_paths) do
         (
             NCDatasets.NCDataset(file_path_to_ncdataset; aggtime_kwarg...),
-            Set([varname]),
+            Dict{String, Int}(),
         )
     end
-    # push! will do nothing when file is opened for the first time
-    push!(open_varnames, varname)
+    _register_file!(open_varnames, varname)
 
-    available_dates = read_available_dates(dataset)
+    # The dataset is now registered in OPEN_NCFILES; release it if any of the
+    # validations below error, so a failed construction does not leak the open
+    # file (there is no reader to close yet)
+    try
+        available_dates = read_available_dates(dataset)
 
-    time_index = -1
+        time_index = -1
 
-    dim_names = NCDatasets.dimnames(dataset[varname])
+        dim_names = NCDatasets.dimnames(dataset[varname])
 
-    if !isempty(available_dates)
-        is_time =
-            x -> x == "time" || x == "date" || x == "t" || x == "valid_time"
+        if !isempty(available_dates)
+            is_time =
+                x -> x == "time" || x == "date" || x == "t" || x == "valid_time"
 
-        time_index_vec = findall(is_time, dim_names)
-        length(time_index_vec) == 1 ||
-            error("Could not find (unique) time dimension")
-        time_index = time_index_vec[]
+            time_index_vec = findall(is_time, dim_names)
+            length(time_index_vec) == 1 ||
+                error("Could not find (unique) time dimension")
+            time_index = time_index_vec[]
 
-        issorted(available_dates) || error(
-            "Cannot process files that are not sorted in time in ($file_paths)",
+            issorted(available_dates) || error(
+                "Cannot process files that are not sorted in time in ($file_paths)",
+            )
+
+            # Remove time from the dim names
+            dim_names = filter(!is_time, dim_names)
+        end
+
+        if all(d in keys(dataset) for d in dim_names)
+            dimensions = Tuple(
+                NCDatasets.nomissing(Array(dataset[d])) for d in dim_names
+            )
+        else
+            error(
+                "$file_paths does not contain information about dimensions $(filter(!in(keys(dataset)), dim_names))",
+            )
+        end
+
+        # Preprocess the first time point to get the size and element type of the output array
+        sample_date =
+            isempty(available_dates) ? Dates.DateTime(0) :
+            first(available_dates)
+        sample = if time_index == -1
+            preprocess_func.(Array(dataset[varname]))
+        else
+            var = dataset[varname]
+            slicer = [
+                i == time_index ? 1 : Colon() for
+                i in 1:length(NCDatasets.dimnames(var))
+            ]
+            preprocess_func.(var[slicer...])
+        end
+        output_size = size(sample)
+
+        # Use an LRU cache to store regridded fields
+        _cached_reads = DataStructures.LRUCache{Dates.DateTime, typeof(sample)}(
+            max_size = cache_max_size,
         )
+        _cached_reads[sample_date] = sample
 
-        # Remove time from the dim names
-        dim_names = filter(!is_time, dim_names)
+        return NCFileReader(
+            file_paths,
+            varname,
+            dimensions,
+            dim_names,
+            available_dates,
+            dataset,
+            preprocess_func,
+            _cached_reads,
+            time_index,
+            output_size,
+        )
+    catch
+        _release_file(file_paths, varname)
+        rethrow()
     end
+end
 
-    if all(d in keys(dataset) for d in dim_names)
-        dimensions =
-            Tuple(NCDatasets.nomissing(Array(dataset[d])) for d in dim_names)
+"""
+    _register_file!(open_varnames, varname)
+
+Count one more reader of `varname` in `open_varnames`, the per-variable reader
+counts of an entry of `OPEN_NCFILES`.
+"""
+function _register_file!(open_varnames, varname)
+    open_varnames[varname] = get(open_varnames, varname, 0) + 1
+    return nothing
+end
+
+"""
+    _release_file(file_paths, varname)
+
+Count one fewer reader of `varname` from the files `file_paths` in
+`OPEN_NCFILES`, closing and deregistering the NetCDF dataset when no reader is
+left. Files that are not registered (e.g. already closed) are skipped.
+"""
+function _release_file(file_paths, varname)
+    haskey(OPEN_NCFILES, file_paths) || return nothing
+    dataset, open_varnames = OPEN_NCFILES[file_paths]
+    count = get(open_varnames, varname, 0)
+    if count > 1
+        open_varnames[varname] = count - 1
     else
-        error(
-            "$file_paths does not contain information about dimensions $(filter(!in(keys(dataset)), dim_names))",
-        )
+        delete!(open_varnames, varname)
+        if isempty(open_varnames)
+            NCDatasets.close(dataset)
+            delete!(OPEN_NCFILES, file_paths)
+        end
     end
-
-    # Preprocess the first time point to get the size and element type of the output array
-    sample_date =
-        isempty(available_dates) ? Dates.DateTime(0) : first(available_dates)
-    sample = if time_index == -1
-        preprocess_func.(Array(dataset[varname]))
-    else
-        var = dataset[varname]
-        slicer = [
-            i == time_index ? 1 : Colon() for
-            i in 1:length(NCDatasets.dimnames(var))
-        ]
-        preprocess_func.(var[slicer...])
-    end
-    output_size = size(sample)
-
-    # Use an LRU cache to store regridded fields
-    _cached_reads = DataStructures.LRUCache{Dates.DateTime, typeof(sample)}(
-        max_size = cache_max_size,
-    )
-    _cached_reads[sample_date] = sample
-
-    return NCFileReader(
-        file_paths,
-        varname,
-        dimensions,
-        dim_names,
-        available_dates,
-        dataset,
-        preprocess_func,
-        _cached_reads,
-        time_index,
-        output_size,
-    )
+    return nothing
 end
 
 """
@@ -215,17 +260,7 @@ end
 Close `NCFileReader`. If no other `NCFileReader` is using the same file, close the NetCDF file.
 """
 function Base.close(file_reader::NCFileReader)
-    # If we don't have the key, we don't have to do anything (we already closed
-    # the file)
-    files_are_not_open = !haskey(OPEN_NCFILES, file_reader.file_paths)
-    files_are_not_open && return nothing
-
-    open_variables = OPEN_NCFILES[file_reader.file_paths][end]
-    pop!(open_variables, file_reader.varname)
-    if isempty(open_variables)
-        NCDatasets.close(file_reader.dataset)
-        delete!(OPEN_NCFILES, file_reader.file_paths)
-    end
+    _release_file(file_reader.file_paths, file_reader.varname)
     return nothing
 end
 
