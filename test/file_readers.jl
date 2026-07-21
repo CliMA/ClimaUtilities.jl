@@ -7,6 +7,8 @@ import ClimaUtilities.FileReaders
 using NCDatasets
 
 @testset "NCFileReader with time" begin
+    # Start from a clean OPEN_NCFILES state
+    FileReaders.close_all_ncfiles()
     PATH = joinpath(artifact"era5_example", "era5_t2m_sp_u10n_20210101.nc")
     NCDataset(PATH) do nc
         ncreader_sp = FileReaders.NCFileReader(PATH, "sp")
@@ -66,12 +68,46 @@ using NCDatasets
     ]
     NCDataset(PATHS, aggdim = "time") do nc
         ncreader_agg = FileReaders.NCFileReader(PATHS, "lai_lv")
-        FileReaders.available_dates(ncreader_agg) == nc["time"][:]
-        length(FileReaders.available_dates(ncreader_agg)) == 104
+        @test FileReaders.available_dates(ncreader_agg) == nc["time"][:]
+        @test length(FileReaders.available_dates(ncreader_agg)) == 104
+        close(ncreader_agg)
+    end
+end
+
+@testset "Shared readers of the same variable" begin
+    FileReaders.close_all_ncfiles()
+    PATH = joinpath(artifact"era5_example", "era5_t2m_sp_u10n_20210101.nc")
+    open_ncfiles =
+        Base.get_extension(ClimaUtilities, :ClimaUtilitiesNCDatasetsExt).NCFileReaderExt.OPEN_NCFILES
+    NCDataset(PATH) do nc
+        reader1 = FileReaders.NCFileReader(PATH, "sp")
+        reader2 = FileReaders.NCFileReader(PATH, "sp")
+
+        # The two readers share the same underlying dataset
+        @test reader1.dataset === reader2.dataset
+
+        # Closing the first reader must not close the file out from under the
+        # second reader
+        close(reader1)
+        @test haskey(open_ncfiles, reader2.file_paths)
+        @test FileReaders.read(reader2, DateTime(2021, 01, 01, 01)) ==
+              nc["sp"][:, :, 2]
+
+        # Check double close is an no-op
+        close(reader1)
+
+        file_paths = reader2.file_paths
+        close(reader2)
+        @test !haskey(open_ncfiles, file_paths)
+
+        # Check again that double close is an no-op
+        close(reader2)
+        @test !haskey(open_ncfiles, file_paths)
     end
 end
 
 @testset "NCFileReader without time" begin
+    FileReaders.close_all_ncfiles()
     PATH = joinpath(
         artifact"era5_static_example",
         "era5_t2m_sp_u10n_20210101_static.nc",
@@ -142,10 +178,14 @@ end
 end
 
 @testset "read_missing_dims" begin
+    FileReaders.close_all_ncfiles()
+    PATH = joinpath(@__DIR__, "test_data", "missing_dim.nc")
     @test_throws contains(
         "missing_dim.nc\"] does not contain information about dimensions (\"missing_dim\",)",
-    ) FileReaders.NCFileReader(
-        joinpath(@__DIR__, "test_data", "missing_dim.nc"),
-        "test_var",
-    )
+    ) FileReaders.NCFileReader(PATH, "test_var")
+
+    # A failed construction must not leak the open file in OPEN_NCFILES
+    open_ncfiles =
+        Base.get_extension(ClimaUtilities, :ClimaUtilitiesNCDatasetsExt).NCFileReaderExt.OPEN_NCFILES
+    @test isempty(open_ncfiles)
 end
