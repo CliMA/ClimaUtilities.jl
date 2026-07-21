@@ -93,15 +93,33 @@ end
         @test FileReaders.read(reader2, DateTime(2021, 01, 01, 01)) ==
               nc["sp"][:, :, 2]
 
-        # Check double close is an no-op
+        # Check double close is a no-op
         close(reader1)
-
+        @test haskey(open_ncfiles, reader2.file_paths)
+        @test FileReaders.read(reader2, DateTime(2021, 01, 01, 01)) ==
+              nc["sp"][:, :, 2]
         file_paths = reader2.file_paths
         close(reader2)
         @test !haskey(open_ncfiles, file_paths)
 
         # Check again that double close is an no-op
         close(reader2)
+        @test !haskey(open_ncfiles, file_paths)
+
+        # Check read from reader3 works after closing reader1 again
+        reader3 = FileReaders.NCFileReader(PATH, "sp")
+        close(reader1)
+        @test haskey(open_ncfiles, file_paths)
+        @test FileReaders.read(reader3, DateTime(2021, 01, 01, 01)) ==
+              nc["sp"][:, :, 2]
+
+        # Check same behavior if we close all NetCDF files instead of a specific
+        # reader
+        FileReaders.close_all_ncfiles()
+        reader4 = FileReaders.NCFileReader(PATH, "sp")
+        close(reader3)
+        @test haskey(open_ncfiles, file_paths)
+        close(reader4)
         @test !haskey(open_ncfiles, file_paths)
     end
 end
