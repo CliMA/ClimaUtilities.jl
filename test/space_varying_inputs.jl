@@ -1,12 +1,15 @@
 using Test
 
 import ClimaUtilities
+import ClimaUtilities.DataHandling
+import ClimaUtilities.FileReaders
 using ClimaUtilities.SpaceVaryingInputs: SpaceVaryingInput
 
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
 using ClimaCore
 using Interpolations
+using NCDatasets
 
 const context = ClimaComms.context()
 ClimaComms.init(context)
@@ -52,4 +55,40 @@ AT = ClimaComms.array_type(ClimaComms.device())
     @test parent(field_of_structs.c)[:] ≈
           AT(collect(range(FT(0.15), FT(2.85), 10)))
 
+end
+
+@testset "SpaceVaryingInput with MultiColumnDataHandler" begin
+    FT = Float32
+    long, lat = FT(20), FT(10)
+    profile = FT[10, 20, 30, 40]
+    nz = length(profile)
+    target_space = make_column_space(
+        FT;
+        context,
+        points = [ClimaCore.Geometry.LatLongPoint(lat, long)],
+        z_elem = nz,
+        z_min = FT(0.5),
+        z_max = FT(nz + 0.5),
+    )
+
+    PATH = joinpath(mktempdir(), "svi_col.nc")
+    NCDataset(PATH, "c") do nc
+        defDim(nc, "z", nz)
+        defVar(nc, "longitude", long, ())
+        defVar(nc, "latitude", lat, ())
+        defVar(nc, "z", FT[1, 2, 3, 4], ("z",))
+        defVar(nc, "sp", profile, ("z",))
+    end
+
+    data_handler = DataHandling.MultiColumnDataHandler(
+        [FileReaders.DataSource(PATH, "sp")],
+        target_space,
+    )
+    field = SpaceVaryingInput(data_handler)
+    @test field isa ClimaCore.Fields.Field
+    @test axes(field) == target_space
+    # Source and target z are the same, so no interpolation should be done
+    @test vec(Array(ClimaCore.Fields.field2array(field))) ≈ profile
+
+    close(data_handler)
 end

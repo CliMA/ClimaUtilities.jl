@@ -125,7 +125,7 @@ function SpaceVaryingInputs.SpaceVaryingInput(
 end
 
 """
-    SpaceVaryingInput(data_handler::DataHandler)
+    SpaceVaryingInput(data_handler::AbstractDataHandler)
     SpaceVaryingInput(file_paths::Union{AbstractString, AbstractArray{String}},
                       varnames::Union{AbstractString, AbstractArray{String}},
                       target_space::Spaces.AbstractSpace;
