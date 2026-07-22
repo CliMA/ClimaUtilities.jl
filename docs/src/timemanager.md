@@ -108,6 +108,22 @@ time1 / time2
 In this case, the return value is just a number (essentially, we divided 15
 seconds by 5 seconds, resulting the dimensionless factor of 3).
 
+Dividing an `ITime` by an integer returns an `ITime`, and the division is exact.
+When the counter is not divisible by the integer, the result is expressed in the largest unit period (week down to nanosecond) at which the division is exact.
+```@example example1
+time1 = ITime(1; period = Hour(1))
+time1 / 2
+```
+When no period down to the nanosecond makes the division exact, an error is thrown.
+```@example example1
+try #hide
+ITime(1; period = Second(1)) / 3
+catch err; showerror(stderr, err); end #hide
+```
+The counter type is preserved, so the refined counter must be representable by it.
+For example, `ITime(Int32(2_000_000_001); period = Second(1)) / 2` needs a millisecond counter larger than `typemax(Int32)`, so an error is thrown.
+For a division that truncates the counter and keeps the period, use `div`.
+
 Similarly, adding a number to an `ITime` is not allowed (because the number
 doesn't have units), but multiplying by is fine.
 
@@ -308,4 +324,5 @@ Base.one(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
 Base.oneunit(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
 Base.zero(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
 Base.:*(t::ClimaUtilities.TimeManager.ITime, a::AbstractFloat)
+Base.:/(t::ClimaUtilities.TimeManager.ITime, num::Integer)
 ```
