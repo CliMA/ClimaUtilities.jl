@@ -109,8 +109,7 @@ function FileReaders.NCFileReader(
         # first dataset. We need this to aggregate multiple datasets, if data is split across
         # multiple files
         NCDatasets.NCDataset(first(file_paths)) do first_dataset
-            is_time =
-                x -> x == "time" || x == "date" || x == "t" || x == "valid_time"
+            is_time = x -> x in TIME_NAMES
             time_dims = filter(is_time, NCDatasets.dimnames(first_dataset))
             if !isempty(time_dims)
                 # When loading multifile dataset using NCDatasets.jl, the NetCDF files are
@@ -154,8 +153,7 @@ function FileReaders.NCFileReader(
         dim_names = NCDatasets.dimnames(dataset[varname])
 
         if !isempty(available_dates)
-            is_time =
-                x -> x == "time" || x == "date" || x == "t" || x == "valid_time"
+            is_time = x -> x in TIME_NAMES
 
             time_index_vec = findall(is_time, dim_names)
             length(time_index_vec) == 1 ||
@@ -356,6 +354,421 @@ function FileReaders.read!(
             i in 1:length(NCDatasets.dimnames(var))
         ]
         file_reader.preprocess_func.(var[slicer...])
+    end
+    return nothing
+end
+
+"""
+    MultiColumnNCFileReader
+
+A struct to read and process NetCDF files for multiple columns.
+"""
+struct MultiColumnNCFileReader{
+    VSTR <: AbstractVector,
+    STR2 <: AbstractString,
+    HDIMS <: Tuple,
+    VDIM <: AbstractArray,
+    DATES <: AbstractArray{Dates.DateTime},
+    PCD <: AbstractVector{<:AbstractArray{Dates.DateTime}},
+    NC <: AbstractVector,
+    PREP <: Function,
+    CACHE <: DataStructures.LRUCache{Dates.DateTime, <:AbstractArray},
+    VEC <: AbstractVector{Int},
+} <: FileReaders.AbstractFileReader
+
+    """Path of the NetCDF file(s), one collection per column"""
+    file_paths::VSTR
+
+    """Name of the dataset in the NetCDF files"""
+    varname::STR2
+
+    """A tuple of arrays with the horizontal physical dimensions where the data is
+    defined (e.g., (lons, lats))"""
+    horizontal_dimensions::HDIMS
+
+    """An array of the vertical levels with size (Nz, Ncolumn). If there is no vertical
+    dimension, then this is an array of size (0, Ncolumn)."""
+    vertical_dimension::VDIM
+
+    """A vector of DateTime collecting all the available dates in the files"""
+    available_dates::DATES
+
+    """A vector containing vectors of dates for each column."""
+    per_column_dates::PCD
+
+    """NetCDF datasets opened by NCDataset, one per column. Don't forget to close the
+    reader!"""
+    datasets::NC
+
+    """Optional function that is applied to the read dataset. Useful to do unit-conversion
+    or remove NaNs. Not suitable for anything more complicated than that."""
+    preprocess_func::PREP
+
+    """A place where to store values that have been already read. Uses an LRU cache,
+    which contains a dictionary mapping dates to arrays, and has a fixed maximum size.
+    For static data sets, a sentinel data `DateTime(0)` is used as key."""
+    _cached_reads::CACHE
+
+    """Per-column index of the time dimension in the array (typically first). -1 for static
+    datasets"""
+    time_indices::VEC
+
+    """The tuple `(Nz, Ncolumn)` which is the size of the output array. Used by `read` to
+    allocate."""
+    output_size::NTuple{2, Int}
+end
+
+"""
+    _open_source_dataset(source)
+
+Open (or fetch from the `OPEN_NCFILES` cache) the NetCDF dataset for a single
+`DataSource`, registering the source's `varname` so the file is closed only
+once every reader using it is closed.
+"""
+function _open_source_dataset(source)
+    column_paths = source.file_paths
+    ncdataset_arg =
+        length(column_paths) == 1 ? first(column_paths) : column_paths
+    dataset, open_varnames = get!(OPEN_NCFILES, column_paths) do
+        (
+            NCDatasets.NCDataset(ncdataset_arg; source.dataset_kwargs...),
+            Dict{String, Int}(),
+        )
+    end
+    _register_file!(open_varnames, source.varname)
+    return dataset
+end
+
+"""
+    _stack_columns(columns, file_paths, quantity)
+
+Stack the per-column vectors in `columns` into an `(Nz, Ncolumn)` array.
+
+This errors when the columns do not have the same length and uses `quantity` to
+name the inconsistent quantity in the error message.
+"""
+function _stack_columns(columns, file_paths, quantity)
+    allequal(length.(columns)) || error(
+        "Columns have inconsistent $quantity; ragged columns are not supported. " *
+        join(
+            (
+                "$(first(fp)): $(length(c))" for
+                (fp, c) in zip(file_paths, columns)
+            ),
+            ", ",
+        ),
+    )
+    return stack(columns)
+end
+
+"""
+    _read_scalar_coord(dataset, name, file_paths)
+
+Read the single value of the coordinate variable `name` in `dataset`, erroring
+when the variable holds more than one value (`file_paths` is not a single
+column).
+"""
+function _read_scalar_coord(dataset, name, file_paths)
+    values = dataset[name][:]
+    length(values) == 1 || error(
+        "Expected a single $name value in $file_paths, found $(length(values)); each column must hold a single (lon, lat) location",
+    )
+    return only(values)
+end
+
+"""
+    FileReaders.MultiColumnNCFileReader(
+        sources;
+        preprocess_func = identity,
+        cache_max_size::Int = 128,
+    )
+
+Create a `MultiColumnNCFileReader` from `sources`, one column per `DataSource`.
+
+## Arguments
+
+`sources` is a single `DataSource` (one column) or a vector of `DataSource`
+(one per column). All sources must read the same variable.
+
+`preprocess_func` preprocesses the data before returning it. This is useful for
+handling `NaN`s or converting units.
+
+The `cache_max_size` is the size of the cache used to store data after loading
+it from the files.
+
+!!! note "Common times"
+    Only the times common to all columns in the datasets are considered.
+"""
+function FileReaders.MultiColumnNCFileReader(
+    sources;
+    preprocess_func = identity,
+    cache_max_size::Int = 128,
+)
+    sources = sources isa AbstractVector ? sources : [sources]
+    isempty(sources) && error("At least one DataSource must be provided")
+
+    # All data sources should have the same variable name
+    varname = first(sources).varname
+    all(source -> source.varname == varname, sources) || error(
+        "All sources must read the same variable, got $(unique(source.varname for source in sources))",
+    )
+
+    file_paths = [source.file_paths for source in sources]
+
+    opened_sources = []
+    try
+        datasets = map(sources) do source
+            dataset = _open_source_dataset(source)
+            push!(opened_sources, source)
+            dataset
+        end
+
+        # In the future, if we want to support x and y instead of lat and lon, we can add it
+        # here
+
+        # Per-column longitude, latitude, and z levels. Each column file is
+        # assumed to hold a single (lon, lat) location. The coordinate variable
+        # names are recorded on each DataSource (user-provided or detected at
+        # construction).
+        for source in sources
+            (
+                haskey(source.coord_names, :lon) &&
+                haskey(source.coord_names, :lat)
+            ) || error(
+                "No longitude/latitude variables identified in $(first(source.file_paths)) (searched $(COORD_NAMES.lon) and $(COORD_NAMES.lat)); pass `coord_names` to DataSource",
+            )
+        end
+        lons = [
+            _read_scalar_coord(
+                dataset,
+                source.coord_names.lon,
+                source.file_paths,
+            ) for (source, dataset) in zip(sources, datasets)
+        ]
+        lats = [
+            _read_scalar_coord(
+                dataset,
+                source.coord_names.lat,
+                source.file_paths,
+            ) for (source, dataset) in zip(sources, datasets)
+        ]
+
+        # Create an array of size (Nz, Ncolumn) where each column of the array
+        # is the vertical levels for that column. It is not necessarily true
+        # that the vertical levels are the same across columns.
+        z_columns = [
+            NCDatasets.nomissing(dataset[source.coord_names.z][:]) for
+            (source, dataset) in zip(sources, datasets) if
+            haskey(source.coord_names, :z)
+        ]
+        length(z_columns) == 0 ||
+            length(z_columns) == length(datasets) ||
+            error(
+                "Inconsistent vertical levels: $(length(z_columns)) of $(length(datasets)) columns have a vertical coordinate. Either all columns or no columns must have vertical levels.",
+            )
+        zs =
+            isempty(z_columns) ? Array{Float64}(undef, 0, length(datasets)) :
+            _stack_columns(z_columns, file_paths, "numbers of z levels")
+
+        # Per-column index of the time dimension. A column whose variable has no
+        # time dimension is "static" and gets the sentinel value of -1
+        time_indices = [source.time_index for source in sources]
+        per_column_dates = [source.available_dates for source in sources]
+
+        # All columns are static or time varying
+        is_static = all(==(-1), time_indices)
+        is_time_varying = all(!=(-1), time_indices)
+        is_static ||
+            is_time_varying ||
+            error("Some columns have a time dimension and some do not")
+
+        # Only the times common to all columns are considered. The result is
+        # sorted because intersect keeps the order of its first argument, which
+        # DataSource validated as sorted. Keep each column's own dates
+        # (`per_column_dates`) so reads can look up a date's position within a
+        # column without re-reading it from disk.
+        available_dates = reduce(intersect, per_column_dates)
+        is_time_varying &&
+            isempty(available_dates) &&
+            error("Columns are time-varying but share no common dates")
+
+        # Get the output size and element type. The output size and element type
+        # is used by read when initializing the array. Furthermore, the element
+        # type is used to provide a concrete type for the cache.
+        sample_per_column = map(datasets, time_indices) do dataset, time_index
+            var = dataset[varname]
+            if time_index == -1
+                preprocess_func.(var[:])
+            else
+                slicer = [
+                    i == time_index ? 1 : Colon() for
+                    i in 1:length(NCDatasets.dimnames(var))
+                ]
+                vec(preprocess_func.(var[slicer...]))
+            end
+        end
+        sample = _stack_columns(sample_per_column, file_paths, "data lengths")
+        output_size = size(sample)
+
+        _cached_reads = DataStructures.LRUCache{Dates.DateTime, typeof(sample)}(
+            max_size = cache_max_size,
+        )
+
+        return MultiColumnNCFileReader(
+            file_paths,
+            varname,
+            (lons, lats),
+            zs,
+            available_dates,
+            per_column_dates,
+            datasets,
+            preprocess_func,
+            _cached_reads,
+            time_indices,
+            output_size,
+        )
+    catch
+        foreach(
+            source -> _release_file(source.file_paths, varname),
+            opened_sources,
+        )
+        rethrow()
+    end
+end
+
+"""
+    close(file_reader::MultiColumnNCFileReader)
+
+Close `MultiColumnNCFileReader`. For each underlying file, if no other reader is using it,
+close the NetCDF dataset.
+"""
+function Base.close(file_reader::MultiColumnNCFileReader)
+    for column_paths in file_reader.file_paths
+        _release_file(column_paths, file_reader.varname)
+    end
+    return nothing
+end
+
+"""
+    _read_all_columns(file_reader::MultiColumnNCFileReader)
+
+Helper function to read in the columns of datasets in `file_reader`.
+
+This is only used when the columns do not vary in time.
+"""
+function _read_all_columns(file_reader::MultiColumnNCFileReader)
+    dest = valtype(file_reader._cached_reads)(undef, file_reader.output_size...)
+    for (j, dataset) in enumerate(file_reader.datasets)
+        # Each column is a single (lon, lat) point, so the data flattens to its
+        # `Nz`-long profile (or length 1 when there is no z).
+        raw = dataset[file_reader.varname][:]
+        @views dest[:, j] .= file_reader.preprocess_func.(raw)
+    end
+    return dest
+end
+
+"""
+    read(file_reader::MultiColumnNCFileReader, date::Dates.DateTime)
+
+Read and preprocess the data at the given `date` for every column, returning a array of size
+`(Nz, Ncolumn)` (`Nz` is the number of z levels, or 1 when there is no z).
+"""
+function FileReaders.read(
+    file_reader::MultiColumnNCFileReader,
+    date::Dates.DateTime,
+)
+    dest = valtype(file_reader._cached_reads)(undef, file_reader.output_size...)
+    FileReaders.read!(dest, file_reader, date)
+    return dest
+end
+
+"""
+    available_dates(file_reader::MultiColumnNCFileReader)
+
+Return the dates common across the columns.
+"""
+function FileReaders.available_dates(file_reader::MultiColumnNCFileReader)
+    return file_reader.available_dates
+end
+
+"""
+    read(file_reader::MultiColumnNCFileReader)
+
+Read and preprocess data (for static datasets) for every column.
+"""
+function FileReaders.read(file_reader::MultiColumnNCFileReader)
+    dest = valtype(file_reader._cached_reads)(undef, file_reader.output_size...)
+    FileReaders.read!(dest, file_reader)
+    return dest
+end
+
+"""
+    read!(dest, file_reader::MultiColumnNCFileReader)
+
+Read and preprocess data (for static datasets), saving the output to `dest`.
+"""
+function FileReaders.read!(dest, file_reader::MultiColumnNCFileReader)
+    isempty(file_reader.available_dates) ||
+        error("File contains temporal data, date required")
+
+    # When there are no dates, we use DateTime(0) as the cache key
+    dest .= get!(file_reader._cached_reads, Dates.DateTime(0)) do
+        _read_all_columns(file_reader)
+    end
+    return nothing
+end
+
+"""
+    read!(dest, file_reader::MultiColumnNCFileReader, date::Dates.DateTime)
+
+Read and preprocess the data at the given `date`, saving the output to `dest`.
+"""
+function FileReaders.read!(
+    dest,
+    file_reader::MultiColumnNCFileReader,
+    date::Dates.DateTime,
+)
+    # DateTime(0) is the sentinel value for static datasets
+    if date == Dates.DateTime(0)
+        dest .= get!(file_reader._cached_reads, date) do
+            _read_all_columns(file_reader)
+        end
+        return nothing
+    end
+
+    dest .= get!(file_reader._cached_reads, date) do
+        # Read each column's slice at `date` into a single preallocated
+        # `(Nz, Ncolumn)` array, one column at a time (instead of allocating a
+        # vector per column and stacking them).
+        read_data = valtype(file_reader._cached_reads)(
+            undef,
+            file_reader.output_size...,
+        )
+        for (j, (dataset, time_index, column_dates)) in enumerate(
+            zip(
+                file_reader.datasets,
+                file_reader.time_indices,
+                file_reader.per_column_dates,
+            ),
+        )
+            var = dataset[file_reader.varname]
+            # `available_dates` is the intersection across columns; the position of `date`
+            # within an individual column's time dimension can differ, so look it up in the
+            # time dimension of the column
+            index = searchsortedfirst(column_dates, date)
+            (index <= length(column_dates) && column_dates[index] == date) || error(
+                "Date $date is not available in column $j ($(first(file_reader.file_paths[j])))",
+            )
+            slicer = [
+                i == time_index ? index : Colon() for
+                i in 1:length(NCDatasets.dimnames(var))
+            ]
+            # Each column is a single (lon, lat) point, so the slice flattens to
+            # its `Nz`-long profile (or length 1 when there is no z).
+            raw = vec(var[slicer...])
+            @views read_data[:, j] .= file_reader.preprocess_func.(raw)
+        end
+        return read_data
     end
     return nothing
 end

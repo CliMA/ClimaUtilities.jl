@@ -186,6 +186,7 @@ data_handler = DataHandling.DataHandler("era5_example.nc",
 
 ```@docs
 ClimaUtilities.DataHandling.DataHandler
+ClimaUtilities.DataHandling.MultiColumnDataHandler
 ClimaUtilities.DataHandling.available_times
 ClimaUtilities.DataHandling.available_dates
 ClimaUtilities.DataHandling.previous_time

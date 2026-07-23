@@ -21,6 +21,8 @@ function TempestRegridder end
 
 function InterpolationsRegridder end
 
+function ColumnRegridder end
+
 function regrid end
 
 function regrid! end
@@ -61,6 +63,7 @@ extension_fns = [
     :ClimaCoreTempestRemap => [:TempestRegridder, :regrid],
     :ClimaCore => [:InterpolationsRegridder, :regrid],
     :Interpolations => [:InterpolationsRegridder, :regrid],
+    :ClimaInterpolations => [:ColumnRegridder, :regrid],
 ]
 
 function __init__()
