@@ -530,7 +530,7 @@ function DataHandling.next_time(data_handler::DataHandler, date::Dates.DateTime)
 end
 
 """
-    DataHandling.previous_date(data_handler::DataHandler, time::Dates.TimeType)
+    DataHandling.previous_date(data_handler::DataHandler, date::Dates.TimeType)
 
 Return the date of the snapshot before the given `date`.
 If `date` is one of the snapshots, return itself.
@@ -551,10 +551,10 @@ function DataHandling.previous_date(
 end
 
 """
-    DataHandling.next_date(data_handler::DataHandler, time::Dates.TimeType)
+    DataHandling.next_date(data_handler::DataHandler, date::Dates.TimeType)
 
-Return the date of the snapshot after the given `time`.
-If `date` is one of the snapshots, return itself.
+Return the date of the snapshot after the given `date`.
+If `date` is one of the snapshots, return the next date.
 
 If `date` is not in the `data_handler`, return an error.
 """
