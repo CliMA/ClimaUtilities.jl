@@ -414,7 +414,7 @@ function TimeVaryingInputs.evaluate!(
 
     # We have to consider the edge case where time is precisely the last available_time.
     # This is relevant also because it can be triggered by LinearPeriodFilling
-    if time in DataHandling.available_dates(itp.data_handler)
+    if insorted(time, DataHandling.available_dates(itp.data_handler))
         regridded_snapshot!(dest, itp.data_handler, time)
     else
         date0, date1 = previous_date(itp.data_handler, time),
