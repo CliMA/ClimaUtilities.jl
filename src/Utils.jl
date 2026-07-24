@@ -37,7 +37,7 @@ returns the endpoint value closest.
 function linear_interpolation(indep_vars, dep_vars, indep_value)
     N = length(indep_vars)
     id = searchsortedfirst(indep_vars, indep_value)
-    indep_value in indep_vars && return dep_vars[id]
+    (id <= N && indep_vars[id] == indep_value) && return dep_vars[id]
     if id == 1
         dep_vars[begin]
     elseif id == N + 1

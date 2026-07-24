@@ -493,12 +493,9 @@ function DataHandling.previous_time(
     data_handler::DataHandler,
     date::Dates.DateTime,
 )
-    # We have to handle separately what happens when we are on the node
-    if date in data_handler.available_dates
-        index = searchsortedfirst(data_handler.available_dates, date)
-    else
-        index = searchsortedfirst(data_handler.available_dates, date) - 1
-    end
+    # searchsortedlast returns the index of the last date <= the given date, which is the
+    # snapshot itself when on a node and the previous one otherwise
+    index = searchsortedlast(data_handler.available_dates, date)
     index < 1 && error("Date $date is before available dates")
     return data_handler.available_times[index]
 end
@@ -518,12 +515,9 @@ function DataHandling.next_time(data_handler::DataHandler, time::AbstractFloat)
 end
 
 function DataHandling.next_time(data_handler::DataHandler, date::Dates.DateTime)
-    # We have to handle separately what happens when we are on the node
-    if date in data_handler.available_dates
-        index = searchsortedfirst(data_handler.available_dates, date) + 1
-    else
-        index = searchsortedfirst(data_handler.available_dates, date)
-    end
+    # searchsortedlast returns the index of the last date <= the given date, which is one
+    # before the next snapshot, so we add one (also correct when on a node)
+    index = searchsortedlast(data_handler.available_dates, date) + 1
     index > length(data_handler.available_dates) &&
         error("Date $date is after available dates")
     return data_handler.available_times[index]
@@ -541,11 +535,9 @@ function DataHandling.previous_date(
     data_handler::DataHandler,
     date::Dates.TimeType,
 )
-    if date in data_handler.available_dates
-        index = searchsortedfirst(data_handler.available_dates, date)
-    else
-        index = searchsortedfirst(data_handler.available_dates, date) - 1
-    end
+    # searchsortedlast returns the index of the last date <= the given date, which is the
+    # snapshot itself when on a node and the previous one otherwise
+    index = searchsortedlast(data_handler.available_dates, date)
     index < 1 && error("Date $date is before available dates")
     return data_handler.available_dates[index]
 end
@@ -559,11 +551,9 @@ If `date` is one of the snapshots, return the next date.
 If `date` is not in the `data_handler`, return an error.
 """
 function DataHandling.next_date(data_handler::DataHandler, date::Dates.TimeType)
-    if date in data_handler.available_dates
-        index = searchsortedfirst(data_handler.available_dates, date) + 1
-    else
-        index = searchsortedfirst(data_handler.available_dates, date)
-    end
+    # searchsortedlast returns the index of the last date <= the given date, which is one
+    # before the next snapshot, so we add one (also correct when on a node)
+    index = searchsortedlast(data_handler.available_dates, date) + 1
     index > length(data_handler.available_dates) &&
         error("Date $date is after available dates")
     return data_handler.available_dates[index]
@@ -594,7 +584,7 @@ function DataHandling.regridded_snapshot(
     # Dates.DateTime(0) is the cache key for static maps
     if date != Dates.DateTime(0)
         file_paths = data_handler.file_readers[first(varnames)].file_paths
-        date in data_handler.available_dates ||
+        insorted(date, data_handler.available_dates) ||
             error("Date $date not available in files $(file_paths)")
     end
 

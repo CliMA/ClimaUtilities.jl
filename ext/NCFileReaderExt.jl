@@ -345,11 +345,11 @@ function FileReaders.read!(
     end
 
     dest .= get!(file_reader._cached_reads, date) do
-        index = findall(d -> d == date, file_reader.available_dates)
-        length(index) == 1 || error(
+        indices = searchsorted(file_reader.available_dates, date)
+        length(indices) == 1 || error(
             "Problem with date $date in one of $(file_reader.file_paths)",
         )
-        index = index[]
+        index = only(indices)
         var = file_reader.dataset[file_reader.varname]
         slicer = [
             i == file_reader.time_index ? index : Colon() for
