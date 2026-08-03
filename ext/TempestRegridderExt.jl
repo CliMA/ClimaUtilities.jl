@@ -138,28 +138,20 @@ function reshape_cgll_sparse_to_field!(
     in_array::Array,
     R,
 )
-    field_array = parent(field)
+    target = ClimaCore.Fields.field_values(field)
 
-    fill!(field_array, zero(eltype(field_array)))
-    Nf = size(field_array, 3)
-
+    fill!(target, zero(eltype(target)))
     for (n, row) in enumerate(R.row_indices)
         it, jt, et = (
             view(R.target_idxs[1], n),
             view(R.target_idxs[2], n),
             view(R.target_idxs[3], n),
         )
-        for f in 1:Nf
-            field_array[it, jt, f, et] .= in_array[row]
-        end
+        target[1, it, jt, et] = in_array[row]
     end
 
     # broadcast to the redundant nodes using unweighted dss
-    space = axes(field)
-    topology = ClimaCore.Spaces.topology(space)
-    hspace = ClimaCore.Spaces.horizontal_space(space)
-    target = ClimaCore.Fields.field_values(field)
-
+    topology = ClimaCore.Spaces.topology(axes(field))
     ClimaCore.Topologies.dss!(target, topology)
 end
 
