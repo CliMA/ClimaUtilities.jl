@@ -1,36 +1,30 @@
 module TimeVaryingInputs0DExt
 
-import ClimaCore
-import ClimaCore: ClimaComms
-import ClimaCore.Fields: Adapt
+import Dates: DateTime
 
-import ClimaUtilities.Utils:
-    searchsortednearest, linear_interpolation, wrap_time, isequispaced
+import ClimaUtilities.Utils: searchsortednearest, wrap_time, isequispaced
+import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:
-    AbstractInterpolationMethod, AbstractTimeVaryingInput
-import ClimaUtilities.TimeVaryingInputs:
+    AbstractInterpolationMethod,
+    AbstractTimeVaryingInput,
     NearestNeighbor,
     LinearInterpolation,
     LinearPeriodFillingInterpolation,
     Throw,
     Flat,
-    PeriodicCalendar
-import ClimaUtilities.TimeVaryingInputs: extrapolation_bc
-
-import ClimaUtilities.TimeVaryingInputs
-
+    PeriodicCalendar,
+    extrapolation_bc
 import ClimaUtilities.TimeManager: ITime, date
-using Dates
 
 """
     InterpolatingTimeVaryingInput0D
 
-The constructor for InterpolatingTimeVaryingInput0D is not supposed to be used directly, unless you
-know what you are doing.
+The constructor for InterpolatingTimeVaryingInput0D is not supposed to be used directly,
+unless you know what you are doing.
 
 `times` and `values` may have different types, but they must be the same length, and we
-assume that they have been sorted to be monotonically increasing in time, without repeated
-values for the same timestamp. `times` can have elements of type `ITime` or floats
+assume that they have been sorted to be strictly increasing in time. `times` can have
+elements of type `ITime` or floats.
 """
 struct InterpolatingTimeVaryingInput0D{
     AA1 <: AbstractArray,
@@ -54,33 +48,6 @@ struct InterpolatingTimeVaryingInput0D{
     range::R
 end
 
-"""
-    in(time, itp::InterpolatingTimeVaryingInput23D)
-
-Check if the given `time` is in the range of definition for `itp`.
-"""
-function Base.in(time, itp::InterpolatingTimeVaryingInput0D)
-    return itp.range[1] <= time <= itp.range[2]
-end
-
-function TimeVaryingInputs.evaluate!(
-    destination,
-    itp::InterpolatingTimeVaryingInput0D,
-    time,
-    args...;
-    kwargs...,
-)
-    if extrapolation_bc(itp.method) isa Throw
-        time in itp || error("TimeVaryingInput does not cover time $time")
-    end
-    scalar_dest = [zero(eltype(destination))]
-
-    TimeVaryingInputs.evaluate!(scalar_dest, itp, time, itp.method)
-    fill!(destination, scalar_dest[])
-
-    return nothing
-end
-
 function TimeVaryingInputs.TimeVaryingInput(
     times::AbstractArray,
     vals::AbstractArray;
@@ -96,9 +63,37 @@ function TimeVaryingInputs.TimeVaryingInput(
     end
     ########### DEPRECATED ###############
 
-    issorted(times) || error("Can only interpolate with sorted times")
+    _check_dims(times, vals)
+    times = _validated_times(times, method)
+    range = (times[begin], times[end])
+    return InterpolatingTimeVaryingInput0D(
+        copy(times),
+        copy(vals),
+        method,
+        range,
+    )
+end
+
+"""
+    _check_dims(times, vals)
+
+Check that `times` and `vals` have compatible sizes.
+"""
+function _check_dims(times, vals)
     length(times) == length(vals) ||
         error("times and vals have different lengths")
+    return nothing
+end
+
+"""
+    _validated_times(times, method)
+
+Check that `times` is sorted and compatible with `method`, promoting `ITime`s
+to a common epoch and period when needed and return the validated times.
+"""
+function _validated_times(times, method)
+    issorted(times, lt = <=) ||
+        error("Can only interpolate with strictly increasing times")
 
     if method isa LinearPeriodFillingInterpolation
         error(
@@ -112,8 +107,8 @@ function TimeVaryingInputs.TimeVaryingInput(
                 t.epoch == first(times).epoch,
             times,
         )
-            # promote if times do not all have same epoch and period to avoid promoting
-            # during the simulation
+            # Promote if times do not all have same epoch and period to avoid
+            # promoting during the simulation
             times = [promote(times...)...]
         elseif !(eltype(times) <: ITime{<:Any, <:Any, Nothing})
             all(d -> d.epoch == first(times).epoch, times) || error(
@@ -121,185 +116,193 @@ function TimeVaryingInputs.TimeVaryingInput(
             )
         end
     end
-    if extrapolation_bc(method) isa PeriodicCalendar
-        if extrapolation_bc(method) isa PeriodicCalendar{Nothing}
-            if !isequispaced(eltype(times) <: ITime ? float.(times) : times)
-                error(
-                    "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
-                )
-            end
-        else
-            # We have the period in PeriodicCalendar
+    if extrapolation_bc(method) isa PeriodicCalendar{Nothing}
+        if !isequispaced(eltype(times) <: ITime ? float.(times) : times)
             error(
-                "PeriodicCalendar(period) is not supported when the input data is 1D",
+                "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
             )
         end
-    end
-
-    range = (times[begin], times[end])
-    return InterpolatingTimeVaryingInput0D(
-        copy(times),
-        copy(vals),
-        method,
-        range,
-    )
-end
-
-function _evaluate_flat!(dest, itp::InterpolatingTimeVaryingInput0D, time)
-    t_init, t_end = itp.range
-    if time >= t_end
-        dest .= itp.vals[end]
-        return true
-    elseif time <= t_init
-        dest .= itp.vals[begin]
-        return true
-    end
-    return false
-end
-
-function _time_range_target_time_dt(itp::InterpolatingTimeVaryingInput0D, time)
-    t_init, t_end = itp.range
-    dt = itp.times[begin + 1] - itp.times[begin]
-    time = wrap_time(time, t_init, t_end + dt)
-    return t_init, t_end, time, dt
-end
-
-function TimeVaryingInputs.evaluate!(
-    dest,
-    itp::InterpolatingTimeVaryingInput0D,
-    time,
-    ::NearestNeighbor,
-)
-    # Nearest neighbor interpolation: just pick the values corresponding to the entry in
-    # itp.times that is closest to the given time.
-    if extrapolation_bc(itp.method) isa Flat
-        _evaluate_flat!(dest, itp, time) && return nothing
-    elseif extrapolation_bc(itp.method) isa PeriodicCalendar{Nothing}
-        t_init, t_end, time, dt = _time_range_target_time_dt(itp, time)
-        # Now time is between t_init and t_end + dt. We are doing nearest neighbor
-        # interpolation here, and when time >= t_end + 0.5dt we need to use t_init instead
-        # of t_end as neighbor.
-        time >= t_end + 0.5dt && (time = t_init)
-    end
-
-    index = searchsortednearest(itp.times, time)
-
-    dest .= itp.vals[index]
-
-    return nothing
-end
-
-"""
-    evaluate!(
-        dest,
-        itp::InterpolatingTimeVaryingInput0D,
-        time,
-        ::LinearInterpolation,
+    elseif extrapolation_bc(method) isa PeriodicCalendar
+        error(
+            "PeriodicCalendar(period) is not supported when the input data is 1D",
         )
-
-Write to `dest` the result of a linear interpolation of `itp` on the given `time`.
-"""
-function TimeVaryingInputs.evaluate!(
-    dest,
-    itp::InterpolatingTimeVaryingInput0D,
-    time,
-    ::LinearInterpolation,
-)
-    if extrapolation_bc(itp.method) isa Flat
-        _evaluate_flat!(dest, itp, time) && return nothing
-    elseif extrapolation_bc(itp.method) isa PeriodicCalendar
-        t_init, t_end, time, dt = _time_range_target_time_dt(itp, time)
-        # We have to handle separately the edge case where the desired time is past t_end.
-        # In this case, we know that t_end <= time <= t_end + dt and we have to do linear
-        # interpolation between t_init and t_end. In this case, y0 = vals[end], y1 =
-        # vals[begin], t1 - t0 = dt, and time - t0 = time - t_end
-        if time > t_end
-            if time isa ITime
-                FT = eltype(itp.vals)
-                @. dest =
-                    itp.vals[end] + FT(
-                        (itp.vals[begin] - itp.vals[end]) / float(dt) *
-                        float((time - t_end)),
-                    )
-            else
-                @. dest =
-                    itp.vals[end] +
-                    (itp.vals[begin] - itp.vals[end]) / dt * (time - t_end)
-            end
-            return nothing
-        end
     end
-
-    indep_vars = itp.times
-    indep_value = time
-    dep_vars = itp.vals
-    dest .= linear_interpolation(indep_vars, dep_vars, indep_value)
-    return nothing
+    return times
 end
 
-function TimeVaryingInputs.evaluate!(
-    destination,
+"""
+    in(time, itp::InterpolatingTimeVaryingInput0D)
+
+Check if the given `time` is in the range of definition for `itp`.
+"""
+function Base.in(time, itp::InterpolatingTimeVaryingInput0D)
+    return itp.range[1] <= time <= itp.range[2]
+end
+
+"""
+    _normalize_time(itp::InterpolatingTimeVaryingInput0D, time)
+
+Convert `time` to the time type used by `itp.times`.
+"""
+_normalize_time(
+    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:Number}},
+    time::Number,
+) = time
+_normalize_time(
     itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:Number}},
     time::ITime,
-    args...;
-    kwargs...,
-)
-    return TimeVaryingInputs.evaluate!(
-        destination,
-        itp,
-        eltype(itp.range)(float(time)),
-        args...;
-        kwargs...,
-    )
-end
-
-function TimeVaryingInputs.evaluate!(
-    destination,
-    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:ITime}},
-    eval_date::DateTime,
-    args...;
-    kwargs...,
-)
-    t0_date = date(itp.range[1])
-    diff_ms = eval_date - t0_date
-    converted_time =
-        ITime(diff_ms.value; period = typeof(diff_ms)(1), epoch = t0_date)
-    return TimeVaryingInputs.evaluate!(
-        destination,
-        itp,
-        converted_time,
-        args...;
-        kwargs...,
-    )
-
-end
-
-function TimeVaryingInputs.evaluate!(
-    destination,
-    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:ITime}},
-    time::Number,
-    args...;
-    kwargs...,
-)
-    converted_time = first(promote(ITime(time), itp.range[1]))
-    return TimeVaryingInputs.evaluate!(
-        destination,
-        itp,
-        converted_time,
-        args...;
-        kwargs...,
-    )
-
-end
-
-TimeVaryingInputs.evaluate!(
-    destination,
+) = eltype(itp.range)(float(time))
+_normalize_time(
     itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:Number}},
     time::DateTime,
-    args...;
-    kwargs...,
 ) = error(
     "Cannot evaluate InterpolatingTimeVaryingInput0D with times as numbers and inputs as DateTime",
 )
+_normalize_time(
+    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:ITime}},
+    time::ITime,
+) = time
+_normalize_time(
+    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:ITime}},
+    time::Number,
+) = first(promote(ITime(time), itp.range[1]))
+function _normalize_time(
+    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:ITime}},
+    time::DateTime,
+)
+    epoch = date(itp.range[1])
+    elapsed = time - epoch
+    return ITime(elapsed.value; period = typeof(elapsed)(1), epoch)
+end
+
+# All stencil functions return (i1, i2, w), where w is the normalized distance
+# from i1 toward i2, so that val = vals[i1] + (vals[i2] - vals[i1]) * w and
+# w = 0 yields vals[i1] exactly.
+
+"""
+    _weight(time, t1, t2)
+
+Normalized distance of `time` from `t1` toward `t2`.
+"""
+@inline _weight(time, t1, t2) = float(time - t1) / float(t2 - t1)
+
+"""
+    _zero_weight(time, times)
+
+Zero of the weight type used for `time` and `times`.
+"""
+@inline function _zero_weight(time, times)
+    FT = Base.promote_op(_weight, typeof(time), eltype(times), eltype(times))
+    isconcretetype(FT) && return zero(FT)
+    return zero(_weight(time, times[begin], times[end]))
+end
+
+"""
+    _stencil(itp::InterpolatingTimeVaryingInput0D, time)
+
+Return the appropriate stencil for `time` given `itp`.
+"""
+@inline function _stencil(itp::InterpolatingTimeVaryingInput0D, time)
+    time in itp && return _interior_stencil(time, itp.times, itp.method)
+    return _boundary_stencil(
+        time,
+        itp.times,
+        extrapolation_bc(itp.method),
+        itp.method,
+    )
+end
+
+"""
+    _interior_stencil(time, times, method)
+
+Return the stencil for `time` within the range of `times`.
+
+A `time` that falls exactly on a data point returns that point with zero weight.
+"""
+@inline function _interior_stencil(time, times, ::LinearInterpolation)
+    id = searchsortedfirst(times, time)
+    times[id] == time && return (id, id, _zero_weight(time, times))
+    return (id - 1, id, _weight(time, times[id - 1], times[id]))
+end
+
+@inline function _interior_stencil(time, times, ::NearestNeighbor)
+    id = searchsortednearest(times, time)
+    return (id, id, _zero_weight(time, times))
+end
+
+"""
+    _boundary_stencil(time, times, extrapolation_bc, method)
+
+Return the stencil for `time` outside the range of `times` given the
+`extrapolation_bc` and `method`.
+"""
+@inline function _boundary_stencil(time, times, ::Throw, method)
+    return error("TimeVaryingInput does not cover time $time")
+end
+
+@inline function _boundary_stencil(time, times, ::Flat, method)
+    left, right = firstindex(times), lastindex(times)
+    w = _zero_weight(time, times)
+    return time < times[left] ? (left, left, w) : (right, right, w)
+end
+
+@inline function _boundary_stencil(time, times, ::PeriodicCalendar, method)
+    t_init, t_end = times[begin], times[end]
+    dt = times[begin + 1] - times[begin]
+    time = wrap_time(time, t_init, t_end + dt)
+    time <= t_end && return _interior_stencil(time, times, method)
+    return _gap_stencil(time, times, t_end, dt, method)
+end
+
+"""
+    _gap_stencil(time, times, t_end, dt, method)
+
+Return the stencil for a wrapped `time` in the gap `(t_end, t_end + dt)` between
+the last and first data points of a periodic input.
+"""
+@inline function _gap_stencil(time, times, t_end, dt, ::LinearInterpolation)
+    w = float(time - t_end) / float(dt)
+    return (lastindex(times), firstindex(times), w)
+end
+
+@inline function _gap_stencil(time, times, t_end, dt, ::NearestNeighbor)
+    w = _zero_weight(time, times)
+    time >= t_end + 0.5dt && return (firstindex(times), firstindex(times), w)
+    return (lastindex(times), lastindex(times), w)
+end
+
+"""
+    _value_at_time_index(itp::InterpolatingTimeVaryingInput0D, index)
+
+Value of `itp` at time index `index` where `index` refers to the time axis of
+`vals`.
+"""
+@inline _value_at_time_index(itp::InterpolatingTimeVaryingInput0D, index) =
+    itp.vals[index]
+
+"""
+    evaluate!(dest, itp::InterpolatingTimeVaryingInput0D, time)
+
+Write to `dest` the result of interpolating `itp` at the given `time`.
+"""
+function TimeVaryingInputs.evaluate!(
+    dest,
+    itp::InterpolatingTimeVaryingInput0D,
+    time,
+    args...;
+    kwargs...,
+)
+    return _evaluate!(dest, itp, _normalize_time(itp, time))
+end
+
+# Function barrier because _normalize_time is type unstable when time is a
+# `Number` and times are `ITime`s
+function _evaluate!(dest, itp::InterpolatingTimeVaryingInput0D, time)
+    (i1, i2, w) = _stencil(itp, time)
+    y1 = _value_at_time_index(itp, i1)
+    y2 = _value_at_time_index(itp, i2)
+    @. dest = y1 + (y2 - y1) * w
+    return nothing
+end
 
 end
