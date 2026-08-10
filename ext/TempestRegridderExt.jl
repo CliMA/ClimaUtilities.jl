@@ -119,40 +119,86 @@ function Regridders.regrid(regridder::TempestRegridder, date::Dates.DateTime)
     )
 end
 
-"""
-    reshape_cgll_sparse_to_field!(field::Fields.Field, in_array::Array, R)
+@static if pkgversion(ClimaCore) >= v"0.15.0"
+    """
+        reshape_cgll_sparse_to_field!(field::Fields.Field, in_array::Array, R)
 
-Reshapes a sparse vector array `in_array` (CGLL, raw output of the TempestRemap),
-and uses its data to populate the input Field object `field`.
-Redundant nodes are populated using `dss` operations.
+    Reshapes a sparse vector array `in_array` (CGLL, raw output of the TempestRemap),
+    and uses its data to populate the input Field object `field`.
+    Redundant nodes are populated using `dss` operations.
 
-Code taken from ClimaCoupler.Regridder.
+    Code taken from ClimaCoupler.Regridder.
 
-# Arguments
-- `field`: [Fields.Field] object populated with the input array.
-- `in_array`: [Array] input used to fill `field`.
-- `R`: [NamedTuple] containing `target_idxs` and `row_indices` used for indexing.
-"""
-function reshape_cgll_sparse_to_field!(
-    field::ClimaCore.Fields.Field,
-    in_array::Array,
-    R,
-)
-    target = ClimaCore.Fields.field_values(field)
+    # Arguments
+    - `field`: [Fields.Field] object populated with the input array.
+    - `in_array`: [Array] input used to fill `field`.
+    - `R`: [NamedTuple] containing `target_idxs` and `row_indices` used for indexing.
+    """
+    function reshape_cgll_sparse_to_field!(
+        field::ClimaCore.Fields.Field,
+        in_array::Array,
+        R,
+    )
+        target = ClimaCore.Fields.field_values(field)
 
-    fill!(target, zero(eltype(target)))
-    for (n, row) in enumerate(R.row_indices)
-        it, jt, et = (
-            view(R.target_idxs[1], n),
-            view(R.target_idxs[2], n),
-            view(R.target_idxs[3], n),
-        )
-        target[1, it, jt, et] = in_array[row]
+        fill!(target, zero(eltype(target)))
+        for (n, row) in enumerate(R.row_indices)
+            it, jt, et = (
+                view(R.target_idxs[1], n),
+                view(R.target_idxs[2], n),
+                view(R.target_idxs[3], n),
+            )
+            @. target[1, it, jt, et] = in_array[row]
+        end
+
+        # broadcast to the redundant nodes using unweighted dss
+        topology = ClimaCore.Spaces.topology(axes(field))
+        ClimaCore.Topologies.dss!(target, topology)
     end
+else
+    """
+        reshape_cgll_sparse_to_field!(field::Fields.Field, in_array::Array, R)
 
-    # broadcast to the redundant nodes using unweighted dss
-    topology = ClimaCore.Spaces.topology(axes(field))
-    ClimaCore.Topologies.dss!(target, topology)
+    Reshapes a sparse vector array `in_array` (CGLL, raw output of the TempestRemap),
+    and uses its data to populate the input Field object `field`.
+    Redundant nodes are populated using `dss` operations.
+
+    Code taken from ClimaCoupler.Regridder.
+
+    # Arguments
+    - `field`: [Fields.Field] object populated with the input array.
+    - `in_array`: [Array] input used to fill `field`.
+    - `R`: [NamedTuple] containing `target_idxs` and `row_indices` used for indexing.
+    """
+    function reshape_cgll_sparse_to_field!(
+        field::ClimaCore.Fields.Field,
+        in_array::Array,
+        R,
+    )
+        field_array = parent(field)
+
+        fill!(field_array, zero(eltype(field_array)))
+        Nf = size(field_array, 3)
+
+        for (n, row) in enumerate(R.row_indices)
+            it, jt, et = (
+                view(R.target_idxs[1], n),
+                view(R.target_idxs[2], n),
+                view(R.target_idxs[3], n),
+            )
+            for f in 1:Nf
+                field_array[it, jt, f, et] .= in_array[row]
+            end
+        end
+
+        # broadcast to the redundant nodes using unweighted dss
+        space = axes(field)
+        topology = ClimaCore.Spaces.topology(space)
+        hspace = ClimaCore.Spaces.horizontal_space(space)
+        target = ClimaCore.Fields.field_values(field)
+
+        ClimaCore.Topologies.dss!(target, topology)
+    end
 end
 
 """

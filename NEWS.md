@@ -3,6 +3,8 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+v0.1.31
+------
 ### Bug fixes
 
 - Fix bug where 0D and 2D/3D `TimeVaryingInput`s using the `Flat()`
