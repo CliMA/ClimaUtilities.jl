@@ -16,7 +16,6 @@ steps:
 
       - echo "--- Instantiate project"
       - "julia --project=test -e 'using Pkg; Pkg.develop(; path = \".\"); Pkg.add(\"MPI\"); Pkg.add(\"CUDA\")'"
-      - "julia --project=test -e 'using Pkg; Pkg.add(url=\"https://github.com/CliMA/ClimaCore.jl\", rev=\"main\")'
       - "julia --project=test -e 'using Pkg; Pkg.instantiate(;verbose=true)'"
       - "julia --project=test -e 'using Pkg; Pkg.precompile()'"
       - "julia --project=test -e 'using Pkg; Pkg.status()'"
