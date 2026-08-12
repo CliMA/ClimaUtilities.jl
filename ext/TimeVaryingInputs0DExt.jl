@@ -2,6 +2,9 @@ module TimeVaryingInputs0DExt
 
 import Dates: DateTime
 
+import ClimaCore
+import ClimaCore: ClimaComms
+
 import ClimaUtilities.Utils: searchsortednearest, wrap_time, isequispaced
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:
@@ -22,9 +25,15 @@ import ClimaUtilities.TimeManager: ITime, date
 The constructor for InterpolatingTimeVaryingInput0D is not supposed to be used directly,
 unless you know what you are doing.
 
-`times` and `values` may have different types, but they must be the same length, and we
-assume that they have been sorted to be strictly increasing in time. `times` can have
-elements of type `ITime` or floats.
+`times` and `values` may have different types. `values` is either a vector with a single
+value per time, which represents a time series for a single point, or a matrix of size
+(number of points, number of times), which represents a time series for each point. If
+`values` is a vector, the interpolated value is broadcast to every point of the destination
+and if `values` is a matrix, the interpolated values are written element-wise into a
+destination of matching length.
+
+We assume `times` has been sorted to be strictly increasing in time. `times` can have
+elements of type `ITime` or float.
 """
 struct InterpolatingTimeVaryingInput0D{
     AA1 <: AbstractArray,
@@ -48,9 +57,12 @@ struct InterpolatingTimeVaryingInput0D{
     range::R
 end
 
+const InterpolatingTimeVaryingMultiPoint =
+    InterpolatingTimeVaryingInput0D{<:AbstractArray, <:AbstractMatrix}
+
 function TimeVaryingInputs.TimeVaryingInput(
     times::AbstractArray,
-    vals::AbstractArray;
+    vals::AbstractVector;
     context = nothing,
     method::AbstractInterpolationMethod = LinearInterpolation(),
 )
@@ -75,13 +87,58 @@ function TimeVaryingInputs.TimeVaryingInput(
 end
 
 """
+    TimeVaryingInput(times, vals::AbstractMatrix, space; method = LinearInterpolation())
+
+Construct a per-point time-varying input (`InterpolatingTimeVaryingMultiPoint`) from a
+matrix of size (number of points, number of times) which represents one time series per
+point of `space`.
+
+`space` must be purely horizontal or have exactly one vertical level. Rows of `vals` must
+follow the order of the points in `ClimaCore.Fields.field2array`. It is the caller's
+responsibility to ensure that this is correct. `evaluate!` writes one value per point into
+the destination.
+"""
+function TimeVaryingInputs.TimeVaryingInput(
+    times::AbstractArray,
+    vals::AbstractMatrix,
+    space::ClimaCore.Spaces.AbstractSpace;
+    method::AbstractInterpolationMethod = LinearInterpolation(),
+)
+    arr = ClimaCore.Fields.field2array(ClimaCore.Fields.zeros(space))
+    # field2array returns a vector for purely horizontal spaces and a matrix
+    # whose size is number of vertical levels by number of columns otherwise
+    num_levels = ndims(arr) == 1 ? 1 : size(arr, 1)
+    num_levels == 1 ||
+        error("TimeVaryingInput needs a space with a single vertical level")
+    _check_dims(times, vals)
+    size(vals, 1) == length(arr) || error(
+        "vals has $(size(vals, 1)) rows, but the space has $(length(arr)) points",
+    )
+    times = _validated_times(times, method)
+    device_vals = ClimaComms.array_type(ClimaComms.device(space))(vals)
+    return InterpolatingTimeVaryingInput0D(
+        copy(times),
+        device_vals,
+        method,
+        (times[begin], times[end]),
+    )
+end
+
+"""
     _check_dims(times, vals)
 
-Check that `times` and `vals` have compatible sizes.
+Check that `times` and `vals` have compatible sizes along the time axis, which
+is the last axis of `vals`.
 """
-function _check_dims(times, vals)
+function _check_dims(times, vals::AbstractVector)
     length(times) == length(vals) ||
         error("times and vals have different lengths")
+    return nothing
+end
+
+function _check_dims(times, vals::AbstractMatrix)
+    length(times) == size(vals, 2) ||
+        error("times and the last dimension of vals have different lengths")
     return nothing
 end
 
@@ -275,10 +332,15 @@ end
     _value_at_time_index(itp::InterpolatingTimeVaryingInput0D, index)
 
 Value of `itp` at time index `index` where `index` refers to the time axis of
-`vals`.
+`vals` which is a number if `vals` is a vector or a column view if `vals` is a
+matrix.
 """
-@inline _value_at_time_index(itp::InterpolatingTimeVaryingInput0D, index) =
-    itp.vals[index]
+@inline _value_at_time_index(
+    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray, <:AbstractVector},
+    index,
+) = itp.vals[index]
+@inline _value_at_time_index(itp::InterpolatingTimeVaryingMultiPoint, index) =
+    view(itp.vals, :, index)
 
 """
     evaluate!(dest, itp::InterpolatingTimeVaryingInput0D, time)
@@ -293,6 +355,30 @@ function TimeVaryingInputs.evaluate!(
     kwargs...,
 )
     return _evaluate!(dest, itp, _normalize_time(itp, time))
+end
+
+"""
+    evaluate!(dest::Fields.Field, itp::InterpolatingTimeVaryingMultiPoint, time)
+
+Write to the `field2array` view of `dest` the result of interpolating `itp` at
+the given `time`.
+"""
+function TimeVaryingInputs.evaluate!(
+    dest::ClimaCore.Fields.Field,
+    itp::InterpolatingTimeVaryingMultiPoint,
+    time,
+    args...;
+    kwargs...,
+)
+    # field2array is either a 1 by number of columns matrix or a vector
+    # We handle both cases by passing it to vec first
+    return TimeVaryingInputs.evaluate!(
+        vec(ClimaCore.Fields.field2array(dest)),
+        itp,
+        time,
+        args...;
+        kwargs...,
+    )
 end
 
 # Function barrier because _normalize_time is type unstable when time is a
