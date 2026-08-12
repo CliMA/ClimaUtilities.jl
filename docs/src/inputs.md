@@ -28,6 +28,7 @@ regridding onto the computational domains (using [`Regridders`](@ref regridder_m
 `TimeVaryingInputs` support:
 - analytic functions of time;
 - pairs of 1D arrays (e.g., for `PointSpaces` or constant fields);
+- matrices for ensemble of points with one time series per point of a space;
 - 2/3D NetCDF files (including composing multiple variables from one or more files into one variable);
 - linear interpolation in time (default), nearest neighbors, and "period filling";
 - boundary conditions and repeating periodic data.
