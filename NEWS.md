@@ -3,6 +3,51 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+
+### 2D/3D `TimeVaryingInput` rewritten with a stencil design
+
+The 2D/3D `TimeVaryingInput` was reimplemented: every evaluation now computes a
+stencil (two dates with available data and a weight) that is applied in one
+place, with the interpolation method and extrapolation condition only involved
+in the stencil computation. Except for the bug fixes below, results agree with
+the previous implementation (verified bit-for-bit across methods, boundary
+conditions, time types, and datasets before enabling the fused/single-precision
+arithmetic, which changes `Float32` results by one ulp), with better
+performance:
+
+- Period metadata (`PeriodicCalendar` bounds, `LinearPeriodFilling` period
+  tables) is computed once at construction instead of on every `evaluate!`, so
+  steady-state evaluations no longer allocate date vectors.
+- Snapshots are combined directly from the data handler cache and the
+  combination weights are converted to the field element type (so GPUs no
+  longer compute broadcasts in double precision): the linear path launches
+  1 GPU kernel per evaluation instead of 3, `LinearPeriodFilling` 3 instead
+  of 9.
+- `LinearPeriodFilling` inputs constructed from file paths now use a snapshot
+  cache large enough for their four-snapshot evaluations.
+
+### Bug fixes
+
+- `NearestNeighbor(PeriodicCalendar(...))` now returns the true nearest
+  snapshot for in-range times. Previously the wrap-around-gap rule was applied
+  to every time, so every in-range time returned the last snapshot of the
+  (repeat) period.
+- `NearestNeighbor` no longer errors when evaluated exactly at the last
+  available date.
+- `LinearPeriodFillingInterpolation` is now continuous across period
+  boundaries when the target date falls before the interpolable region: the
+  earlier bracketing date is taken from the period before the target instead
+  of the one after.
+
+Minor user-visible differences:
+
+- Invalid configurations that previously errored at the first `evaluate!` are
+  now rejected at construction (with the same message): `PeriodicCalendar()`
+  with non-equispaced or single-date data when constructing from a
+  `DataHandler`, and `PeriodicCalendar(period, repeat_date)` with no data in
+  the repeat period.
+- `Dates.Date` evaluation times are now converted to `DateTime` up front and
+  work everywhere; previously they raised `MethodError`s in most code paths.
 v0.1.31
 ------
 ### Bug fixes

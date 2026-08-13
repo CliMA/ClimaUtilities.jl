@@ -176,5 +176,46 @@ include("TestTools.jl")
 
         # Target time falling at the right of the interpolable region for one
         test_date(DateTime(1987, 12, 12))
+
+        # The values used above are linear in time, for which any bracketing
+        # dates interpolate exactly; nonlinear values are needed to expose a
+        # wrong choice of bracketing dates
+        nonlinear_path = joinpath(tmpdir, "nonlinear.nc")
+        NCDatasets.NCDataset(nonlinear_path, "c") do nc
+            NCDatasets.defDim(nc, "lon", length(lon_array))
+            NCDatasets.defDim(nc, "lat", length(lat_array))
+            NCDatasets.defDim(nc, "time", length(dates))
+            NCDatasets.defVar(nc, "lon", lon_array, ("lon",))
+            NCDatasets.defVar(nc, "lat", lat_array, ("lat",))
+            NCDatasets.defVar(nc, "time", dates, ("time",))
+            NCDatasets.defVar(
+                nc,
+                "data",
+                stack(v -> v * ones_array, [1.0, 2.0, 4.0, 8.0]),
+                ("lon", "lat", "time"),
+            )
+        end
+        nonlinear_input = TimeVaryingInputs.TimeVaryingInput(
+            nonlinear_path,
+            "data",
+            target_space;
+            method,
+            start_date,
+            regridder_type,
+        )
+        value_at(date) = begin
+            TimeVaryingInputs.evaluate!(dest, nonlinear_input, date)
+            Array(parent(dest))[1]
+        end
+
+        # These two times fall in the same coverage hole (Dec 11 to Jan 10),
+        # handled by the two branches of the bracketing logic, which must draw
+        # the same line: the result must be continuous across New Year
+        @test abs(
+            value_at(DateTime(1986, 12, 31, 23)) -
+            value_at(DateTime(1987, 1, 1, 1)),
+        ) < 0.05
+
+        close(nonlinear_input)
     end
 end

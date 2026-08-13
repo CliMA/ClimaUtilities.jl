@@ -324,6 +324,27 @@ include("TestTools.jl")
                     end
                 end
 
+                # Exactly at the last date, the last snapshot is returned
+                @test available_dates[end] in input_nearest
+                @test begin
+                    TimeVaryingInputs.evaluate!(
+                        dest,
+                        input_nearest,
+                        available_dates[end],
+                    )
+                    isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[end],
+                                ),
+                            ),
+                        ),
+                    )
+                end
+
                 # Flat left
                 target_time = available_times[begin] - 1
                 target_date = available_dates[begin] - Second(1)
@@ -487,6 +508,26 @@ include("TestTools.jl")
                         ),
                     )
                 end
+
+                # In-range times must return the true nearest snapshot (only
+                # wrapped times in the gap past the last date follow the
+                # wrap-around rule)
+                TimeVaryingInputs.evaluate!(
+                    dest,
+                    input_nearest_periodic_calendar,
+                    available_times[10] + 0.1dt,
+                )
+                @test isequal(
+                    Array(parent(dest)),
+                    Array(
+                        parent(
+                            DataHandling.regridded_snapshot(
+                                data_handler,
+                                available_times[10],
+                            ),
+                        ),
+                    ),
+                )
 
                 # Now testing LinearInterpolation
                 input_linear = TimeVaryingInputs.TimeVaryingInput(data_handler)
