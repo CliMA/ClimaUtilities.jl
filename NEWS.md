@@ -3,6 +3,12 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+### Features
+
+- `TimeVaryingInput` now support matrix input representing time series data for
+  multiple column. This can be used with purely horizontal spaces or spaces
+  with exactly one vertical level such as the point ensemble space.
+
 v0.1.31
 ------
 ### Bug fixes
