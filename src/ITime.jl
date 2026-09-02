@@ -90,12 +90,17 @@ end
 
 """
     seconds(t::ITime)
+    seconds(t::Real)
 
 Return the time represented by `t` in seconds, as a floating-point number.
+
+For a plain `Real`, the value is assumed to already be in seconds and is
+returned as a floating-point number.
 """
 function seconds(t::ITime)
     return float(t)
 end
+seconds(t::Real) = float(t)
 
 # Accessors
 """
@@ -473,6 +478,80 @@ Base.:*(num::Integer, t::T) where {T <: ITime} =
     ITime(num * t.counter, t.period, t.epoch)
 Base.:*(t::T, num::Integer) where {T <: ITime} =
     ITime(num * t.counter, t.period, t.epoch)
+
+"""
+    finer_unit_period(period::Dates.FixedPeriod)
+
+Return the next unit period after the unit of `period` in the sequence week,
+day, hour, minute, second, millisecond, microsecond, nanosecond, as a pair
+`(finer_period, ratio)` with `oneunit(period) == ratio * finer_period`.
+Return `nothing` when the unit of `period` is `Dates.Nanosecond`.
+"""
+finer_unit_period(::Dates.Week) = (Dates.Day(1), 7)
+finer_unit_period(::Dates.Day) = (Dates.Hour(1), 24)
+finer_unit_period(::Dates.Hour) = (Dates.Minute(1), 60)
+finer_unit_period(::Dates.Minute) = (Dates.Second(1), 60)
+finer_unit_period(::Dates.Second) = (Dates.Millisecond(1), 1000)
+finer_unit_period(::Dates.Millisecond) = (Dates.Microsecond(1), 1000)
+finer_unit_period(::Dates.Microsecond) = (Dates.Nanosecond(1), 1000)
+finer_unit_period(::Dates.Nanosecond) = nothing
+
+"""
+    refine_period(period::Dates.FixedPeriod)
+
+Return the next step in the period-refinement sequence as a pair
+`(finer_period, ratio)` with `period == ratio * finer_period`: a multiple-unit
+period refines to its unit period, and a unit period to the next finer unit
+period. Return `nothing` for `Dates.Nanosecond(1)`.
+"""
+function refine_period(period::Dates.FixedPeriod)
+    n = Dates.value(period)
+    n == 1 || return (typeof(period)(1), n)
+    return finer_unit_period(period)
+end
+
+"""
+    Base.:/(t::ITime, num::Integer)
+
+Divide an `ITime` by an integer exactly, so that `num * (t / num) == t`.
+
+When `counter(t)` is divisible by `num`, the result keeps the period of `t`.
+Otherwise the result is expressed in the largest unit period, from week down
+to nanosecond and no larger than the unit of the period of `t`, at which the
+division is exact; for example, `ITime(1; period = Dates.Hour(1)) / 2` is 30
+minutes. An error is thrown when the division is not exact at any such period
+(e.g. `ITime(1; period = Dates.Second(1)) / 3`) or when the resulting counter
+is not representable by the counter type of `t`.
+
+Unlike `div(t, num)`, which truncates the counter, this division is exact.
+"""
+function Base.:/(t::ITime, num::Integer)
+    iszero(num) && throw(DivideError())
+    INT = typeof(t.counter)
+    WIDE = promote_type(INT, Int64)
+    c = WIDE(t.counter)
+    num_signed = promote_type(typeof(num), Int64)(num)
+    remaining = WIDE(Base.Checked.checked_abs(num_signed))
+    common = gcd(c, remaining)
+    c = div(c, common)
+    remaining = div(remaining, common)
+    current_period = t.period
+    while !isone(remaining)
+        step = refine_period(current_period)
+        isnothing(step) && error(
+            "Cannot represent $t / $num as an integer multiple of a nanosecond or coarser period",
+        )
+        current_period, ratio = step
+        common = gcd(WIDE(ratio), remaining)
+        c = Base.Checked.checked_mul(c, div(WIDE(ratio), common))
+        remaining = div(remaining, common)
+    end
+    new_counter = num < 0 ? Base.Checked.checked_neg(c) : c
+    INT === WIDE ||
+        typemin(INT) <= new_counter <= typemax(INT) ||
+        error("The counter of $t / $num is not representable as $INT")
+    return ITime(INT(new_counter), current_period, t.epoch)
+end
 
 # Behave as a scalar when broadcasted
 Base.Broadcast.broadcastable(t::ITime) = Ref(t)
