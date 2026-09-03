@@ -3,11 +3,16 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+
+v0.1.32
+------
 ### Features
 
 - `TimeVaryingInput` now support matrix input representing time series data for
   multiple column. This can be used with purely horizontal spaces or spaces
-  with exactly one vertical level such as the point ensemble space.
+  with exactly one vertical level such as the multi-column space.
+- Add ClimaCore v0.16 to the compat and drop support for ClimaCore v0.14.
+
 
 v0.1.31
 ------

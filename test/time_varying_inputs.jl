@@ -166,7 +166,7 @@ end
             Geometry.LatLongPoint(FT(lat), FT(long)) for (lat, long) in
             zip((-30.0, 0.0, 30.0, 60.0), (0.0, 45.0, 90.0, 180.0))
         ]
-        center_space = CommonSpaces.PointColumnEnsembleSpace(
+        center_space = MultiColumnSpace(
             FT;
             points,
             z_elem = 10,
@@ -178,7 +178,7 @@ end
         cloud_space = Spaces.level(center_space, 1)
         ncols = Spaces.ncolumns(cloud_space)
         @test ncols == length(points)
-        single_level_space = CommonSpaces.PointColumnEnsembleSpace(
+        single_level_space = MultiColumnSpace(
             FT;
             points,
             z_elem = 1,
@@ -557,7 +557,7 @@ end
     topology = Topologies.IntervalTopology(singleton_cpu_context, mesh)
     column_space = Spaces.CenterFiniteDifferenceSpace(topology)
     point_space = Spaces.level(column_space, 1)
-    center_space = CommonSpaces.PointColumnEnsembleSpace(
+    center_space = MultiColumnSpace(
         FT;
         points = [Geometry.LatLongPoint(FT(0), FT(0))],
         z_elem = 10,

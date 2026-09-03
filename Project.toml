@@ -1,6 +1,6 @@
 name = "ClimaUtilities"
 uuid = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
-version = "0.1.31"
+version = "0.1.32"
 authors = ["Gabriele Bozzola <gbozzola@caltech.edu>", "Julia Sloan <jsloan@caltech.edu>", "Kevin Phan <kphan2@caltech.edu>"]
 
 [deps]
@@ -28,7 +28,7 @@ Adapt = "4"
 Artifacts = "1"
 CUDA = "5.5, 6"
 ClimaComms = "0.6.2"
-ClimaCore = "0.15.1"
+ClimaCore = "0.15.1, 0.16"
 ClimaCoreTempestRemap = "0.3.15"
 Dates = "1"
 Interpolations = "0.15.1, 0.16"
