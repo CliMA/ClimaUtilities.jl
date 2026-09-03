@@ -165,3 +165,9 @@ function make_z_only_space(FT; context = ClimaComms.context())
 
     return vert_center_space
 end
+
+# ClimaCore < 0.16 only has the old name. Remove this when ClimaCore v0.15 is
+# not supported.
+const MultiColumnSpace =
+    pkgversion(ClimaCore) >= v"0.16" ? CommonSpaces.MultiColumnSpace :
+    CommonSpaces.PointColumnEnsembleSpace
