@@ -51,7 +51,8 @@ totuple(pt::ClimaCore.Geometry.ZPoint) = pt.z
                             [; extrapolation_bc::Tuple,
                                dim_increasing::Union{Nothing, Tuple},
                                dim_names::Union{Nothing, Tuple},
-                               interpolation_method = Interpolations.Linear()])
+                               interpolation_method = Interpolations.Linear(),
+                               horizontally_uniform = false])
 
 An online regridder that uses Interpolations.jl
 
@@ -83,6 +84,11 @@ order: `dim_increasing[i]` applies to `dim_names[i]` and the i-th dimension. Thi
 particularly important for Z-only spaces where vertical dimensions need to be identified
 by name.
 
+The optional keyword argument `horizontally_uniform` (default `false`) allows data with only
+a vertical dimension to be regridded onto a LatLongZ or XYZ space by applying the same
+profile to every column. The default `extrapolation_bc` is `(Interpolations.Throw(),)` and
+the default `dim_increasing` is `(true,)`.
+
 !!! note "Centers of cells heuristic for longitude dimension"
     For the longitude dimension, the points along the dimension can either
     represent the centers of cells or the edges of cells.
@@ -98,8 +104,17 @@ function Regridders.InterpolationsRegridder(
     dim_increasing::Union{Nothing, Tuple} = nothing,
     dim_names::Union{Nothing, Tuple} = nothing,
     interpolation_method = Intp.Linear(),
+    horizontally_uniform::Bool = false,
 )
     coordinates = ClimaCore.Fields.coordinate_field(target_space)
+    if horizontally_uniform
+        eltype(coordinates) <: ClimaCore.Geometry.LatLongZPoint ||
+            eltype(coordinates) <: ClimaCore.Geometry.XYZPoint ||
+            error("horizontally_uniform requires a lat-long-z or x-y-z space")
+        # Interpolate in z only, so the regridder behaves as for a z space
+        coordinates =
+            map(coord -> ClimaCore.Geometry.ZPoint(coord.z), coordinates)
+    end
     # set default values for the extrapolation_bc and dim_increasing if they are not provided
     if eltype(coordinates) <: ClimaCore.Geometry.LatLongPoint
         isnothing(extrapolation_bc) &&
@@ -163,6 +178,12 @@ function Regridders.regrid(regridder::InterpolationsRegridder, data, dimensions)
         coords = map(regridder.coordinates) do coord
             ClimaCore.Geometry.LatLongPoint(coord.lat, coord.long)
         end
+    elseif length(dimensions) == 1 &&
+           !(eltype(regridder.coordinates) <: ClimaCore.Geometry.ZPoint)
+        error(
+            "One-dimensional data can only be regridded onto a z space, or onto a \
+             lat-long-z or x-y-z space with horizontally_uniform = true",
+        )
     else
         coords = regridder.coordinates
     end
