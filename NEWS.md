@@ -3,6 +3,11 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+### Features
+
+- `InterpolationsRegridder` accepts `horizontally_uniform = true` to regrid data
+  with only a vertical dimension onto a LatLongZ or XYZ space, applying the same
+  profile to every column.
 
 v0.1.32
 ------

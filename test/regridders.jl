@@ -286,6 +286,41 @@ end
         regridded_lon = Regridders.regrid(reg_hv, data_lon3D, dimensions3D)
         regridded_z = Regridders.regrid(reg_hv, data_z3D, dimensions3D)
 
+        # Z-only data on a 3D space needs horizontally_uniform to be set
+        profile = exp.(-z)
+        data_profile3D =
+            repeat(reshape(profile, 1, 1, :), length(lon), length(lat))
+        regridded_profile =
+            Regridders.regrid(reg_hv, data_profile3D, dimensions3D)
+        @test_throws ErrorException Regridders.regrid(reg_hv, profile, (z,))
+        @test_throws ErrorException Regridders.InterpolationsRegridder(
+            horzspace;
+            horizontally_uniform = true,
+        )
+        reg_uniform = Regridders.InterpolationsRegridder(
+            hv_center_space;
+            horizontally_uniform = true,
+        )
+        @test Regridders.regrid(reg_uniform, profile, (z,)) ≈ regridded_profile
+        reg_uniform_decreasing = Regridders.InterpolationsRegridder(
+            hv_center_space;
+            dim_increasing = (false,),
+            horizontally_uniform = true,
+        )
+        @test Regridders.regrid(
+            reg_uniform_decreasing,
+            reverse(profile),
+            (reverse(z),),
+        ) ≈ regridded_profile
+        in_place_regridded_profile = zeros(axes(regridded_profile))
+        Regridders.regrid!(
+            in_place_regridded_profile,
+            reg_uniform,
+            FT.(profile),
+            (FT.(z),),
+        )
+        @test in_place_regridded_profile ≈ regridded_profile
+
         in_place_regridded_lat = zeros(axes(regridded_lat))
         in_place_regridded_lon = zeros(axes(regridded_lon))
         in_place_regridded_z = zeros(axes(regridded_z))
@@ -598,6 +633,11 @@ end
     @test regridded_x == regridded_x_inplace
     @test regridded_y == regridded_y_inplace
     @test regridded_z == regridded_z_inplace
+
+    @test_throws ErrorException Regridders.regrid(reg_box, z, (z,))
+    reg_box_uniform =
+        Regridders.InterpolationsRegridder(spaces; horizontally_uniform = true)
+    @test Regridders.regrid(reg_box_uniform, z, (z,)) ≈ regridded_z
 
     err_x = abs.(reg_box.coordinates.x .- regridded_x)
     err_y = abs.(reg_box.coordinates.y .- regridded_y)
