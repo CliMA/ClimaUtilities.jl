@@ -107,9 +107,8 @@ function TimeVaryingInputs.TimeVaryingInput(
     segment_times = _common_times(segment_times, epoch)
     segment_times = [_validated_times(times, method) for times in segment_times]
     if extrapolation_bc(method) isa PeriodicCalendar{Nothing}
-        spans = [
-            t[end] - t[begin] + t[begin + 1] - t[begin] for t in segment_times
-        ]
+        spans =
+            [t[end] - t[begin] + t[begin + 1] - t[begin] for t in segment_times]
         all(s -> isapprox(s, first(spans)), spans) ||
             @warn "Segments have different periods; PeriodicCalendar() repeats each one over its own length"
     end
