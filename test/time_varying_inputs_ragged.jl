@@ -10,6 +10,7 @@ import ClimaUtilities.Utils: interpolate_columns!
 import ClimaCore: Domains, Fields, Geometry, Grids, Meshes, Spaces, Topologies
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+import Interpolations
 import NCDatasets
 
 const context = ClimaComms.context()
@@ -690,5 +691,114 @@ end
             filled,
             node_date,
         )
+    end
+end
+
+@testset "Equivalence with the 23D and 0D inputs" begin
+    data_dir = mktempdir()
+    start_date = DateTime(2010, 7, 1)
+    z = collect(0.0:500.0:5000.0)
+    dates = start_date .+ Hour.(0:23)
+    ta = [280 + 0.01z * cos(t / 4) + sin(t / 3) for z in z, t in 0:23]
+    ts = [290 + 5 * sin(t / 5) for t in 0:23]
+    file = write_column_file(
+        joinpath(data_dir, "site.nc");
+        z,
+        dates,
+        variables = ["ta" => ta, "ts" => ts],
+    )
+    # Seconds from start_date of the nodes and of times between them
+    node_seconds = 3600.0 .* (0:23)
+    between_seconds = 3600.0 .* (0:22) .+ 1800.0
+    to_date(t) = start_date + Millisecond(round(Int, 1000t))
+
+    for FT in (Float32, Float64)
+        (; center_space, level_space, column_space) =
+            make_spaces(FT; nlevels = 10, z_max = FT(6000))
+        close_enough(a, b) = isapprox(a, b; rtol = 10eps(FT))
+
+        for method in (
+            TimeVaryingInputs.LinearInterpolation(),
+            TimeVaryingInputs.LinearInterpolation(
+                TimeVaryingInputs.PeriodicCalendar(),
+            ),
+        )
+            itp23 = TimeVaryingInputs.TimeVaryingInput(
+                file,
+                "ta",
+                column_space;
+                start_date,
+                method,
+                regridder_type = :InterpolationsRegridder,
+                regridder_kwargs = (;
+                    extrapolation_bc = (Interpolations.Flat(),)
+                ),
+            )
+            ragged = TimeVaryingInputs.TimeVaryingInput(
+                [DataSource(file, "ta")],
+                column_space;
+                start_date,
+                method,
+            )
+            shared = TimeVaryingInputs.TimeVaryingInput(
+                DataSource(file, "ta"),
+                center_space;
+                start_date,
+                method,
+            )
+            dest23 = Fields.zeros(column_space)
+            dest_ragged = Fields.zeros(column_space)
+            dest_shared = Fields.zeros(center_space)
+            periodic =
+                TimeVaryingInputs.extrapolation_bc(method) isa
+                TimeVaryingInputs.PeriodicCalendar
+            seconds =
+                periodic ?
+                (
+                    node_seconds...,
+                    between_seconds...,
+                    30 * 3600.0,
+                    -5 * 3600.0,
+                ) : (node_seconds..., between_seconds...)
+            for t in seconds, time in (t, to_date(t))
+                TimeVaryingInputs.evaluate!(dest23, itp23, time)
+                TimeVaryingInputs.evaluate!(dest_ragged, ragged, time)
+                TimeVaryingInputs.evaluate!(dest_shared, shared, time)
+                expected = vec(Array(Fields.field2array(dest23)))
+                @test close_enough(
+                    vec(Array(Fields.field2array(dest_ragged))),
+                    expected,
+                )
+                @test all(
+                    col -> close_enough(col, expected),
+                    eachcol(Array(Fields.field2array(dest_shared))),
+                )
+            end
+        end
+
+        # A surface series against the scalar and the multi-point 0D inputs,
+        # the latter holding the same FT values
+        surface = TimeVaryingInputs.TimeVaryingInput(
+            DataSource(file, "ts"),
+            level_space;
+            start_date,
+        )
+        scalar = TimeVaryingInputs.TimeVaryingInput(node_seconds, ts)
+        multipoint = TimeVaryingInputs.TimeVaryingInput(
+            node_seconds,
+            FT.(repeat(ts', 4, 1)),
+            level_space,
+        )
+        dest_surface = Fields.zeros(level_space)
+        dest_multipoint = Fields.zeros(level_space)
+        expected = zeros(1)
+        for t in (node_seconds..., between_seconds...)
+            TimeVaryingInputs.evaluate!(dest_surface, surface, t)
+            TimeVaryingInputs.evaluate!(dest_multipoint, multipoint, t)
+            TimeVaryingInputs.evaluate!(expected, scalar, t)
+            values = vec(Array(Fields.field2array(dest_surface)))
+            @test all(v -> close_enough(v, expected[1]), values)
+            @test values == vec(Array(Fields.field2array(dest_multipoint)))
+        end
     end
 end
