@@ -1,5 +1,6 @@
 import ClimaCore
 import ClimaComms
+import NCDatasets
 import ClimaCore: CommonSpaces, Grids
 
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
@@ -156,3 +157,55 @@ end
 const MultiColumnSpace =
     pkgversion(ClimaCore) >= v"0.16" ? CommonSpaces.MultiColumnSpace :
     CommonSpaces.PointColumnEnsembleSpace
+
+"""
+    write_column_file(path; z, dates, variables, z_name = "z", z_units = "m",
+                      time_first = false, scalars = ())
+
+Write a single-site NetCDF file at `path` and return the path: the coordinate
+`z_name` holding `z` with units `z_units`, a `time` axis holding `dates` unless
+`dates` is `nothing`, the scalar variables `scalars` and the variables
+`variables`, both `name => data` pairs. A matrix is written over `(z, time)`, or
+`(time, z)` when `time_first`; a vector over `time`, or over `z` when there are
+no dates.
+"""
+function write_column_file(
+    path;
+    z,
+    dates,
+    variables,
+    z_name = "z",
+    z_units = "m",
+    time_first = false,
+    scalars = (),
+)
+    NCDatasets.NCDataset(path, "c") do nc
+        nc.attrib["site_latitude"] = 17.0
+        nc.attrib["site_longitude"] = -149.0
+        NCDatasets.defDim(nc, z_name, length(z))
+        NCDatasets.defVar(
+            nc,
+            z_name,
+            z,
+            (z_name,);
+            attrib = ["units" => z_units],
+        )
+        if !isnothing(dates)
+            NCDatasets.defDim(nc, "time", length(dates))
+            NCDatasets.defVar(nc, "time", dates, ("time",))
+        end
+        for (name, value) in scalars
+            NCDatasets.defVar(nc, name, value, ())
+        end
+        for (name, data) in variables
+            if data isa AbstractMatrix
+                dims = time_first ? ("time", z_name) : (z_name, "time")
+                data = time_first ? permutedims(data) : data
+            else
+                dims = isnothing(dates) ? (z_name,) : ("time",)
+            end
+            NCDatasets.defVar(nc, name, data, dims)
+        end
+    end
+    return path
+end
