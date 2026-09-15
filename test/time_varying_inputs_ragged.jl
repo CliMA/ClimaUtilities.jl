@@ -485,19 +485,23 @@ end
     dates_b = start_date .+ Hour.(2:3:26)
     ta_a = [300 - 0.006z + t for z in z_a, t in 0:23]
     ta_b = [290 - 0.005z + 2t for z in z_b, t in 0:8]
+    ua_a = [10 + 0.001z - 0.5t for z in z_a, t in 0:23]
+    ua_b = [8 + 0.002z - t for z in z_b, t in 0:8]
+    hus_a = [0.01 - 1e-6 * z + 1e-4 * t for z in z_a, t in 0:23]
+    hus_b = [0.012 - 2e-6 * z + 2e-4 * t for z in z_b, t in 0:8]
     ts_a = 280 .+ (0:23)
     ts_b = 285 .+ 2 .* (0:8)
     file_a = write_column_file(
         joinpath(data_dir, "site_a.nc");
         z = z_a,
         dates = dates_a,
-        variables = ["ta" => ta_a, "ts" => ts_a],
+        variables = ["ta" => ta_a, "ua" => ua_a, "hus" => hus_a, "ts" => ts_a],
     )
     file_b = write_column_file(
         joinpath(data_dir, "site_b.nc");
         z = z_b,
         dates = dates_b,
-        variables = ["ta" => ta_b, "ts" => ts_b],
+        variables = ["ta" => ta_b, "ua" => ua_b, "hus" => hus_b, "ts" => ts_b],
         z_name = "height",
         time_first = true,
     )
@@ -574,6 +578,59 @@ end
             @test vec(Array(Fields.field2array(dest))) ==
                   FT[ts_a[3], ts_b[1], ts_a[3], ts_b[1]]
         end
+
+        # Composing variables equals composing single-variable inputs
+        composed = TimeVaryingInputs.TimeVaryingInput(
+            [sources("ta"), sources("ua"), sources("hus")],
+            center_space;
+            start_date,
+            compose_function = (a, b, c) -> a .+ b .+ c,
+        )
+        parts = [
+            TimeVaryingInputs.TimeVaryingInput(
+                sources(name),
+                center_space;
+                start_date,
+            ) for name in ("ta", "ua", "hus")
+        ]
+        for t in (node_date, node_date + Minute(20))
+            TimeVaryingInputs.evaluate!(dest, composed, t)
+            expected = sum(parts) do part
+                part_dest = Fields.zeros(center_space)
+                TimeVaryingInputs.evaluate!(part_dest, part, t)
+                Array(Fields.field2array(part_dest))
+            end
+            @test Array(Fields.field2array(dest)) ≈ expected
+        end
+        @test_throws "compose_function is required" TimeVaryingInputs.TimeVaryingInput(
+            [sources("ta"), sources("ua")],
+            center_space;
+            start_date,
+        )
+        @test_throws "one source per column" TimeVaryingInputs.TimeVaryingInput(
+            [sources("ta"), sources("ua")[1:2]],
+            center_space;
+            start_date,
+            compose_function = +,
+        )
+        @test_throws "share their dates" TimeVaryingInputs.TimeVaryingInput(
+            [[DataSource(file_a, "ta")], [DataSource(file_b, "ta")]],
+            column_space;
+            start_date,
+            compose_function = +,
+        )
+
+        # One source for every column
+        shared = TimeVaryingInputs.TimeVaryingInput(
+            DataSource(file_a, "ta"),
+            center_space;
+            start_date,
+        )
+        @test Array(shared.column_segment) == [1, 1, 1, 1]
+        @test length(shared.offsets) == 2
+        TimeVaryingInputs.evaluate!(dest, shared, node_date)
+        arr = Array(Fields.field2array(dest))
+        @test all(c -> arr[:, c] == regrid(z_a, ta_a)[:, 3], 1:4)
 
         make(srcs, space; kwargs...) = TimeVaryingInputs.TimeVaryingInput(
             srcs,

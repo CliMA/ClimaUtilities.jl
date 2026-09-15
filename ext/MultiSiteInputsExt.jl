@@ -14,45 +14,68 @@ import ClimaUtilities.TimeVaryingInputs:
 const PRESSURE_UNITS = ("Pa", "hPa", "mb", "mbar", "millibar", "bar")
 
 """
-    TimeVaryingInput(sources::AbstractVector{<:DataSource}, space; start_date, method, preprocess_func, max_bytes)
+    TimeVaryingInput(sources::AbstractVector{<:AbstractVector{<:DataSource}}, space; start_date, compose_function, method, preprocess_func, max_bytes)
+    TimeVaryingInput(sources::AbstractVector{<:DataSource}, space; kwargs...)
+    TimeVaryingInput(source::DataSource, space; kwargs...)
 
-Construct an input with one time series per column of `space` from `sources`,
-one per column. Each source is a time-varying variable of one site, given on the
-levels of a vertical coordinate in metres, which are interpolated linearly onto
-the levels of `space` and held constant beyond them, or without levels for a
-space with a single level. Columns whose sources are equal share one time
-series.
+Construct an input with one time series per column of `space`. `sources` holds
+one vector per file variable, each with one source per column; a single vector
+is one variable, and a single source is read for every column. Each source is a
+time-varying variable of one site, given on the levels of a vertical coordinate
+in metres, which are interpolated linearly onto the levels of `space` and held
+constant beyond them, or without levels for a space with a single level.
+Columns whose sources are equal share one time series.
 
+`compose_function` combines the values of the variables of one column into the
+values of the input and is required with more than one variable.
 `preprocess_func` is applied to every value read, the dates of each source are
 counted from `start_date`, and `max_bytes` bounds the memory of the values,
 erroring before anything is read.
 """
 function TimeVaryingInputs.TimeVaryingInput(
-    sources::AbstractVector{<:DataSource},
+    sources::AbstractVector{<:AbstractVector{<:DataSource}},
     space::ClimaCore.Spaces.AbstractSpace;
     start_date::Union{Dates.DateTime, Dates.Date},
+    compose_function = nothing,
     method::AbstractInterpolationMethod = LinearInterpolation(),
     preprocess_func = identity,
     max_bytes = nothing,
 )
-    unique_sources = unique(sources)
-    column_segment = [findfirst(==(s), unique_sources) for s in sources]
+    allequal(length.(sources)) ||
+        error("Every variable needs one source per column")
+    length(sources) == 1 ||
+        !isnothing(compose_function) ||
+        error(
+            "compose_function is required to combine $(length(sources)) variables",
+        )
+    compose_function = something(compose_function, identity)
+    # The sources of each column, one per variable
+    per_column = [
+        [variable[c] for variable in sources] for c in eachindex(first(sources))
+    ]
+    unique_columns = unique(per_column)
+    column_segment = [findfirst(==(col), unique_columns) for col in per_column]
     model_z = _model_levels(space)
 
     num_levels = isnothing(model_z) ? 1 : length(model_z)
     bytes =
         sizeof(ClimaCore.Spaces.undertype(space)) *
         num_levels *
-        sum(s -> length(s.available_dates), unique_sources)
-    @debug "TimeVaryingInput from $(length(unique_sources)) sources needs $bytes bytes"
+        sum(col -> length(first(col).available_dates), unique_columns)
+    @debug "TimeVaryingInput from $(length(unique_columns)) sets of sources needs $bytes bytes"
     isnothing(max_bytes) ||
         bytes <= max_bytes ||
         error("The values need $bytes bytes, more than max_bytes = $max_bytes")
 
-    segments = map(unique_sources) do source
-        dates, block, z_src = _read_block(source, preprocess_func)
+    segments = map(unique_columns) do col
+        reads = [_read_block(source, preprocess_func) for source in col]
+        dates, _, z_src = first(reads)
+        all(r -> r[1] == dates && r[3] == z_src, reads) || error(
+            "The variables of one column must share their dates and vertical coordinate: $(join(("$(s.varname) in $(s.file_paths)" for s in col), ", "))",
+        )
+        block = compose_function((r[2] for r in reads)...)
         isnothing(z_src) ||
-            (block = _regrid_block(block, z_src, model_z, source))
+            (block = _regrid_block(block, z_src, model_z, first(col)))
         (dates, block)
     end
     return TimeVaryingInputs.TimeVaryingInput(
@@ -63,6 +86,22 @@ function TimeVaryingInputs.TimeVaryingInput(
         method,
         epoch = start_date,
     )
+end
+
+TimeVaryingInputs.TimeVaryingInput(
+    sources::AbstractVector{<:DataSource},
+    space::ClimaCore.Spaces.AbstractSpace;
+    kwargs...,
+) = TimeVaryingInputs.TimeVaryingInput([sources], space; kwargs...)
+
+function TimeVaryingInputs.TimeVaryingInput(
+    source::DataSource,
+    space::ClimaCore.Spaces.AbstractSpace;
+    kwargs...,
+)
+    arr = ClimaCore.Fields.field2array(ClimaCore.Fields.zeros(space))
+    sources = fill(source, size(arr, ndims(arr)))
+    return TimeVaryingInputs.TimeVaryingInput(sources, space; kwargs...)
 end
 
 """
