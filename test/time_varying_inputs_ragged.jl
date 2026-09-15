@@ -46,7 +46,7 @@ segment_values(FT, nlevels, hours) = [
 ]
 
 
-@testset "InterpolatingTimeVaryingInputRagged" begin
+@testset "RaggedInterpolatingTimeVaryingInput" begin
     start_date = DateTime(2014)
     # Nodes of four segments with different spacing and range, in hours, and
     # the same nodes as ITime counters with a different period per segment
