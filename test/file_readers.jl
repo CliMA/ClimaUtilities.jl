@@ -195,6 +195,44 @@ end
     end
 end
 
+@testset "detect_coord_names" begin
+    nc_ext =
+        Base.get_extension(ClimaUtilities, :ClimaUtilitiesNCDatasetsExt).NCFileReaderExt
+    data_dir = mktempdir()
+
+    # Coordinate variables are matched case-insensitively, by type
+    path = joinpath(data_dir, "coords.nc")
+    NCDataset(path, "c") do nc
+        defDim(nc, "height", 2)
+        defDim(nc, "valid_time", 2)
+        defVar(nc, "Longitude", 10.0, ())
+        defVar(nc, "lat", 20.0, ())
+        defVar(nc, "height", [1.0, 2.0], ("height",))
+        dates = [DateTime(2000), DateTime(2001)]
+        defVar(nc, "valid_time", dates, ("valid_time",))
+        @test nc_ext.detect_coord_names(nc, path) ==
+              (; lon = "Longitude", lat = "lat", z = "height")
+        @test nc_ext.read_available_dates(nc) == dates
+    end
+
+    # Types without a match are omitted
+    NCDataset(joinpath(data_dir, "no_coords.nc"), "c") do nc
+        defDim(nc, "x", 2)
+        defVar(nc, "myvar", [1.0, 2.0], ("x",))
+        @test nc_ext.detect_coord_names(nc, "no_coords.nc") == (;)
+    end
+
+    # Two candidates for one type of coordinate
+    NCDataset(joinpath(data_dir, "ambiguous.nc"), "c") do nc
+        defVar(nc, "lon", 10.0, ())
+        defVar(nc, "longitude", 10.0, ())
+        @test_throws "multiple lon variables" nc_ext.detect_coord_names(
+            nc,
+            "ambiguous.nc",
+        )
+    end
+end
+
 @testset "read_missing_dims" begin
     FileReaders.close_all_ncfiles()
     PATH = joinpath(@__DIR__, "test_data", "missing_dim.nc")
