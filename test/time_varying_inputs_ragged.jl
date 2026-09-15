@@ -3,11 +3,14 @@ using Dates
 
 import ClimaUtilities
 import ClimaUtilities: TimeVaryingInputs
+import ClimaUtilities.FileReaders: DataSource
 import ClimaUtilities.TimeManager: ITime, date, period, epoch
+import ClimaUtilities.Utils: interpolate_columns!
 
 import ClimaCore: Domains, Fields, Geometry, Grids, Meshes, Spaces, Topologies
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+import NCDatasets
 
 const context = ClimaComms.context()
 ClimaComms.init(context)
@@ -41,6 +44,42 @@ segment_values(FT, nlevels, hours) = [
     s in eachindex(hours)
 ]
 
+# Spaces with four columns and with one column, nlevels levels up to z_max, and
+# their single-level counterparts
+function make_spaces(FT; nlevels, z_max)
+    points = [
+        Geometry.LatLongPoint(FT(lat), FT(long)) for (lat, long) in
+        zip((-30.0, 0.0, 30.0, 60.0), (0.0, 45.0, 90.0, 180.0))
+    ]
+    center_space = MultiColumnSpace(
+        FT;
+        points,
+        z_elem = nlevels,
+        z_min = FT(0),
+        z_max,
+        radius = FT(6.371229e6),
+        staggering = Grids.CellCenter(),
+    )
+    domain = Domains.IntervalDomain(
+        Geometry.ZPoint{FT}(0),
+        Geometry.ZPoint{FT}(z_max),
+        boundary_names = (:bottom, :top),
+    )
+    mesh = Meshes.IntervalMesh(domain; nelems = nlevels)
+    topology = Topologies.IntervalTopology(
+        ClimaComms.SingletonCommsContext(ClimaComms.device()),
+        mesh,
+    )
+    column_space = Spaces.CenterFiniteDifferenceSpace(topology)
+    return (;
+        center_space,
+        level_space = Spaces.level(center_space, 1),
+        horizontal_space = Spaces.horizontal_space(center_space),
+        column_space,
+        point_space = Spaces.level(column_space, 1),
+    )
+end
+
 @testset "InterpolatingTimeVaryingInputRagged" begin
     start_date = DateTime(2014)
     # Nodes of four segments with different spacing and range, in hours, and
@@ -70,33 +109,13 @@ segment_values(FT, nlevels, hours) = [
     uncovered = (4, 2, 1, 1)
 
     for FT in (Float32, Float64)
-        points = [
-            Geometry.LatLongPoint(FT(lat), FT(long)) for (lat, long) in
-            zip((-30.0, 0.0, 30.0, 60.0), (0.0, 45.0, 90.0, 180.0))
-        ]
-        center_space = MultiColumnSpace(
-            FT;
-            points,
-            z_elem = 5,
-            z_min = FT(0),
-            z_max = FT(5),
-            radius = FT(6.371229e6),
-            staggering = Grids.CellCenter(),
-        )
-        level_space = Spaces.level(center_space, 1)
-        horizontal_space = Spaces.horizontal_space(center_space)
-        domain = Domains.IntervalDomain(
-            Geometry.ZPoint{FT}(0),
-            Geometry.ZPoint{FT}(5),
-            boundary_names = (:bottom, :top),
-        )
-        mesh = Meshes.IntervalMesh(domain; nelems = 5)
-        topology = Topologies.IntervalTopology(
-            ClimaComms.SingletonCommsContext(ClimaComms.device()),
-            mesh,
-        )
-        column_space = Spaces.CenterFiniteDifferenceSpace(topology)
-        point_space = Spaces.level(column_space, 1)
+        (;
+            center_space,
+            level_space,
+            horizontal_space,
+            column_space,
+            point_space,
+        ) = make_spaces(FT; nlevels = 5, z_max = FT(5))
 
         vals = segment_values(FT, 5, hours)
         surface_vals = segment_values(FT, 1, hours)
@@ -452,5 +471,202 @@ segment_values(FT, nlevels, hours) = [
                 start_date,
             )
         end
+    end
+end
+
+@testset "TimeVaryingInput from DataSources" begin
+    data_dir = mktempdir()
+    start_date = DateTime(2010, 7, 1)
+    # Two sites with different levels and time axes; ta is a column variable
+    # and ts a surface one
+    z_a = Float64[0, 1000, 2000, 3000, 4000, 5000]
+    z_b = Float64[500, 1500, 2500, 3500, 4500, 5500]
+    dates_a = start_date .+ Hour.(0:23)
+    dates_b = start_date .+ Hour.(2:3:26)
+    ta_a = [300 - 0.006z + t for z in z_a, t in 0:23]
+    ta_b = [290 - 0.005z + 2t for z in z_b, t in 0:8]
+    ts_a = 280 .+ (0:23)
+    ts_b = 285 .+ 2 .* (0:8)
+    file_a = write_column_file(
+        joinpath(data_dir, "site_a.nc");
+        z = z_a,
+        dates = dates_a,
+        variables = ["ta" => ta_a, "ts" => ts_a],
+    )
+    file_b = write_column_file(
+        joinpath(data_dir, "site_b.nc");
+        z = z_b,
+        dates = dates_b,
+        variables = ["ta" => ta_b, "ts" => ts_b],
+        z_name = "height",
+        time_first = true,
+    )
+    sources(name) =
+        [DataSource(f, name) for f in (file_a, file_b, file_a, file_b)]
+    # The second hour is a node of both sites
+    node_date = start_date + Hour(2)
+
+    for FT in (Float32, Float64)
+        (;
+            center_space,
+            level_space,
+            horizontal_space,
+            column_space,
+            point_space,
+        ) = make_spaces(FT; nlevels = 10, z_max = FT(6000))
+        model_z =
+            Array(Fields.field2array(Fields.coordinate_field(center_space).z))[
+                :,
+                1,
+            ]
+        regrid(z, vals) = interpolate_columns!(
+            zeros(FT, length(model_z), size(vals, 2)),
+            model_z,
+            z,
+            vals,
+        )
+
+        itp = TimeVaryingInputs.TimeVaryingInput(
+            sources("ta"),
+            center_space;
+            start_date,
+        )
+        @test Array(itp.column_segment) == [1, 2, 1, 2]
+        @test length(itp.offsets) == 3
+        @test date.(TimeVaryingInputs.segment_times(itp, 1)) == dates_a
+        @test date.(TimeVaryingInputs.segment_times(itp, 2)) == dates_b
+
+        # Node values are the file values regridded onto the model levels
+        dest = Fields.zeros(center_space)
+        TimeVaryingInputs.evaluate!(dest, itp, node_date)
+        arr = Array(Fields.field2array(dest))
+        @test arr[:, 1] == arr[:, 3] == regrid(z_a, ta_a)[:, 3]
+        @test arr[:, 2] == arr[:, 4] == regrid(z_b, ta_b)[:, 1]
+
+        # preprocess_func is applied to the values read
+        doubled = TimeVaryingInputs.TimeVaryingInput(
+            sources("ta"),
+            center_space;
+            start_date = Date(start_date),
+            preprocess_func = x -> 2x,
+        )
+        TimeVaryingInputs.evaluate!(dest, doubled, node_date)
+        @test Array(Fields.field2array(dest))[:, 1] ==
+              2 .* regrid(z_a, ta_a)[:, 3]
+
+        # time_transform shifts the nodes
+        shifted = TimeVaryingInputs.TimeVaryingInput(
+            [DataSource(file_a, "ta"; time_transform = d -> d + Hour(1))],
+            column_space;
+            start_date,
+        )
+        @test date.(TimeVaryingInputs.segment_times(shifted, 1)) ==
+              dates_a .+ Hour(1)
+
+        # Surface variables into spaces with a single level
+        surface = TimeVaryingInputs.TimeVaryingInput(
+            sources("ts"),
+            level_space;
+            start_date,
+        )
+        for dest in (Fields.zeros(level_space), Fields.zeros(horizontal_space))
+            TimeVaryingInputs.evaluate!(dest, surface, node_date)
+            @test vec(Array(Fields.field2array(dest))) ==
+                  FT[ts_a[3], ts_b[1], ts_a[3], ts_b[1]]
+        end
+
+        make(srcs, space; kwargs...) = TimeVaryingInputs.TimeVaryingInput(
+            srcs,
+            space;
+            start_date,
+            kwargs...,
+        )
+        @test_throws "more than max_bytes" make(
+            sources("ta"),
+            center_space;
+            max_bytes = 10,
+        )
+        @test_throws "but the space has no levels" make(
+            [DataSource(file_a, "ta")],
+            point_space,
+        )
+        static_path = write_column_file(
+            joinpath(data_dir, "static.nc");
+            z = z_a,
+            dates = nothing,
+            variables = ["ta" => z_a],
+        )
+        @test_throws "no time dimension" make(
+            [DataSource(static_path, "ta")],
+            column_space,
+        )
+        pressure_path = write_column_file(
+            joinpath(data_dir, "pressure.nc");
+            z = z_a,
+            dates = dates_a,
+            variables = ["ta" => ta_a],
+            z_units = "hPa",
+        )
+        @test_throws "heights in metres" make(
+            [DataSource(pressure_path, "ta")],
+            column_space,
+        )
+        one_time_path = write_column_file(
+            joinpath(data_dir, "one_time.nc");
+            z = z_a,
+            dates = dates_a[1:1],
+            variables = ["ta" => ta_a[:, 1:1]],
+        )
+        @test_throws "at least two times" make(
+            [DataSource(one_time_path, "ta")],
+            column_space,
+        )
+
+        # Horizontal dimensions of length two
+        grid_path = joinpath(data_dir, "grid.nc")
+        NCDatasets.NCDataset(grid_path, "c") do nc
+            NCDatasets.defDim(nc, "z", length(z_a))
+            NCDatasets.defDim(nc, "time", length(dates_a))
+            NCDatasets.defDim(nc, "x", 2)
+            NCDatasets.defDim(nc, "y", 2)
+            NCDatasets.defVar(nc, "z", z_a, ("z",))
+            NCDatasets.defVar(nc, "time", dates_a, ("time",))
+            NCDatasets.defVar(
+                nc,
+                "ta",
+                repeat(ta_a, 1, 1, 2, 2),
+                ("z", "time", "x", "y"),
+            )
+        end
+        @test_throws "only time and the vertical coordinate" make(
+            [DataSource(grid_path, "ta")],
+            column_space,
+        )
+
+        # Missing values must be handled by preprocess_func
+        gaps_path = joinpath(data_dir, "gaps.nc")
+        NCDatasets.NCDataset(gaps_path, "c") do nc
+            NCDatasets.defDim(nc, "z", length(z_a))
+            NCDatasets.defDim(nc, "time", length(dates_a))
+            NCDatasets.defVar(nc, "z", z_a, ("z",))
+            NCDatasets.defVar(nc, "time", dates_a, ("time",))
+            data = Array{Union{Missing, Float64}}(ta_a)
+            data[2, 5] = missing
+            NCDatasets.defVar(nc, "ta", data, ("z", "time"); fillvalue = -999.0)
+        end
+        @test_throws "Missing values" make(
+            [DataSource(gaps_path, "ta")],
+            column_space,
+        )
+        filled = make(
+            [DataSource(gaps_path, "ta")],
+            column_space;
+            preprocess_func = x -> coalesce(x, 0.0),
+        )
+        TimeVaryingInputs.evaluate!(
+            Fields.zeros(column_space),
+            filled,
+            node_date,
+        )
     end
 end
