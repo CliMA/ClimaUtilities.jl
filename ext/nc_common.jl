@@ -21,9 +21,7 @@ available, return an empty vector.
 """
 function read_available_dates(ds::NetCDFDataset)
     # Check for time dimensions in order of preference
-    for time_dim in TIME_NAMES
-        # "date" holds integer yyyymmdd values and is parsed separately below
-        time_dim == "date" && continue
+    for time_dim in ("time", "t", "valid_time")
         if time_dim in keys(ds.dim)
             # NCDatasets.jl uses CFTime.jl, which supports a time resolution of
             # an attosecond, whereas Dates.DateTime only supports a time

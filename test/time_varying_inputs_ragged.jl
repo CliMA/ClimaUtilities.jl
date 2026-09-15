@@ -358,52 +358,50 @@ segment_values(FT, nlevels, hours) = [
 
         @testset "Errors, FT = $FT" begin
             times = floats(FT)
-            make(args...; kwargs...) =
-                TimeVaryingInputs.TimeVaryingInput(args...; kwargs...)
-            @test_throws "different lengths" make(
+            @test_throws "different lengths" TimeVaryingInputs.TimeVaryingInput(
                 times[1:3],
                 vals,
                 center_space,
             )
-            @test_throws "column_segment has 2 entries" make(
+            @test_throws "column_segment has 2 entries" TimeVaryingInputs.TimeVaryingInput(
                 times,
                 vals,
                 center_space;
                 column_segment = [1, 2],
             )
-            @test_throws "does not exist" make(
+            @test_throws "does not exist" TimeVaryingInputs.TimeVaryingInput(
                 times,
                 vals,
                 center_space;
                 column_segment = [1, 2, 3, 5],
             )
-            @test_throws "last dimension of vals" make(
+            @test_throws "last dimension of vals" TimeVaryingInputs.TimeVaryingInput(
                 times[1:1],
                 vals[2:2],
                 column_space,
             )
-            @test_throws "rows, but the space has 1 levels" make(
+            @test_throws "rows, but the space has 1 levels" TimeVaryingInputs.TimeVaryingInput(
                 times,
                 vals,
                 level_space,
             )
-            @test_throws "at least two times" make(
+            @test_throws "at least two times" TimeVaryingInputs.TimeVaryingInput(
                 [times[1][1:1]],
                 [vals[1][:, 1:1]],
                 column_space,
             )
-            @test_throws "strictly increasing" make(
+            @test_throws "strictly increasing" TimeVaryingInputs.TimeVaryingInput(
                 [reverse(times[1])],
                 vals[1:1],
                 column_space,
             )
-            @test_throws "one kind" make(
+            @test_throws "one kind" TimeVaryingInputs.TimeVaryingInput(
                 [times[1], itimes(nothing)[2]],
                 vals[1:2],
                 center_space;
                 column_segment = [1, 2, 1, 2],
             )
-            @test_throws "non uniform" make(
+            @test_throws "non uniform" TimeVaryingInputs.TimeVaryingInput(
                 [FT[0, 1, 3]],
                 [vals[1][:, 1:3]],
                 column_space;
@@ -411,7 +409,7 @@ segment_values(FT, nlevels, hours) = [
                     TimeVaryingInputs.PeriodicCalendar(),
                 ),
             )
-            @test_throws "PeriodicCalendar(period)" make(
+            @test_throws "PeriodicCalendar(period)" TimeVaryingInputs.TimeVaryingInput(
                 times[1:1],
                 vals[1:1],
                 column_space;
@@ -419,13 +417,13 @@ segment_values(FT, nlevels, hours) = [
                     TimeVaryingInputs.PeriodicCalendar(Year(1), start_date),
                 ),
             )
-            @test_throws "LinearPeriodFillingInterpolation is not supported" make(
+            @test_throws "LinearPeriodFillingInterpolation is not supported" TimeVaryingInputs.TimeVaryingInput(
                 times[1:1],
                 vals[1:1],
                 column_space;
                 method = TimeVaryingInputs.LinearPeriodFillingInterpolation(),
             )
-            itp = make(times, vals, center_space)
+            itp = TimeVaryingInputs.TimeVaryingInput(times, vals, center_space)
             @test_throws "dest is not defined on the space" TimeVaryingInputs.evaluate!(
                 Fields.zeros(level_space),
                 itp,
@@ -484,11 +482,7 @@ end
             column_space,
             point_space,
         ) = make_spaces(FT; nlevels = 10, z_max = FT(6000))
-        model_z =
-            Array(Fields.field2array(Fields.coordinate_field(center_space).z))[
-                :,
-                1,
-            ]
+        model_z = model_levels(center_space)
         regrid(z, vals) = interpolate_columns!(
             zeros(FT, length(model_z), size(vals, 2)),
             model_z,

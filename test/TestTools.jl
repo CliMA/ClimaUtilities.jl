@@ -249,3 +249,13 @@ function make_spaces(FT; nlevels, z_max)
         point_space = ClimaCore.Spaces.level(column_space, 1),
     )
 end
+
+"""
+    model_levels(space)
+
+Heights of the levels of one column of `space`, on the host.
+"""
+function model_levels(space)
+    z = ClimaCore.Fields.coordinate_field(space).z
+    return Array(ClimaCore.Fields.field2array(z))[:, 1]
+end

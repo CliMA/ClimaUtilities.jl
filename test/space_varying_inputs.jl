@@ -91,14 +91,7 @@ end
     for FT in (Float32, Float64)
         (; center_space, level_space, column_space, point_space) =
             make_spaces(FT; nlevels = 10, z_max = FT(6000))
-        model_z = Array(
-            ClimaCore.Fields.field2array(
-                ClimaCore.Fields.coordinate_field(center_space).z,
-            ),
-        )[
-            :,
-            1,
-        ]
+        model_z = model_levels(center_space)
         regrid(z, vals) = vec(
             interpolate_columns!(
                 zeros(FT, length(model_z), 1),

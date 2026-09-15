@@ -117,6 +117,14 @@ end
     src = FileReaders.DataSource(detected_path, "myvar")
     @test src.coord_names == (; lon = "Longitude", lat = "lat", z = "level")
 
+    # Two candidates for one type of coordinate
+    ambiguous_path =
+        make_coord_file("cn_ambiguous.nc", "lon", "longitude", "level")
+    @test_throws "multiple lon variables" FileReaders.DataSource(
+        ambiguous_path,
+        "myvar",
+    )
+
     # Explicit names are checked against the file and stored as given
     custom_path = make_coord_file("cn_custom.nc", "x_lon", "y_lat", "zed")
     names = (; lon = "x_lon", lat = "y_lat", z = "zed")
@@ -317,6 +325,12 @@ end
         defVar(nc, "date", times, ("date",))
         @test read_dates_func(nc) == DateTime.(string.(times), "yyyymmdd")
     end
+    NCDataset(joinpath(data_dir, "test_valid_time_1.nc"), "c") do nc
+        defDim(nc, "valid_time", 2)
+        times = [DateTime(2022), DateTime(2023)]
+        defVar(nc, "valid_time", times, ("valid_time",))
+        @test read_dates_func(nc) == times
+    end
 
     NCDataset(joinpath(@__DIR__, "test_data", "reinterpret_time_dim.nc")) do nc
         @test read_dates_func(nc) == Dates.DateTime.(
@@ -326,44 +340,6 @@ end
                 "1850-03-15T12:00:00"
                 "1850-04-15T00:00:00"
             ],
-        )
-    end
-end
-
-@testset "detect_coord_names" begin
-    nc_ext =
-        Base.get_extension(ClimaUtilities, :ClimaUtilitiesNCDatasetsExt).NCFileReaderExt
-    data_dir = mktempdir()
-
-    # Coordinate variables are matched case-insensitively, by type
-    path = joinpath(data_dir, "coords.nc")
-    NCDataset(path, "c") do nc
-        defDim(nc, "height", 2)
-        defDim(nc, "valid_time", 2)
-        defVar(nc, "Longitude", 10.0, ())
-        defVar(nc, "lat", 20.0, ())
-        defVar(nc, "height", [1.0, 2.0], ("height",))
-        dates = [DateTime(2000), DateTime(2001)]
-        defVar(nc, "valid_time", dates, ("valid_time",))
-        @test nc_ext.detect_coord_names(nc, path) ==
-              (; lon = "Longitude", lat = "lat", z = "height")
-        @test nc_ext.read_available_dates(nc) == dates
-    end
-
-    # Types without a match are omitted
-    NCDataset(joinpath(data_dir, "no_coords.nc"), "c") do nc
-        defDim(nc, "x", 2)
-        defVar(nc, "myvar", [1.0, 2.0], ("x",))
-        @test nc_ext.detect_coord_names(nc, "no_coords.nc") == (;)
-    end
-
-    # Two candidates for one type of coordinate
-    NCDataset(joinpath(data_dir, "ambiguous.nc"), "c") do nc
-        defVar(nc, "lon", 10.0, ())
-        defVar(nc, "longitude", 10.0, ())
-        @test_throws "multiple lon variables" nc_ext.detect_coord_names(
-            nc,
-            "ambiguous.nc",
         )
     end
 end

@@ -37,7 +37,7 @@ function TimeVaryingInputs.TimeVaryingInput(
     sources::AbstractVector{<:AbstractVector{<:DataSource}},
     space::ClimaCore.Spaces.AbstractSpace;
     start_date::Union{Dates.DateTime, Dates.Date},
-    compose_function = nothing,
+    compose_function = identity,
     method::AbstractInterpolationMethod = LinearInterpolation(),
     preprocess_func = identity,
     max_bytes = nothing,
@@ -45,11 +45,10 @@ function TimeVaryingInputs.TimeVaryingInput(
     allequal(length.(sources)) ||
         error("Every variable needs one source per column")
     length(sources) == 1 ||
-        !isnothing(compose_function) ||
+        compose_function != identity ||
         error(
             "compose_function is required to combine $(length(sources)) variables",
         )
-    compose_function = something(compose_function, identity)
     # The sources of each column, one per variable
     per_column = [
         [variable[c] for variable in sources] for c in eachindex(first(sources))
@@ -128,8 +127,8 @@ end
 
 Read the variable of `source` as `(dates, block, z_src)`, where `block` has one
 row per level of the vertical coordinate `z_src`, or a single row when there is
-none and `z_src` is `nothing`, and one column per date, or is a vector for a
-static variable.
+none and `z_src` is `nothing`, and one column per date, or a single column for
+a static variable.
 """
 function _read_block(source::DataSource, preprocess_func)
     files =
@@ -157,16 +156,10 @@ function _read_block(source::DataSource, preprocess_func)
         # length one
         order = filter(!in((z_index, source.time_index)), 1:ndims(data))
         isnothing(z_index) || pushfirst!(order, z_index)
+        source.time_index == -1 || push!(order, source.time_index)
         num_levels = isnothing(z_index) ? 1 : size(data, z_index)
         data = NCDatasets.nomissing(data)
-        block =
-            source.time_index == -1 ?
-            reshape(permutedims(data, order), num_levels) :
-            reshape(
-                permutedims(data, [order; source.time_index]),
-                num_levels,
-                :,
-            )
+        block = reshape(permutedims(data, order), num_levels, :)
         z_src = isnothing(z_index) ? nothing : _heights(ds[z_name], source)
         (source.available_dates, block, z_src)
     end
@@ -228,15 +221,12 @@ function SpaceVaryingInputs.SpaceVaryingInput(
             "$(source.varname) in $(source.file_paths) has a time dimension; use TimeVaryingInput for time-varying data",
         )
         _, block, z_src = _read_block(source, preprocess_func)
-        isnothing(z_src) || (
-            block = vec(
-                _regrid_block(reshape(block, :, 1), z_src, model_z, source),
-            )
-        )
+        isnothing(z_src) ||
+            (block = _regrid_block(block, z_src, model_z, source))
         length(block) == num_levels || error(
             "$(source.varname) in $(source.file_paths) has $(length(block)) levels, but the space has $num_levels",
         )
-        block
+        vec(block)
     end
     values = stack(columns[findfirst(==(s), unique_sources)] for s in sources)
     copyto!(arr, values)
