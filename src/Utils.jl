@@ -60,6 +60,8 @@ increasing or strictly decreasing. Outside the source levels the closest source
 value is used, as in `linear_interpolation`.
 """
 function interpolate_columns!(dest, z_target, z_src, data)
+    # Note that this funciton use Flat extrapolation. If more functionality is
+    # need, then this should be remade into a proper regridder struct
     size(z_src, 1) >= 2 || error("At least two source levels are needed")
     size(z_src, 1) == size(data, 1) ||
         error("z_src and data have different numbers of levels")

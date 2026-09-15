@@ -46,8 +46,12 @@ import ..TimeVaryingInputs0DExt:
 # allow for reusing the same forcing data for multiple columns.
 #
 # With this struct, it is not necessary to use the same times across all of the
-# data for each of the column. To support this on GPU, we can have each thread
-# do a binary search along the time dimension.
+# data for each of the column. However, this forces all the data to have the
+# same z axis. This is accomplished by preprocessing the data by interpolating
+# along the z direction for each column.
+
+# To support this on GPU, each thread do a binary search along the time
+# dimension.
 #
 # At this point of time, there is no support for data that do not fit in memory.
 

@@ -18,13 +18,12 @@ abstract type AbstractFileReader end
 """
     DataSource
 
-A variable in one or more NetCDF files, joined along time when several: the
-paths, the variable name, the dates of its time axis (empty without a time
-dimension), the index of its time dimension (`-1` without one), the names of its
-coordinate variables by type of coordinate, and the keyword arguments used to
-open the files. It holds no data. Build it with
-`DataSource(file_paths, varname; time_transform, coord_names)` once `NCDatasets`
-is loaded.
+A lightweight description of a variable in one or more datasets which includes
+the path(s) to its source(s), the variable name, the dates of its time axis
+(empty without a time dimension), and the names of its coordinate variables by
+type of coordinate. A `DataSource` holds no data itself. It records what is
+needed to read the variable, and the sources are joined along the time dimension
+when several are given. It holds no data.
 """
 struct DataSource{CN <: NamedTuple, K <: Tuple}
     file_paths::Vector{String}
@@ -36,6 +35,8 @@ struct DataSource{CN <: NamedTuple, K <: Tuple}
 end
 
 # Sources built independently from the same files compare equal
+# This is needed because Base.:(==) defaults to Base.:(===) if no implementation
+# is found and vectors are false with ===
 Base.:(==)(a::DataSource, b::DataSource) =
     all(f -> getfield(a, f) == getfield(b, f), fieldnames(DataSource))
 Base.hash(s::DataSource, h::UInt) =

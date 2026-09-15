@@ -18,7 +18,7 @@ chronological order and with the same coordinate values in every file.
 `time_transform` is applied to each date of the time axis and must return a
 `Dates.DateTime`. `coord_names` names the coordinate variables by type of
 coordinate, e.g. `(; lon = "lon", lat = "lat", z = "height")`; when `nothing`,
-they are detected by matching the variable names against `COORD_NAMES`.
+they are automatically detected.
 """
 function FileReaders.DataSource(
     file_paths,
