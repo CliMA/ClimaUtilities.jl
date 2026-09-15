@@ -44,41 +44,6 @@ segment_values(FT, nlevels, hours) = [
     s in eachindex(hours)
 ]
 
-# Spaces with four columns and with one column, nlevels levels up to z_max, and
-# their single-level counterparts
-function make_spaces(FT; nlevels, z_max)
-    points = [
-        Geometry.LatLongPoint(FT(lat), FT(long)) for (lat, long) in
-        zip((-30.0, 0.0, 30.0, 60.0), (0.0, 45.0, 90.0, 180.0))
-    ]
-    center_space = MultiColumnSpace(
-        FT;
-        points,
-        z_elem = nlevels,
-        z_min = FT(0),
-        z_max,
-        radius = FT(6.371229e6),
-        staggering = Grids.CellCenter(),
-    )
-    domain = Domains.IntervalDomain(
-        Geometry.ZPoint{FT}(0),
-        Geometry.ZPoint{FT}(z_max),
-        boundary_names = (:bottom, :top),
-    )
-    mesh = Meshes.IntervalMesh(domain; nelems = nlevels)
-    topology = Topologies.IntervalTopology(
-        ClimaComms.SingletonCommsContext(ClimaComms.device()),
-        mesh,
-    )
-    column_space = Spaces.CenterFiniteDifferenceSpace(topology)
-    return (;
-        center_space,
-        level_space = Spaces.level(center_space, 1),
-        horizontal_space = Spaces.horizontal_space(center_space),
-        column_space,
-        point_space = Spaces.level(column_space, 1),
-    )
-end
 
 @testset "InterpolatingTimeVaryingInputRagged" begin
     start_date = DateTime(2014)

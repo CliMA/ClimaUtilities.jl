@@ -1,7 +1,11 @@
 using Test
 
 import ClimaUtilities
+using Dates
+
 using ClimaUtilities.SpaceVaryingInputs: SpaceVaryingInput
+import ClimaUtilities.FileReaders: DataSource
+import ClimaUtilities.Utils: interpolate_columns!
 
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
@@ -52,4 +56,100 @@ AT = ClimaComms.array_type(ClimaComms.device())
     @test parent(field_of_structs.c)[:] ≈
           AT(collect(range(FT(0.15), FT(2.85), 10)))
 
+end
+
+@testset "SpaceVaryingInput from DataSources" begin
+    data_dir = mktempdir()
+    z_a = Float64[0, 1000, 2000, 3000, 4000, 5000]
+    z_b = Float64[500, 1500, 2500, 3500, 4500, 5500]
+    ta_a = 300 .- 0.006 .* z_a
+    ta_b = 290 .- 0.005 .* z_b
+    file_a = write_column_file(
+        joinpath(data_dir, "static_a.nc");
+        z = z_a,
+        dates = nothing,
+        variables = ["ta" => ta_a],
+        scalars = ["ts" => 280.0],
+    )
+    file_b = write_column_file(
+        joinpath(data_dir, "static_b.nc");
+        z = z_b,
+        dates = nothing,
+        variables = ["ta" => ta_b],
+        scalars = ["ts" => 285.0],
+        z_name = "height",
+    )
+    tv_file = write_column_file(
+        joinpath(data_dir, "time_varying.nc");
+        z = z_a,
+        dates = [DateTime(2000, 1, 1), DateTime(2000, 1, 2)],
+        variables = ["ta" => hcat(ta_a, ta_a)],
+    )
+    sources(name) =
+        [DataSource(f, name) for f in (file_a, file_b, file_a, file_b)]
+
+    for FT in (Float32, Float64)
+        (; center_space, level_space, column_space, point_space) =
+            make_spaces(FT; nlevels = 10, z_max = FT(6000))
+        model_z = Array(
+            ClimaCore.Fields.field2array(
+                ClimaCore.Fields.coordinate_field(center_space).z,
+            ),
+        )[
+            :,
+            1,
+        ]
+        regrid(z, vals) = vec(
+            interpolate_columns!(
+                zeros(FT, length(model_z), 1),
+                model_z,
+                z,
+                reshape(vals, :, 1),
+            ),
+        )
+
+        field = SpaceVaryingInput(sources("ta"), center_space)
+        arr = Array(ClimaCore.Fields.field2array(field))
+        @test arr[:, 1] == arr[:, 3] == regrid(z_a, ta_a)
+        @test arr[:, 2] == arr[:, 4] == regrid(z_b, ta_b)
+
+        # The same profile in every column, with preprocess_func applied
+        field = SpaceVaryingInput(
+            DataSource(file_a, "ta"),
+            center_space;
+            preprocess_func = x -> 2x,
+        )
+        arr = Array(ClimaCore.Fields.field2array(field))
+        @test all(c -> arr[:, c] == 2 .* regrid(z_a, ta_a), 1:4)
+
+        # A single column matches the array method
+        field = SpaceVaryingInput([DataSource(file_a, "ta")], column_space)
+        @test Array(parent(field)) ≈ Array(
+            parent(SpaceVaryingInput(FT.(z_a), FT.(ta_a), column_space)),
+        )
+
+        # Static points into spaces with a single level
+        field = SpaceVaryingInput(sources("ts"), level_space)
+        @test vec(Array(ClimaCore.Fields.field2array(field))) ==
+              FT[280, 285, 280, 285]
+        field = SpaceVaryingInput([DataSource(file_a, "ts")], point_space)
+        @test vec(Array(ClimaCore.Fields.field2array(field))) == FT[280]
+
+        @test_throws "sources for a space" SpaceVaryingInput(
+            sources("ta")[1:2],
+            center_space,
+        )
+        @test_throws "has a time dimension" SpaceVaryingInput(
+            [DataSource(tv_file, "ta")],
+            column_space,
+        )
+        @test_throws "but the space has no levels" SpaceVaryingInput(
+            [DataSource(file_a, "ta")],
+            point_space,
+        )
+        @test_throws "levels, but the space has" SpaceVaryingInput(
+            [DataSource(file_a, "ts")],
+            column_space,
+        )
+    end
 end
