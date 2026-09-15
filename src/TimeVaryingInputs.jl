@@ -194,6 +194,13 @@ an analytic one. In that case, `args` and `kwargs` are passed down to the functi
 function evaluate! end
 
 """
+    segment_times(input, s)
+
+Return the times of the `s`-th segment of a multi-segment `input`.
+"""
+function segment_times end
+
+"""
     extrapolation_bc(aim::AbstractInterpolationMethod)
 
 Return the interpolation boundary conditions associated to `aim`.
@@ -321,7 +328,7 @@ struct LinearPeriodFillingInterpolation{
 end
 
 extension_fns = [
-    :ClimaCore => [:TimeVaryingInput, :evaluate!],
+    :ClimaCore => [:TimeVaryingInput, :evaluate!, :segment_times],
     :NCDatasets => [:TimeVaryingInput, :evaluate!],
     :CUDA => [:TimeVaryingInput, :evaluate!],
 ]
