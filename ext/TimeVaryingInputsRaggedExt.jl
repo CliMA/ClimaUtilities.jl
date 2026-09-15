@@ -12,10 +12,17 @@ import ClimaUtilities.TimeVaryingInputs:
     AbstractInterpolationMethod,
     AbstractTimeVaryingInput,
     LinearInterpolation,
+    Throw,
+    Flat,
     PeriodicCalendar,
     extrapolation_bc
 import ClimaUtilities.TimeManager: ITime
-import ..TimeVaryingInputs0DExt: _check_dims, _validated_times, _normalize_time
+import ..TimeVaryingInputs0DExt:
+    _check_dims,
+    _validated_times,
+    _normalize_time,
+    _interior_stencil,
+    _boundary_stencil
 
 """
     InterpolatingTimeVaryingInputRagged
@@ -160,6 +167,74 @@ Check if `time` is in the range covered by every segment of `itp`.
 function Base.in(time, itp::InterpolatingTimeVaryingInputRagged)
     time = _normalize_time(itp.range, time)
     return itp.range[1] <= time <= itp.range[2]
+end
+
+"""
+    evaluate!(dest::Fields.Field, itp::InterpolatingTimeVaryingInputRagged, time)
+
+Write to `dest` the result of interpolating every column of `itp` at the given
+`time`. `dest` must be on the space `itp` was built for.
+"""
+function TimeVaryingInputs.evaluate!(
+    dest::ClimaCore.Fields.Field,
+    itp::InterpolatingTimeVaryingInputRagged,
+    time,
+    args...;
+    kwargs...,
+)
+    arr = ClimaCore.Fields.field2array(dest)
+    arr = ndims(arr) == 1 ? reshape(arr, 1, :) : arr
+    size(arr) == (size(itp.vals, 1), length(itp.column_segment)) ||
+        error("dest is not defined on the space the input was built for")
+    return _evaluate!(arr, itp, _normalize_time(itp.range, time))
+end
+
+# Function barrier as in the 0D input. Throw is settled on the host because the
+# kernel cannot raise the error of _boundary_stencil.
+function _evaluate!(arr, itp::InterpolatingTimeVaryingInputRagged, time)
+    bc = extrapolation_bc(itp.method)
+    if bc isa Throw
+        time in itp || error(
+            "Segment $(_uncovered_segment(itp, time)) of TimeVaryingInput does not cover time $time",
+        )
+        bc = Flat()
+    end
+    arr .= _point.(Ref(itp), CartesianIndices(arr), time, Ref(bc))
+    return nothing
+end
+
+"""
+    _point(itp::InterpolatingTimeVaryingInputRagged, I::CartesianIndex, time, bc)
+
+Value of `itp` at `time` on the level and column given by `I`, using `bc`
+outside the times of the column's segment.
+"""
+@inline function _point(itp, I::CartesianIndex, time, bc)
+    k, c = Tuple(I)
+    s = itp.column_segment[c]
+    seg = itp.offsets[s]:(itp.offsets[s + 1] - 1)
+    times = view(itp.times, seg)
+    (i1, i2, w) =
+        times[begin] <= time <= times[end] ?
+        _interior_stencil(time, times, itp.method) :
+        _boundary_stencil(time, times, bc, itp.method)
+    y1, y2 = itp.vals[k, seg[i1]], itp.vals[k, seg[i2]]
+    return y1 + (y2 - y1) * w
+end
+
+"""
+    _uncovered_segment(itp::InterpolatingTimeVaryingInputRagged, time)
+
+Index of the first segment of `itp` whose times do not cover `time`. Only called
+to name the segment in the `Throw` error of `evaluate!`, so the copies to the
+host do not matter.
+"""
+function _uncovered_segment(itp, time)
+    offsets, times = Array(itp.offsets), Array(itp.times)
+    return findfirst(
+        s -> !(times[offsets[s]] <= time <= times[offsets[s + 1] - 1]),
+        1:(length(offsets) - 1),
+    )
 end
 
 """
