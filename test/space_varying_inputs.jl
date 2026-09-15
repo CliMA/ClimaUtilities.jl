@@ -144,5 +144,9 @@ end
             [DataSource(file_a, "ts")],
             column_space,
         )
+        @test_throws MethodError SpaceVaryingInput(
+            [DataSource(file_a, "ta")],
+            make_box_space(FT),
+        )
     end
 end

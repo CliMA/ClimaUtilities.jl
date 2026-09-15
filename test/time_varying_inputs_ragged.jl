@@ -423,6 +423,11 @@ segment_values(FT, nlevels, hours) = [
                 column_space;
                 method = TimeVaryingInputs.LinearPeriodFillingInterpolation(),
             )
+            @test_throws MethodError TimeVaryingInputs.TimeVaryingInput(
+                times[1:1],
+                vals[1:1],
+                make_box_space(FT),
+            )
             itp = TimeVaryingInputs.TimeVaryingInput(times, vals, center_space)
             @test_throws "dest is not defined on the space" TimeVaryingInputs.evaluate!(
                 Fields.zeros(level_space),
@@ -598,11 +603,6 @@ end
             start_date,
             kwargs...,
         )
-        @test_throws "more than max_bytes" make(
-            sources("ta"),
-            center_space;
-            max_bytes = 10,
-        )
         @test_throws "but the space has no levels" make(
             [DataSource(file_a, "ta")],
             point_space,
@@ -637,6 +637,10 @@ end
         @test_throws "at least two times" make(
             [DataSource(one_time_path, "ta")],
             column_space,
+        )
+        @test_throws MethodError make(
+            [DataSource(file_a, "ta")],
+            make_box_space(FT),
         )
 
         # Horizontal dimensions of length two

@@ -12,35 +12,84 @@ import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:
     AbstractInterpolationMethod, LinearInterpolation
 
+include("column_spaces.jl")
+
 const PRESSURE_UNITS = ("Pa", "hPa", "mb", "mbar", "millibar", "bar")
 
 """
-    TimeVaryingInput(sources::AbstractVector{<:AbstractVector{<:DataSource}}, space; start_date, compose_function, method, preprocess_func, max_bytes)
+    TimeVaryingInput(
+        sources::AbstractVector{<:AbstractVector{<:DataSource}},
+        space;
+        start_date,
+        compose_function,
+        method,
+        preprocess_func
+    )
     TimeVaryingInput(sources::AbstractVector{<:DataSource}, space; kwargs...)
     TimeVaryingInput(source::DataSource, space; kwargs...)
 
-Construct an input with one time series per column of `space`. `sources` holds
-one vector per file variable, each with one source per column; a single vector
-is one variable, and a single source is read for every column. Each source is a
-time-varying variable of one site, given on the levels of a vertical coordinate
-in metres, which are interpolated linearly onto the levels of `space` and held
-constant beyond them, or without levels for a space with a single level.
-Columns whose sources are equal share one time series.
+Construct an time varying input that gives every column of `space` the time
+series of its own site, read from the NetCDF variables described by
+`DataSource`s.
 
-`compose_function` combines the values of the variables of one column into the
-values of the input and is required with more than one variable.
-`preprocess_func` is applied to every value read, the dates of each source are
-counted from `start_date`, and `max_bytes` bounds the memory of the values,
-erroring before anything is read.
+`sources` has one vector per file variable, and each vector has one source per
+column of `space`, in the order of the columns of
+`ClimaCore.Fields.field2array`. A single vector is shorthand for one variable,
+and a single source is read for every column. With more than one variable,
+`compose_function` is required: it receives the values of each variable of a
+column as an array with one row per level and one column per time, and returns
+the values of the input. `preprocess_func` is applied to every value before
+that.
+
+Each source is a time-varying variable of one site: one value per time for a
+space with a single level, or one value per time and level otherwise, on a
+vertical coordinate in metres. Levels are interpolated linearly onto the levels
+of `space` and held constant above and below the file's levels. The variables of
+one column must share their dates and levels. Dates are counted from
+`start_date`, and `method` sets the interpolation in time. Columns whose sources
+compare equal share one time series in memory.
+
+# Examples
+
+If we want to use the same air temperature for all columns, we can do
+
+```julia
+input = TimeVaryingInput(
+    DataSource("site_a.nc", "ta"),
+    space;
+    start_date = DateTime(2010, 7, 1),
+)
+```
+
+If we want site specific air temperature for two columns, we can do
+
+```julia
+sources = [DataSource("site_a.nc", "ta"), DataSource("site_b.nc", "ta")]
+input = TimeVaryingInput(sources, space; start_date = DateTime(2010, 7, 1))
+```
+
+If we want to compute virtual temperature of three columns from temperature and
+humidity, with the first and the third column reading the same site:
+
+```julia
+files = ["site_a.nc", "site_b.nc", "site_a.nc"]
+ta = [DataSource(f, "ta") for f in files]
+hus = [DataSource(f, "hus") for f in files]
+input = TimeVaryingInput(
+    [ta, hus],
+    space;
+    start_date = DateTime(2010, 7, 1),
+    compose_function = (ta, hus) -> ta .* (1 .+ 0.61 .* hus),
+)
+```
 """
 function TimeVaryingInputs.TimeVaryingInput(
     sources::AbstractVector{<:AbstractVector{<:DataSource}},
-    space::ClimaCore.Spaces.AbstractSpace;
+    space::ColumnSpace;
     start_date::Union{Dates.DateTime, Dates.Date},
     compose_function = identity,
     method::AbstractInterpolationMethod = LinearInterpolation(),
     preprocess_func = identity,
-    max_bytes = nothing,
 )
     allequal(length.(sources)) ||
         error("Every variable needs one source per column")
@@ -53,19 +102,11 @@ function TimeVaryingInputs.TimeVaryingInput(
     per_column = [
         [variable[c] for variable in sources] for c in eachindex(first(sources))
     ]
+    # If the same time series data is used for multiple columns, reuse the data
+    # instead of duplicating it
     unique_columns = unique(per_column)
     column_segment = [findfirst(==(col), unique_columns) for col in per_column]
     model_z = _model_levels(space)
-
-    num_levels = isnothing(model_z) ? 1 : length(model_z)
-    bytes =
-        sizeof(ClimaCore.Spaces.undertype(space)) *
-        num_levels *
-        sum(col -> length(first(col).available_dates), unique_columns)
-    @debug "TimeVaryingInput from $(length(unique_columns)) sets of sources needs $bytes bytes"
-    isnothing(max_bytes) ||
-        bytes <= max_bytes ||
-        error("The values need $bytes bytes, more than max_bytes = $max_bytes")
 
     segments = map(unique_columns) do col
         for source in col
@@ -79,10 +120,13 @@ function TimeVaryingInputs.TimeVaryingInput(
             "The variables of one column must share their dates and vertical coordinate: $(join(("$(s.varname) in $(s.file_paths)" for s in col), ", "))",
         )
         block = compose_function((r[2] for r in reads)...)
+
+        # Preprocess the data by regridding to the dest z
         isnothing(z_src) ||
             (block = _regrid_block(block, z_src, model_z, first(col)))
         (dates, block)
     end
+    # This calls the constructor for RaggedInterpolatingTimeVaryingInput
     return TimeVaryingInputs.TimeVaryingInput(
         first.(segments),
         last.(segments),
@@ -95,16 +139,17 @@ end
 
 TimeVaryingInputs.TimeVaryingInput(
     sources::AbstractVector{<:DataSource},
-    space::ClimaCore.Spaces.AbstractSpace;
+    space::ColumnSpace;
     kwargs...,
 ) = TimeVaryingInputs.TimeVaryingInput([sources], space; kwargs...)
 
 function TimeVaryingInputs.TimeVaryingInput(
     source::DataSource,
-    space::ClimaCore.Spaces.AbstractSpace;
+    space::ColumnSpace;
     kwargs...,
 )
     arr = ClimaCore.Fields.field2array(ClimaCore.Fields.zeros(space))
+    # Use the same sites for all columns
     sources = fill(source, size(arr, ndims(arr)))
     return TimeVaryingInputs.TimeVaryingInput(sources, space; kwargs...)
 end
@@ -115,11 +160,13 @@ end
 Heights of the levels of one column of `space`, or `nothing` when `space` has a
 single level.
 """
-function _model_levels(space)
-    coords = ClimaCore.Fields.coordinate_field(space)
-    :z in propertynames(coords) || return nothing
-    z = Array(ClimaCore.Fields.field2array(coords.z))
-    return ndims(z) == 1 ? nothing : z[:, 1]
+_model_levels(::Union{ClimaCore.Spaces.PointSpace, MultiPointSpace}) = nothing
+# Every column shares the vertical grid
+_model_levels(space::ClimaCore.Spaces.MultiColumnFiniteDifferenceSpace) =
+    _model_levels(ClimaCore.Spaces.column(space, 1, 1, 1))
+function _model_levels(space::ClimaCore.Spaces.FiniteDifferenceSpace)
+    z = ClimaCore.Fields.coordinate_field(space).z
+    return vec(Array(ClimaCore.Fields.field2array(z)))
 end
 
 """
@@ -147,7 +194,6 @@ function _read_block(source::DataSource, preprocess_func)
                     "$(source.varname) in $(source.file_paths) has dimensions $dims, but only time and the vertical coordinate may have more than one entry",
                 )
         end
-        # map, unlike broadcasting, keeps a variable without dimensions an array
         data = map(preprocess_func, Array(var))
         any(ismissing, data) && error(
             "Missing values in $(source.varname) of $(source.file_paths); handle them in preprocess_func",
@@ -193,7 +239,11 @@ function _regrid_block(block, z_src, model_z, source)
 end
 
 """
-    SpaceVaryingInput(sources::AbstractVector{<:DataSource}, space; preprocess_func = identity)
+    SpaceVaryingInput(
+        sources::AbstractVector{<:DataSource},
+        space;
+        preprocess_func = identity
+    )
     SpaceVaryingInput(source::DataSource, space; kwargs...)
 
 Return a `Field` on `space` holding in each column the static variable of the
@@ -205,7 +255,7 @@ applied to every value read.
 """
 function SpaceVaryingInputs.SpaceVaryingInput(
     sources::AbstractVector{<:DataSource},
-    space::ClimaCore.Spaces.AbstractSpace;
+    space::ColumnSpace;
     preprocess_func = identity,
 )
     field = ClimaCore.Fields.zeros(space)
@@ -235,7 +285,7 @@ end
 
 function SpaceVaryingInputs.SpaceVaryingInput(
     source::DataSource,
-    space::ClimaCore.Spaces.AbstractSpace;
+    space::ColumnSpace;
     kwargs...,
 )
     arr = ClimaCore.Fields.field2array(ClimaCore.Fields.zeros(space))

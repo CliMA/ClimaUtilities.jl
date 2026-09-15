@@ -24,6 +24,8 @@ import ..TimeVaryingInputs0DExt:
     _interior_stencil,
     _boundary_stencil
 
+include("column_spaces.jl")
+
 # The core requirement of the RaggedInterpolatingTimeVaryingInput is to
 # support linear interpolation across time of time series data of multiple
 # columns that may not necessarily share the same time axis. Furthermore, this
@@ -108,7 +110,7 @@ With `PeriodicCalendar()`, every segment repeats over its own length.
 function TimeVaryingInputs.TimeVaryingInput(
     segment_times::AbstractVector{<:AbstractVector},
     segment_vals::AbstractVector{<:AbstractMatrix},
-    space::ClimaCore.Spaces.AbstractSpace;
+    space::ColumnSpace;
     column_segment::AbstractVector{<:Integer} = eachindex(segment_times),
     method::AbstractInterpolationMethod = LinearInterpolation(),
     epoch = nothing,
@@ -230,18 +232,22 @@ This is a function barrier for `evaluate!`.
 """
 function _evaluate!(arr, itp::RaggedInterpolatingTimeVaryingInput, time)
     bc = extrapolation_bc(itp.method)
-    if bc isa Throw && !(time in itp)
-        offsets, times = Array(itp.offsets), Array(itp.times)
-        segment = findfirst(
-            s -> !(times[offsets[s]] <= time <= times[offsets[s + 1] - 1]),
-            1:(length(offsets) - 1),
-        )
-        error("Segment $segment of TimeVaryingInput does not cover time $time")
+    if bc isa Throw
+        if !(time in itp)
+            offsets, times = Array(itp.offsets), Array(itp.times)
+            segment = findfirst(
+                s -> !(times[offsets[s]] <= time <= times[offsets[s + 1] - 1]),
+                1:(length(offsets) - 1),
+            )
+            error(
+                "Segment $segment of TimeVaryingInput does not cover time $time",
+            )
+        end
+        # Throw() can't compile on GPU, so we use Flat() instead. Both should not
+        # lead to different results since there is no extrapolation given the
+        # check above
+        bc = Flat()
     end
-    # Throw() can't compile on GPU, so we use Flat() instead
-    # Both should not lead to different results since there is no extrapolation
-    # given the check above
-    bc = Flat()
     arr .= _point.(Ref(itp), CartesianIndices(arr), time, Ref(bc))
     return nothing
 end
