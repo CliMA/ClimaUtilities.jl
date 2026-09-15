@@ -5,6 +5,7 @@ using Dates
 import ClimaUtilities.Utils:
     searchsortednearest,
     linear_interpolation,
+    interpolate_columns!,
     isequispaced,
     wrap_time,
     beginningofperiod,
@@ -168,5 +169,68 @@ end
 
         sorted_files = sort_by_creation_time(files)
         @test sorted_files == [files[2], files[3], files[1]]
+    end
+end
+
+@testset "interpolate_columns!" begin
+    for FT in (Float32, Float64)
+        z_src = FT[0, 2500, 5000, 7500, 10_000]
+        data = stack([FT(c) .* z_src for c in 1:3])
+        for z_target in
+            (collect(FT, 0:1000:10_000), collect(FT, 10_000:-1000:0))
+            dest = similar(data, length(z_target), 3)
+            # Increasing and decreasing source levels
+            for (zs, ys) in
+                ((z_src, data), (reverse(z_src), reverse(data, dims = 1)))
+                interpolate_columns!(dest, z_target, zs, ys)
+                @test dest ≈ stack([FT(c) .* z_target for c in 1:3])
+            end
+            # Levels per column, in different directions
+            zs = stack([z_src, reverse(z_src), z_src .+ 1000])
+            interpolate_columns!(dest, z_target, zs, zs)
+            @test dest[:, 1] ≈ z_target
+            @test dest[:, 2] ≈ z_target
+            @test dest[:, 3] ≈ clamp.(z_target, FT(1000), FT(11_000))
+        end
+
+        # Nodes are exact and values are clamped outside the source levels
+        z_target = FT[-1, 0, 2500, 10_000, 20_000]
+        dest = similar(data, length(z_target), 3)
+        interpolate_columns!(dest, z_target, z_src, data)
+        @test dest[2:4, :] == data[[1, 2, 5], :]
+        @test dest[1, :] == data[1, :]
+        @test dest[5, :] == data[end, :]
+
+
+        @test_throws "not strictly monotonic" interpolate_columns!(
+            dest,
+            z_target,
+            FT[0, 1, 1, 2, 3],
+            data,
+        )
+        @test_throws "At least two" interpolate_columns!(
+            dest,
+            z_target,
+            FT[0],
+            data[1:1, :],
+        )
+        @test_throws "different numbers of levels" interpolate_columns!(
+            dest,
+            z_target,
+            z_src[1:4],
+            data,
+        )
+        @test_throws "different numbers of columns" interpolate_columns!(
+            dest,
+            z_target,
+            stack([z_src, z_src]),
+            data,
+        )
+        @test_throws "dest must have size" interpolate_columns!(
+            similar(data, 2, 3),
+            z_target,
+            z_src,
+            data,
+        )
     end
 end

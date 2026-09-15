@@ -51,6 +51,40 @@ function linear_interpolation(indep_vars, dep_vars, indep_value)
 end
 
 """
+    interpolate_columns!(dest, z_target, z_src, data)
+
+Interpolate each column of `data`, given at the levels `z_src`, onto the levels
+`z_target` and write the result to `dest`. `z_src` is a vector shared by every
+column or a matrix with one column per column of `data`, each strictly
+increasing or strictly decreasing. Outside the source levels the closest source
+value is used, as in `linear_interpolation`.
+"""
+function interpolate_columns!(dest, z_target, z_src, data)
+    size(z_src, 1) >= 2 || error("At least two source levels are needed")
+    size(z_src, 1) == size(data, 1) ||
+        error("z_src and data have different numbers of levels")
+    z_src isa AbstractVector ||
+        size(z_src, 2) == size(data, 2) ||
+        error("z_src and data have different numbers of columns")
+    size(dest) == (length(z_target), size(data, 2)) ||
+        error("dest must have size (length(z_target), size(data, 2))")
+    for c in axes(data, 2)
+        zs = z_src isa AbstractVector ? z_src : view(z_src, :, c)
+        ys = view(data, :, c)
+        if !issorted(zs; lt = <=)
+            issorted(zs; rev = true, lt = <=) || error(
+                "The source levels of column $c are not strictly monotonic",
+            )
+            zs, ys = reverse(zs), reverse(ys)
+        end
+        for (k, z) in enumerate(z_target)
+            dest[k, c] = linear_interpolation(zs, ys, z)
+        end
+    end
+    return dest
+end
+
+"""
     isequispaced(v; tol = eltype(v) <: AbstractFloat ? sqrt(eps(eltype(v))) : eps())
 
 Check if the vector `v` has uniform spacing between its elements within a given tolerance
