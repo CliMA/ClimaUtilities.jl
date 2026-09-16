@@ -143,6 +143,13 @@ using Test, Dates
         t7 = ITime(5, epoch = Dates.DateTime(2024, 10, 1))
         # Arithmetic operations between ITime with different epochs are disallowed
         @test_throws ErrorException t6 + t7
+
+        # Binary operations skip promotion when period and epoch are shared
+        @test ClimaUtilities.TimeManager._same_period_and_epoch(t5, t6)
+        @test !ClimaUtilities.TimeManager._same_period_and_epoch(t3, t4)
+        @test !ClimaUtilities.TimeManager._same_period_and_epoch(t1, t5)
+        @test t5 + t6 === ITime(15, Dates.Second(1), Dates.DateTime(2024, 1, 1))
+        @test t5 / t6 == 2
     end
 
     @testset "Float Conversion and Broadcasting" begin
