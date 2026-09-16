@@ -426,10 +426,26 @@ macro itime_unary_op(op)
     )
 end
 
+"""
+    _same_period_and_epoch(t1::ITime, t2::ITime)
+
+Return whether the types, period, and epoch of `t1` and `t2` are the same.
+"""
+@inline _same_period_and_epoch(
+    t1::T1,
+    t2::T2,
+) where {T1 <: ITime, T2 <: ITime} =
+    T1 === T2 && t1.period == t2.period && t1.epoch == t2.epoch
+
 macro itime_binary_op(op)
     return esc(
         quote
             function Base.$op(t1::T1, t2::T2) where {T1 <: ITime, T2 <: ITime}
+                _same_period_and_epoch(t1, t2) && return ITime(
+                    $op(t1.counter, t2.counter),
+                    t1.period,
+                    t1.epoch,
+                )
                 t1p, t2p = promote(t1, t2)
                 ITime($op(t1p.counter, t2p.counter), t1p.period, t1p.epoch)
             end
@@ -441,6 +457,8 @@ macro itime_binary_op_notype(op)
     return esc(
         quote
             function Base.$op(t1::T1, t2::T2) where {T1 <: ITime, T2 <: ITime}
+                _same_period_and_epoch(t1, t2) &&
+                    return $op(t1.counter, t2.counter)
                 t1p, t2p = promote(t1, t2)
                 $op(t1p.counter, t2p.counter)
             end

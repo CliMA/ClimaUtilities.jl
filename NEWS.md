@@ -3,6 +3,9 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+### Minor additions
+
+- Binary operations with `ITime`s do not promote unless needed
 
 v0.1.32
 ------
