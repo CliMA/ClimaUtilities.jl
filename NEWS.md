@@ -4,6 +4,11 @@ ClimaUtilities.jl Release Notes
 main
 ------
 
+v0.1.33
+------
+
+- Added ClimaCore v1 to the compat.
+
 v0.1.32
 ------
 ### Features
