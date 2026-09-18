@@ -12,8 +12,10 @@ main
 ### Bug fixes
 
 - Fix bug where evaluating a 0D `TimeVaryingInput` defined at `ITime`s at a
-  `Dates.DateTime` used the date of the first time as the epoch. Unless the
-  first time was the epoch, this failed with `Cannot find common epoch`.
+  `Dates.DateTime` used the date of the first time as the epoch.
+- Fix bug where `NearestNeighbor(PeriodicCalendar())` returned the first value
+  instead of the nearest one in the gap between the last and the first time,
+  when the times are `ITime`s whose step has a counter of one.
 
 v0.1.33
 ------

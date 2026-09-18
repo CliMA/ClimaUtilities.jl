@@ -313,7 +313,9 @@ end
 
 @inline function _gap_stencil(time, times, t_end, dt, ::NearestNeighbor)
     w = _zero_weight(time, times)
-    time >= t_end + 0.5dt && return (firstindex(times), firstindex(times), w)
+    # Scaling an ITime by a float rounds its counter, so use
+    # 2 * (time - t_end) >= dt instead of time >= t_end + 0.5dt
+    2 * (time - t_end) >= dt && return (firstindex(times), firstindex(times), w)
     return (lastindex(times), lastindex(times), w)
 end
 
