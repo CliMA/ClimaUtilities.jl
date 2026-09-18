@@ -318,11 +318,9 @@ end
 
                     check_vals(input, vals, space)
 
-                    # Test in
-                    if ft_to_input(FT(3.0)) isa eltype(times)
-                        @test FT(3.0) in input
-                        @test !(FT(-3.0) in input)
-                    end
+                    # Test in, with the time in each of the input types
+                    @test ft_to_input(FT(3.0)) in input
+                    @test !(ft_to_input(FT(-3.0)) in input)
 
                     for dest in dests
                         # Time outside of range

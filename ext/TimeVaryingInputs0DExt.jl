@@ -193,41 +193,28 @@ end
 Check if the given `time` is in the range of definition for `itp`.
 """
 function Base.in(time, itp::InterpolatingTimeVaryingInput0D)
+    time = _normalize_time(itp.range, time)
     return itp.range[1] <= time <= itp.range[2]
 end
 
 """
-    _normalize_time(itp::InterpolatingTimeVaryingInput0D, time)
+    _normalize_time(range::Tuple, time)
 
-Convert `time` to the time type used by `itp.times`.
+Convert `time` to the type of the times in `range`, the first and last times of
+a time varying input.
 """
-_normalize_time(
-    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:Number}},
-    time::Number,
-) = time
-_normalize_time(
-    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:Number}},
-    time::ITime,
-) = eltype(itp.range)(float(time))
-_normalize_time(
-    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:Number}},
-    time::DateTime,
-) = error(
+_normalize_time(range::Tuple{<:Number, <:Number}, time::Number) = time
+_normalize_time(range::Tuple{<:Number, <:Number}, time::ITime) =
+    eltype(range)(float(time))
+_normalize_time(range::Tuple{<:Number, <:Number}, time::DateTime) = error(
     "Cannot evaluate InterpolatingTimeVaryingInput0D with times as numbers and inputs as DateTime",
 )
-_normalize_time(
-    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:ITime}},
-    time::ITime,
-) = time
-_normalize_time(
-    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:ITime}},
-    time::Number,
-) = first(promote(ITime(time), itp.range[1]))
-function _normalize_time(
-    itp::InterpolatingTimeVaryingInput0D{<:AbstractArray{<:ITime}},
-    time::DateTime,
-)
-    epoch = date(itp.range[1])
+_normalize_time(range::Tuple{<:ITime, <:ITime}, time::ITime) =
+    first(promote(time, range[1]))
+_normalize_time(range::Tuple{<:ITime, <:ITime}, time::Number) =
+    first(promote(ITime(time), range[1]))
+function _normalize_time(range::Tuple{<:ITime, <:ITime}, time::DateTime)
+    epoch = date(range[1])
     elapsed = time - epoch
     return ITime(elapsed.value; period = typeof(elapsed)(1), epoch)
 end
@@ -354,7 +341,7 @@ function TimeVaryingInputs.evaluate!(
     args...;
     kwargs...,
 )
-    return _evaluate!(dest, itp, _normalize_time(itp, time))
+    return _evaluate!(dest, itp, _normalize_time(itp.range, time))
 end
 
 """
