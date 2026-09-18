@@ -6,6 +6,8 @@ main
 ### Minor additions
 
 - Binary operations with `ITime`s do not promote unless needed
+- `Base.in` for 0D `TimeVaryingInput`s tries to convert the times to match the
+  times used for the 0D `TimeVaryingInput`.
 
 v0.1.33
 ------
