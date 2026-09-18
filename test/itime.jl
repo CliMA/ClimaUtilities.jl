@@ -103,6 +103,10 @@ using Test, Dates
             t3,
             ITime(10, epoch = Dates.DateTime(2024, 1, 2)),
         )
+
+        # Promotion unifies the type of the counter
+        t5, t6 = promote(ITime(Int32(1)), ITime(1))
+        @test typeof(t5.counter) == typeof(t6.counter) == Int64
     end
 
     @testset "Arithmetic Operations" begin
