@@ -17,7 +17,7 @@ import ClimaUtilities.TimeVaryingInputs:
     Flat,
     PeriodicCalendar,
     extrapolation_bc
-import ClimaUtilities.TimeManager: ITime, date
+import ClimaUtilities.TimeManager: ITime
 
 """
     InterpolatingTimeVaryingInput0D
@@ -214,7 +214,9 @@ _normalize_time(range::Tuple{<:ITime, <:ITime}, time::ITime) =
 _normalize_time(range::Tuple{<:ITime, <:ITime}, time::Number) =
     first(promote(ITime(time), range[1]))
 function _normalize_time(range::Tuple{<:ITime, <:ITime}, time::DateTime)
-    epoch = date(range[1])
+    epoch = range[1].epoch
+    isnothing(epoch) &&
+        error("Cannot evaluate at a DateTime when the times have no epoch")
     elapsed = time - epoch
     return ITime(elapsed.value; period = typeof(elapsed)(1), epoch)
 end

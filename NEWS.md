@@ -9,6 +9,12 @@ main
 - `Base.in` for 0D `TimeVaryingInput`s tries to convert the times to match the
   times used for the 0D `TimeVaryingInput`.
 
+### Bug fixes
+
+- Fix bug where evaluating a 0D `TimeVaryingInput` defined at `ITime`s at a
+  `Dates.DateTime` used the date of the first time as the epoch. Unless the
+  first time was the epoch, this failed with `Cannot find common epoch`.
+
 v0.1.33
 ------
 

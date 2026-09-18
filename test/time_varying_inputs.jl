@@ -140,6 +140,15 @@ end
         TimeVaryingInputs.PeriodicCalendar(),
     )
 
+    # Test evaluating at a date when the first time is not the epoch
+    out = [0.0]
+    nonzero_first = TimeVaryingInputs.TimeVaryingInput(
+        [ITime(t; period = Dates.Hour(1), epoch = DateTime(2010)) for t in 1:2],
+        ys,
+    )
+    TimeVaryingInputs.evaluate!(out, nonzero_first, DateTime(2010, 1, 1, 2))
+    @test out[1] == 2.0
+
     for FT in (Float32, Float64)
         # Prepare spaces/fields
         domain = Domains.IntervalDomain(
