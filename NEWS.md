@@ -6,6 +6,17 @@ main
 ### Minor additions
 
 - Binary operations with `ITime`s do not promote unless needed
+- `Base.in` for 0D `TimeVaryingInput`s tries to convert the times to match the
+  times used for the 0D `TimeVaryingInput`.
+
+### Bug fixes
+
+- Fix bug where evaluating a 0D `TimeVaryingInput` defined at `ITime`s at a
+  `Dates.DateTime` used the date of the first time as the epoch.
+- Fix bug where `NearestNeighbor(PeriodicCalendar())` returned the first value
+  instead of the nearest one in the gap between the last and the first time for
+  `ITime`s due to rounding
+- Fix bug where `promote` returned `ITime`s with different counter types.
 
 v0.1.33
 ------

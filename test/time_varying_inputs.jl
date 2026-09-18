@@ -140,6 +140,29 @@ end
         TimeVaryingInputs.PeriodicCalendar(),
     )
 
+    # Test evaluating at a date when the first time is not the epoch
+    out = [0.0]
+    nonzero_first = TimeVaryingInputs.TimeVaryingInput(
+        [ITime(t; period = Dates.Hour(1), epoch = DateTime(2010)) for t in 1:2],
+        ys,
+    )
+    TimeVaryingInputs.evaluate!(out, nonzero_first, DateTime(2010, 1, 1, 2))
+    @test out[1] == 2.0
+
+    # Test NearestNeighbor with PeriodicCalendar and check
+    # 2 * (time - t_end) >= dt is used instead of time >= t_end + 0.5dt
+    hourly = TimeVaryingInputs.TimeVaryingInput(
+        [ITime(t; period = Dates.Hour(1)) for t in 0:1],
+        ys;
+        method = TimeVaryingInputs.NearestNeighbor(
+            TimeVaryingInputs.PeriodicCalendar(),
+        ),
+    )
+    # A quarter of the way into the gap, the last time is the nearest one
+    quarter_into_gap = ITime(5; period = Dates.Minute(15))
+    TimeVaryingInputs.evaluate!(out, hourly, quarter_into_gap)
+    @test out[1] == 2.0
+
     for FT in (Float32, Float64)
         # Prepare spaces/fields
         domain = Domains.IntervalDomain(
@@ -318,11 +341,9 @@ end
 
                     check_vals(input, vals, space)
 
-                    # Test in
-                    if ft_to_input(FT(3.0)) isa eltype(times)
-                        @test FT(3.0) in input
-                        @test !(FT(-3.0) in input)
-                    end
+                    # Test in, with the time in each of the input types
+                    @test ft_to_input(FT(3.0)) in input
+                    @test !(ft_to_input(FT(-3.0)) in input)
 
                     for dest in dests
                         # Time outside of range
