@@ -345,7 +345,7 @@ function TimeVaryingInputs.evaluate!(
             # previous period. For date_post, we take the min, and take it to the current period
             date_pre = _move_date_to_period(
                 max_interpolable_range,
-                target_period + period,
+                target_period - period,
                 period,
             )
             date_post = _move_date_to_period(
