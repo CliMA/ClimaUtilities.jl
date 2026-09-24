@@ -27,6 +27,11 @@ main
 - Fix bug where `LinearPeriodFillingInterpolation` extrapolated instead of
   interpolated for dates before the interpolable region of a period.
 
+### Bug fixes
+
+- Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` errored at the
+  last available date.
+
 v0.1.33
 ------
 
