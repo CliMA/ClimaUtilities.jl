@@ -176,5 +176,26 @@ include("TestTools.jl")
 
         # Target time falling at the right of the interpolable region for one
         test_date(DateTime(1987, 12, 12))
+
+        # With data that is not linear in time, check that a date before the interpolable
+        # region is interpolated between the closest dates in the region
+        squared_input = TimeVaryingInputs.TimeVaryingInput(
+            data_path,
+            "data",
+            target_space;
+            method,
+            start_date,
+            regridder_type,
+            file_reader_kwargs = (; preprocess_func = x -> x^2),
+        )
+        target_date = DateTime(1987, 1, 1)
+        date_pre, date_post = DateTime(1986, 12, 11), DateTime(1987, 1, 10)
+        TimeVaryingInputs.evaluate!(dest, squared_input, date_pre)
+        value_pre = copy(dest)
+        TimeVaryingInputs.evaluate!(dest, squared_input, date_post)
+        w = (target_date - date_pre) / (date_post - date_pre)
+        expected = (1 - w) .* value_pre .+ w .* dest
+        TimeVaryingInputs.evaluate!(dest, squared_input, target_date)
+        @test parent(dest) ≈ parent(expected)
     end
 end

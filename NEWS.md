@@ -13,6 +13,8 @@ main
   last available date.
 - Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` with
   `PeriodicCalendar` returned the last snapshot for dates within the data.
+- Fix bug where `LinearPeriodFillingInterpolation` extrapolated instead of
+  interpolated for dates before the interpolable region of a period.
 
 v0.1.33
 ------

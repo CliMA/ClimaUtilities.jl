@@ -292,12 +292,9 @@ case: we interpolate 05/01/1985 and 11/02/1985 to get 08/01/1985, and 07/01/1995
 Second, the other cases, when the target date does not have two boundary dates defined in
 1995. An example is 04/01/1986 because 07/01/1995 is the earliest date available on that
 year. We have to be careful with this interpolation because we do not want to mix December
-1985 with January 1995. In this case, we perform another interpolation to obtain a date in
-December 1994 and reduce to the first case using this date as second half of the
-interpolation bracket. To find what date to interpolate to, we walk the available dates
-backwards in time at find the first date that we can interpolate because it falls into the
-first case. In this example, it is 17/12/1994 (which we can obtain because we have data for
-17/12/1985 and we can interpolate data on 17/12/1995).
+1985 with January 1995. In this case, we interpolate between the closest dates before and
+after the target date that fall into the first case. In this example, they are 17/12/1985
+and 07/01/1986, since the first case covers the dates from 07/01 to 17/12.
 """
 struct LinearPeriodFillingInterpolation{
     BC <: AbstractInterpolationBoundaryMethod,
