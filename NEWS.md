@@ -11,6 +11,8 @@ main
 
 - Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` errored at the
   last available date.
+- Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` with
+  `PeriodicCalendar` returned the last snapshot for dates within the data.
 
 v0.1.33
 ------
