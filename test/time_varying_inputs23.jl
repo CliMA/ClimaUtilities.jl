@@ -324,6 +324,13 @@ include("TestTools.jl")
                     end
                 end
 
+                # On last node
+                target_date = available_dates[end]
+                TimeVaryingInputs.evaluate!(dest, input_nearest, target_date)
+                expected =
+                    DataHandling.regridded_snapshot(data_handler, target_date)
+                @test isequal(Array(parent(dest)), Array(parent(expected)))
+
                 # Flat left
                 target_time = available_times[begin] - 1
                 target_date = available_dates[begin] - Second(1)

@@ -18,6 +18,11 @@ main
   `ITime`s due to rounding
 - Fix bug where `promote` returned `ITime`s with different counter types.
 
+### Bug fixes
+
+- Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` errored at the
+  last available date.
+
 v0.1.33
 ------
 
