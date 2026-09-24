@@ -495,6 +495,20 @@ include("TestTools.jl")
                     )
                 end
 
+                # Nearest periodic calendar, in range
+                target_date = available_dates[10] + Second(1)
+                expected = DataHandling.regridded_snapshot(
+                    data_handler,
+                    available_dates[10],
+                )
+                for input in (
+                    input_nearest_periodic_calendar,
+                    input_nearest_periodic_calendar_date,
+                )
+                    TimeVaryingInputs.evaluate!(dest, input, target_date)
+                    @test isequal(Array(parent(dest)), Array(parent(expected)))
+                end
+
                 # Now testing LinearInterpolation
                 input_linear = TimeVaryingInputs.TimeVaryingInput(data_handler)
                 input_linear_flat = TimeVaryingInputs.TimeVaryingInput(

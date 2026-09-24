@@ -353,15 +353,9 @@ function TimeVaryingInputs.evaluate!(
         # Now time is between t_init and t_end + dt. We are doing nearest neighbor
         # interpolation here, and when time >= t_end + dt_e we need to use t_init instead of
         # t_end as neighbor.
-
-        # TODO: It would be nice to handle this edge case directly instead of copying the
-        # code
-        if (time - t_end) <= dt_e
-            regridded_snapshot!(dest, itp.data_handler, t_end)
-        else
-            regridded_snapshot!(dest, itp.data_handler, t_init)
+        if time > t_end
+            time = (time - t_end) <= dt_e ? t_end : t_init
         end
-        return nothing
     end
     date0 = previous_date(itp.data_handler, time)
     # The last available date has no next date
