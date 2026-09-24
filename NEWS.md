@@ -7,6 +7,11 @@ main
 
 - Binary operations with `ITime`s do not promote unless needed
 
+### Bug fixes
+
+- Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` errored at the
+  last available date.
+
 v0.1.33
 ------
 

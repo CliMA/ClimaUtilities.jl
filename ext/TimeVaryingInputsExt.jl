@@ -363,8 +363,9 @@ function TimeVaryingInputs.evaluate!(
         end
         return nothing
     end
-    date0, date1 =
-        previous_date(itp.data_handler, time), next_date(itp.data_handler, time)
+    date0 = previous_date(itp.data_handler, time)
+    # The last available date has no next date
+    date1 = date0 == time ? date0 : next_date(itp.data_handler, time)
 
     # The closest regridded_snapshot could be either the previous or the next one
     if (time - date0) <= (date1 - time)
