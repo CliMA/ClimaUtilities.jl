@@ -192,14 +192,19 @@ function _interpolable_range(
     return largest_first_date, smallest_last_date
 end
 
-function TimeVaryingInputs.evaluate!(
+function _evaluate!(
     dest,
     itp::InterpolatingTimeVaryingInput23D,
     time,
     method::LinearPeriodFillingInterpolation,
-    args...;
-    kwargs...,
 )
+    # Outside of the available dates, this is the same as LinearInterpolation
+    if !(time in itp)
+        linear = LinearInterpolation(extrapolation_bc(method))
+        _evaluate!(dest, itp, time, linear)
+        return nothing
+    end
+
     # E.g., Year(1)
     period = method.period
 
@@ -217,12 +222,12 @@ function TimeVaryingInputs.evaluate!(
     # LinearInterpolation()
     if _extract_period(target_date, period) in available_periods
         # Here we are just interpolating within some available data, so it is easy
-        TimeVaryingInputs.evaluate!(dest, itp, time, LinearInterpolation())
+        _evaluate!(dest, itp, time, LinearInterpolation())
         return nothing
     end
 
     # We can assume that time is defined in the range of available_times because we handle
-    # extrapolation boundary conditions elsewhere. For this reason, we will always have a
+    # extrapolation boundary conditions above. For this reason, we will always have a
     # left and right periods
 
     # We are not in one of the available_periods, we have two cases: either we are in the
@@ -234,10 +239,10 @@ function TimeVaryingInputs.evaluate!(
     # have to identify two dates in the interpolable region that bound the desired date and
     # interpolate across them.
 
-    # itp.preallocated_regridded_fields[1:2] is used internally by functions called by this
-    # function, so we should not used them here. Also, we will use dest as a working area to
-    # avoid extra allocations
-    tmp_field1, tmp_field2 = itp.preallocated_regridded_fields[(end - 1):end]
+    # tmp_field1 is used by the calls to this function in the second branch below, so that
+    # branch uses tmp_field2. Also, we will use dest as a working area to avoid extra
+    # allocations
+    tmp_field1, tmp_field2 = itp.preallocated_regridded_fields
 
     # E.g, Date(1985, 1, 1), Date(1995, 1, 1)
     period_left, period_right =
@@ -286,16 +291,9 @@ function TimeVaryingInputs.evaluate!(
         period_offset = period_right - period_left
         coeff = offset_periods_left / period_offset
 
-        TimeVaryingInputs.evaluate!(dest, itp, date_pre, LinearInterpolation())
-        dest .*= (1 - coeff)
-        TimeVaryingInputs.evaluate!(
-            tmp_field1,
-            itp,
-            date_post,
-            LinearInterpolation(),
-        )
-        tmp_field1 .*= coeff
-        dest .+= tmp_field1
+        _evaluate!(dest, itp, date_pre, LinearInterpolation())
+        _evaluate!(tmp_field1, itp, date_post, LinearInterpolation())
+        dest .= (1 - coeff) .* dest .+ coeff .* tmp_field1
         return nothing
     else
         # In this branch, we are not in the interpolable region. This can happen because the
@@ -358,43 +356,11 @@ function TimeVaryingInputs.evaluate!(
         end
 
         # y = y0 * (1 - coeff) + coeff * y1
-        TimeVaryingInputs.evaluate!(dest, itp, date_pre, method)
+        _evaluate!(dest, itp, date_pre, method)
+        _evaluate!(tmp_field2, itp, date_post, method)
         coeff = (time - date_pre) / (date_post - date_pre)
-        dest .*= (1 - coeff)
-        TimeVaryingInputs.evaluate!(tmp_field2, itp, date_post, method)
-        tmp_field2 .*= coeff
-        dest .+= tmp_field2
+        dest .= (1 - coeff) .* dest .+ coeff .* tmp_field2
         return nothing
     end
-    return nothing
-end
-
-function TimeVaryingInputs.evaluate!(
-    dest,
-    itp::InterpolatingTimeVaryingInput23D,
-    time::Number,
-    method::LinearPeriodFillingInterpolation,
-    args...;
-    kwargs...,
-)
-    TimeVaryingInputs.evaluate!(
-        dest,
-        itp,
-        Dates.Millisecond(round(1_000 * time)) + itp.data_handler.start_date,
-        args...,
-        kwargs...,
-    )
-    return nothing
-end
-
-function TimeVaryingInputs.evaluate!(
-    dest,
-    itp::InterpolatingTimeVaryingInput23D,
-    time::ITime,
-    method::LinearPeriodFillingInterpolation,
-    args...;
-    kwargs...,
-)
-    TimeVaryingInputs.evaluate!(dest, itp, date(time), args..., kwargs...)
     return nothing
 end

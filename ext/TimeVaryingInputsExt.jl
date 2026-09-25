@@ -2,22 +2,13 @@ module TimeVaryingInputsExt
 
 import Dates
 
-import ClimaCore
-import ClimaCore: ClimaComms
-import ClimaCore: DeviceSideContext
-import ClimaCore.Fields: Adapt
-
 import ClimaUtilities.Utils:
-    searchsortednearest,
-    linear_interpolation,
     isequispaced,
     wrap_time,
     bounding_dates,
     beginningofperiod,
     endofperiod,
-    period_to_seconds_float,
-    unique_periods,
-    is_pkg_loaded
+    unique_periods
 
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:
@@ -33,14 +24,7 @@ import ClimaUtilities.TimeVaryingInputs: extrapolation_bc
 
 import ClimaUtilities.DataHandling
 import ClimaUtilities.DataHandling:
-    DataHandler,
-    regridded_snapshot!,
-    available_times,
-    available_dates,
-    date_to_time,
-    time_to_date,
-    previous_date,
-    next_date
+    regridded_snapshot, available_dates, time_to_date, previous_date, next_date
 
 
 import ClimaUtilities.TimeManager: ITime, date
@@ -87,8 +71,6 @@ GPU compatibility. It is responsibility of the user-facing constructor TimeVaryi
 struct InterpolatingTimeVaryingInput23D{
     DH,
     M <: AbstractInterpolationMethod,
-    CC <: ClimaComms.AbstractCommsContext,
-    R <: Tuple,
     RR,
 } <: AbstractTimeVaryingInput
     """Object that has all the information on how to deal with files, data, and so on.
@@ -98,14 +80,7 @@ struct InterpolatingTimeVaryingInput23D{
     """Interpolation method"""
     method::M
 
-    """ClimaComms context"""
-    context::CC
-
-    """Range of times over which the interpolator is defined. range is always defined on the
-    CPU. Used by the in() function."""
-    range::R
-
-    """Preallocated memory for storing regridded fields"""
+    """Preallocated memory used by LinearPeriodFillingInterpolation"""
     preallocated_regridded_fields::RR
 end
 
@@ -128,25 +103,27 @@ end
 function TimeVaryingInputs.TimeVaryingInput(
     data_handler;
     method = LinearInterpolation(),
-    context = ClimaComms.context(),
+    context = nothing,
 )
     available_times = DataHandling.available_times(data_handler)
     isempty(available_times) &&
         error("DataHandler does not contain temporal data")
     issorted(available_times) || error("Can only interpolate with sorted times")
-    range = (available_times[begin], available_times[end])
+    if extrapolation_bc(method) isa PeriodicCalendar{Nothing} &&
+       !isequispaced(available_times)
+        error(
+            "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
+        )
+    end
 
-    # TODO: Generalize the number of _regridded_fields depending on the interpolation
-    # stencil. At the moment, we use four for LinearPeriodFilling
-    _num_fields = method isa LinearPeriodFillingInterpolation ? 4 : 2
+    # LinearPeriodFillingInterpolation needs one field for each level of nesting
+    _num_fields = method isa LinearPeriodFillingInterpolation ? 2 : 0
     preallocated_regridded_fields =
         ntuple(_ -> zeros(data_handler.target_space), _num_fields)
 
     return InterpolatingTimeVaryingInput23D(
         data_handler,
         method,
-        context,
-        range,
         preallocated_regridded_fields,
     )
 end
@@ -189,14 +166,7 @@ function TimeVaryingInputs.TimeVaryingInput(
         file_reader_kwargs,
         compose_function,
     )
-    if extrapolation_bc(method) isa PeriodicCalendar{Nothing} &&
-       !isequispaced(DataHandling.available_times(data_handler))
-        error(
-            "PeriodicCalendar() boundary condition cannot be used because data is defined at non uniform intervals of time",
-        )
-    end
-    context = ClimaComms.context(target_space)
-    return TimeVaryingInputs.TimeVaryingInput(data_handler; method, context)
+    return TimeVaryingInputs.TimeVaryingInput(data_handler; method)
 end
 
 function TimeVaryingInputs.evaluate!(
@@ -206,52 +176,19 @@ function TimeVaryingInputs.evaluate!(
     args...;
     kwargs...,
 )
-    if extrapolation_bc(itp.method) isa Throw
-        time in itp || error("TimeVaryingInput does not cover time $time")
-    end
-    if extrapolation_bc(itp.method) isa Flat
-        date_init, date_end = itp.data_handler.available_dates[begin],
-        itp.data_handler.available_dates[end]
-        if time >= date_end
-            regridded_snapshot!(dest, itp.data_handler, date_end)
-        elseif time <= date_init
-            regridded_snapshot!(dest, itp.data_handler, date_init)
-        else
-            TimeVaryingInputs.evaluate!(dest, itp, time, itp.method)
-        end
-    else
-        TimeVaryingInputs.evaluate!(dest, itp, time, itp.method)
-    end
+    _evaluate!(dest, itp, _normalize_time(itp, time), itp.method)
     return nothing
 end
 
-function TimeVaryingInputs.evaluate!(
-    dest,
-    itp::InterpolatingTimeVaryingInput23D,
-    time::Number,
-    args...;
-    kwargs...,
-)
-    TimeVaryingInputs.evaluate!(
-        dest,
-        itp,
-        Dates.Millisecond(round(1_000 * time)) + itp.data_handler.start_date,
-        args...,
-        kwargs...,
-    )
-    return nothing
-end
+"""
+    _normalize_time(itp::InterpolatingTimeVaryingInput23D, time)
 
-function TimeVaryingInputs.evaluate!(
-    dest,
-    itp::InterpolatingTimeVaryingInput23D,
-    time::ITime,
-    args...;
-    kwargs...,
-)
-    TimeVaryingInputs.evaluate!(dest, itp, date(time), args..., kwargs...)
-    return nothing
-end
+Convert `time` to a date. A number is the number of seconds since the start date.
+"""
+_normalize_time(itp, time) = time
+_normalize_time(itp, time::Number) =
+    Dates.Millisecond(round(1_000 * time)) + itp.data_handler.start_date
+_normalize_time(itp, time::ITime) = date(time)
 
 function _time_range_dt_dt_e(itp::InterpolatingTimeVaryingInput23D)
     return _time_range_dt_dt_e(itp, extrapolation_bc(itp.method))
@@ -261,7 +198,9 @@ function _time_range_dt_dt_e(
     itp::InterpolatingTimeVaryingInput23D,
     extrapolation_bc::PeriodicCalendar{Nothing},
 )
-    dt = DataHandling.dt(itp.data_handler)
+    # DataHandling.dt would check again that the times are equispaced, which is slow
+    times = DataHandling.available_times(itp.data_handler)
+    dt = times[begin + 1] - times[begin]
     return itp.data_handler.available_dates[begin],
     itp.data_handler.available_dates[end],
     Dates.Millisecond(round(1_000 * dt)),
@@ -281,8 +220,6 @@ function _time_range_dt_dt_e(
     # dt is 15/01/23 + period - 14/12/23
     # if period = 1 Year, dt_e = 17 days (in seconds)
 
-    t_init, t_end = date_to_time(itp.data_handler, date_init),
-    date_to_time(itp.data_handler, date_end)
     # We have to add 1 Second because endofperiod(date_end, period) returns the very last
     # second before the next period
     dt_e = (endofperiod(date_end, period) + Dates.Second(1) - date_end)
@@ -338,90 +275,90 @@ function _interpolation_times_periodic_calendar(
     return time, t_init, t_end, dt, dt_e
 end
 
-function TimeVaryingInputs.evaluate!(
-    dest,
-    itp::InterpolatingTimeVaryingInput23D,
-    time,
-    ::NearestNeighbor,
-    args...;
-    kwargs...,
-)
-    if extrapolation_bc(itp.method) isa PeriodicCalendar
-        time, t_init, t_end, _, dt_e =
-            _interpolation_times_periodic_calendar(time, itp)
+# All stencil functions return (date1, date2, w), so that the interpolated value is
+# (1 - w) * y1 + w * y2, where y1 and y2 are the snapshots at date1 and date2
 
-        # Now time is between t_init and t_end + dt. We are doing nearest neighbor
-        # interpolation here, and when time >= t_end + dt_e we need to use t_init instead of
-        # t_end as neighbor.
-        if time > t_end
-            time = (time - t_end) <= dt_e ? t_end : t_init
-        end
-    end
-    date0 = previous_date(itp.data_handler, time)
-    # The last available date has no next date
-    date1 = date0 == time ? date0 : next_date(itp.data_handler, time)
+"""
+    _evaluate!(dest, itp::InterpolatingTimeVaryingInput23D, time, method)
 
-    # The closest regridded_snapshot could be either the previous or the next one
-    if (time - date0) <= (date1 - time)
-        regridded_snapshot!(dest, itp.data_handler, date0)
+Write to `dest` the value of `itp` at `time` interpolated with `method`.
+"""
+function _evaluate!(dest, itp, time, method)
+    date1, date2, w = _stencil(itp, time, method, extrapolation_bc(method))
+    y1 = regridded_snapshot(itp.data_handler, date1)
+    if date1 == date2
+        dest .= y1
     else
-        regridded_snapshot!(dest, itp.data_handler, date1)
+        y2 = regridded_snapshot(itp.data_handler, date2)
+        dest .= (1 - w) .* y1 .+ w .* y2
     end
     return nothing
 end
 
-function TimeVaryingInputs.evaluate!(
-    dest,
-    itp::InterpolatingTimeVaryingInput23D,
-    time,
-    ::LinearInterpolation,
-    args...;
-    kwargs...,
-)
-    # Linear interpolation is:
-    # y = y0 + (y1 - y0) * (time - t0) / (t1 - t0)
-    #
-    # Define coeff = (time - t0) / (t1 - t0)
-    #
-    # y = (1 - coeff) * y0 + coeff * y1
+"""
+    _stencil(itp::InterpolatingTimeVaryingInput23D, time, method, extrapolation_bc)
 
-    field_t0, field_t1 = itp.preallocated_regridded_fields[begin:(begin + 1)]
+Return the stencil for `time` given `method` and its `extrapolation_bc`.
+"""
+function _stencil(itp, time, method, bc)
+    time in itp && return _interior_stencil(itp, time, method)
+    return _boundary_stencil(itp, time, bc)
+end
 
-    if extrapolation_bc(itp.method) isa PeriodicCalendar
-        time, date_init, date_end, dt, _ =
-            _interpolation_times_periodic_calendar(time, itp)
+function _stencil(itp, time, method, ::PeriodicCalendar)
+    time, t_init, t_end, dt, dt_e =
+        _interpolation_times_periodic_calendar(time, itp)
+    time <= t_end && return _interior_stencil(itp, time, method)
+    return _gap_stencil(time, t_init, t_end, dt, dt_e, method)
+end
 
-        # We have to handle separately the edge case where the desired time is past t_end.
-        # In this case, we know that t_end <= time <= t_end + dt and we have to do linear
-        # interpolation between t_init and t_end. In this case, y0 = regridded_field(t_end),
-        # y1 = regridded_field(t_init), t1 - t0 = dt, and time - t0 = time - t_end
+"""
+    _interior_stencil(itp::InterpolatingTimeVaryingInput23D, time, method)
 
-        # TODO: It would be nice to handle this edge case directly instead of copying the
-        # code
-        if time > date_end
-            regridded_snapshot!(field_t0, itp.data_handler, date_end)
-            regridded_snapshot!(field_t1, itp.data_handler, date_init)
-            coeff = (time - date_end) / dt
-            dest .= (1 - coeff) .* field_t0 .+ coeff .* field_t1
-            return nothing
-        end
-    end
+Return the stencil for `time` within the range of the available dates.
+"""
+function _interior_stencil(itp, time, ::LinearInterpolation)
+    date1 = previous_date(itp.data_handler, time)
+    date1 == time && return (date1, date1, 0.0)
+    date2 = next_date(itp.data_handler, time)
+    return (date1, date2, (time - date1) / (date2 - date1))
+end
 
-    # We have to consider the edge case where time is precisely the last available_time.
-    # This is relevant also because it can be triggered by LinearPeriodFilling
-    if insorted(time, DataHandling.available_dates(itp.data_handler))
-        regridded_snapshot!(dest, itp.data_handler, time)
-    else
-        date0, date1 = previous_date(itp.data_handler, time),
-        next_date(itp.data_handler, time)
-        coeff = (time - date0) / (date1 - date0)
+function _interior_stencil(itp, time, ::NearestNeighbor)
+    date1 = previous_date(itp.data_handler, time)
+    date1 == time && return (date1, date1, 0.0)
+    date2 = next_date(itp.data_handler, time)
+    nearest = time - date1 <= date2 - time ? date1 : date2
+    return (nearest, nearest, 0.0)
+end
 
-        regridded_snapshot!(field_t0, itp.data_handler, date0)
-        regridded_snapshot!(field_t1, itp.data_handler, date1)
+"""
+    _boundary_stencil(itp::InterpolatingTimeVaryingInput23D, time, extrapolation_bc)
 
-        dest .= (1 - coeff) .* field_t0 .+ coeff .* field_t1
-    end
-    return nothing
+Return the stencil for `time` outside the range of the available dates.
+"""
+function _boundary_stencil(itp, time, ::Throw)
+    return error("TimeVaryingInput does not cover time $time")
+end
+
+function _boundary_stencil(itp, time, ::Flat)
+    dates = available_dates(itp.data_handler)
+    boundary_date = clamp(time, dates[begin], dates[end])
+    return (boundary_date, boundary_date, 0.0)
+end
+
+"""
+    _gap_stencil(time, t_init, t_end, dt, dt_e, method)
+
+Return the stencil for `time` between `t_end` and `t_end + dt`, which is `t_init` repeated.
+"""
+function _gap_stencil(time, t_init, t_end, dt, dt_e, ::LinearInterpolation)
+    return (t_end, t_init, (time - t_end) / dt)
+end
+
+function _gap_stencil(time, t_init, t_end, dt, dt_e, ::NearestNeighbor)
+    nearest = time - t_end <= dt_e ? t_end : t_init
+    return (nearest, nearest, 0.0)
 end
 
 include("time_varying_inputs_linearperiodfilling.jl")
