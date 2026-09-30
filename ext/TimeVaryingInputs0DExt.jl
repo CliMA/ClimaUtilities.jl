@@ -158,17 +158,13 @@ function _validated_times(times, method)
         )
     end
     if eltype(times) <: ITime
-        if !all(
-            t ->
-                t.period == first(times).period &&
-                t.epoch == first(times).epoch,
-            times,
-        )
+        t1 = first(times)
+        if !all(t -> t.period == t1.period && t.epoch == t1.epoch, times)
             # Promote if times do not all have same epoch and period to avoid
             # promoting during the simulation
             times = [promote(times...)...]
         elseif !(eltype(times) <: ITime{<:Any, <:Any, Nothing})
-            all(d -> d.epoch == first(times).epoch, times) || error(
+            all(d -> d.epoch == t1.epoch, times) || error(
                 "TimeVaryingInputs cannot be used when the data is defined at `ITime`(s) with differing epochs",
             )
         end
@@ -207,7 +203,7 @@ _normalize_time(range::Tuple{<:Number, <:Number}, time::Number) = time
 _normalize_time(range::Tuple{<:Number, <:Number}, time::ITime) =
     eltype(range)(float(time))
 _normalize_time(range::Tuple{<:Number, <:Number}, time::DateTime) = error(
-    "Cannot evaluate InterpolatingTimeVaryingInput0D with times as numbers and inputs as DateTime",
+    "Cannot evaluate a TimeVaryingInput with times as numbers and inputs as DateTime",
 )
 _normalize_time(range::Tuple{<:ITime, <:ITime}, time::ITime) =
     first(promote(time, range[1]))
