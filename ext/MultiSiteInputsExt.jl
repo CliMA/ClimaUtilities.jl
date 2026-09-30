@@ -7,6 +7,7 @@ import ClimaCore
 
 import ClimaUtilities.Utils: interpolate_columns!
 import ClimaUtilities.FileReaders: DataSource
+import ClimaUtilities.SpaceVaryingInputs
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:
     AbstractInterpolationMethod, LinearInterpolation
@@ -253,6 +254,59 @@ function _regrid_block(block, z_src, model_z, source)
     )
     out = Matrix{eltype(model_z)}(undef, length(model_z), size(block, 2))
     return interpolate_columns!(out, model_z, z_src, block)
+end
+
+"""
+    SpaceVaryingInput(
+        sources::AbstractVector{<:DataSource},
+        space;
+        preprocess_func = identity
+    )
+    SpaceVaryingInput(source::DataSource, space; kwargs...)
+
+Return a `Field` on `space` holding in each column the static variable of the
+corresponding source, one per column, or of `source` in every column. Each
+source is given on the levels of a vertical coordinate in metres, which are
+interpolated linearly onto the levels of `space` and held constant beyond them,
+or is a single value for a space with a single level. A variable with a time
+dimension of a single date is read as static. `preprocess_func` is applied to
+every value read.
+"""
+function SpaceVaryingInputs.SpaceVaryingInput(
+    sources::AbstractVector{<:DataSource},
+    space::ColumnSpace;
+    preprocess_func = identity,
+)
+    field = ClimaCore.Fields.zeros(space)
+    arr = ClimaCore.Fields.field2array(field)
+    num_columns = ndims(arr) == 1 ? length(arr) : size(arr, 2)
+    length(sources) == num_columns || error(
+        "$(length(sources)) sources for a space with $num_columns columns",
+    )
+    model_z = _model_levels(space)
+    unique_sources = unique(sources)
+    columns = map(unique_sources) do source
+        length(source.available_dates) <= 1 || error(
+            "$(source.varname) in $(source.file_paths) has a time dimension with $(length(source.available_dates)) dates; use TimeVaryingInput for time-varying data",
+        )
+        (; block, z_src) = _read_block(source, preprocess_func)
+        block = _regrid_block(block, z_src, model_z, source)
+        vec(block)
+    end
+    copyto!(arr, stack(columns[indexin(sources, unique_sources)]))
+    return field
+end
+
+function SpaceVaryingInputs.SpaceVaryingInput(
+    source::DataSource,
+    space::ColumnSpace;
+    kwargs...,
+)
+    num_columns =
+        space isa ClimaCore.Spaces.PointSpace ? 1 :
+        ClimaCore.Spaces.ncolumns(space)
+    sources = fill(source, num_columns)
+    return SpaceVaryingInputs.SpaceVaryingInput(sources, space; kwargs...)
 end
 
 end
