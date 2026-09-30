@@ -182,6 +182,12 @@ end
         defVar(nc, "date", times, ("date",))
         @test read_dates_func(nc) == DateTime.(string.(times), "yyyymmdd")
     end
+    NCDataset(joinpath(data_dir, "test_valid_time_1.nc"), "c") do nc
+        defDim(nc, "valid_time", 2)
+        times = [DateTime(2022), DateTime(2023)]
+        defVar(nc, "valid_time", times, ("valid_time",))
+        @test read_dates_func(nc) == times
+    end
 
     NCDataset(joinpath(@__DIR__, "test_data", "reinterpret_time_dim.nc")) do nc
         @test read_dates_func(nc) == Dates.DateTime.(
