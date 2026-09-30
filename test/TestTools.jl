@@ -198,3 +198,40 @@ function write_column_file(
     end
     return path
 end
+
+"""
+    make_column_spaces(FT; nlevels, z_max)
+
+Spaces with four columns and with one column, `nlevels` levels up to `z_max`,
+and their single-level counterparts.
+"""
+function make_column_spaces(FT; nlevels, z_max)
+    points = [
+        ClimaCore.Geometry.LatLongPoint(FT(lat), FT(long)) for
+        (lat, long) in zip((-30.0, 0.0, 30.0, 60.0), (0.0, 45.0, 90.0, 180.0))
+    ]
+    center_space = MultiColumnSpace(
+        FT;
+        points,
+        z_elem = nlevels,
+        z_min = FT(0),
+        z_max,
+        radius = FT(6.371229e6),
+        staggering = Grids.CellCenter(),
+    )
+    column_space = CommonSpaces.ColumnSpace(
+        FT;
+        z_elem = nlevels,
+        z_min = FT(0),
+        z_max,
+        context = ClimaComms.SingletonCommsContext(ClimaComms.device()),
+        staggering = Grids.CellCenter(),
+    )
+    return (;
+        center_space,
+        level_space = ClimaCore.Spaces.level(center_space, 1),
+        horizontal_space = ClimaCore.Spaces.horizontal_space(center_space),
+        column_space,
+        point_space = ClimaCore.Spaces.level(column_space, 1),
+    )
+end
