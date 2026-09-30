@@ -1,3 +1,6 @@
+# Names a temporal dimension might have in a NetCDF file
+const TIME_NAMES = ("time", "date", "t", "valid_time")
+
 # For a single and multi-file dataset
 const NetCDFDataset =
     Union{NCDatasets.NCDataset, NCDatasets.CommonDataModel.MFDataset}
