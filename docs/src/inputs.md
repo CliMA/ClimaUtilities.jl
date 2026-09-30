@@ -10,7 +10,8 @@ infrastructure to handle all these cases.
 
 > This extension is loaded when loading `ClimaCore` is loaded. In addition to
 > this, if NetCDF files are used, `NCDatasets` has to be loaded too. Finally, a
-> `Regridder` is needed (which might require importing additional packages).
+> `Regridder` is needed for 2D and 3D files (which might require importing
+> additional packages).
 
 A `TimeVaryingInput` is an object that knows how to fill a `ClimaCore` `Field`
 at a given simulation time `t`. `TimeVaryingInputs` can be constructed in a
@@ -246,7 +247,8 @@ albedo_tv = TimeVaryingInputs.TimeVaryingInput("cesm_albedo.nc", "alb", target_s
 
 > This extension is loaded when loading `ClimaCore` is loaded. In addition to
 > this, if NetCDF files are used, `NCDatasets` has to be loaded too. Finally, a
-> `Regridder` is needed (which might require importing additional packages).
+> `Regridder` is needed for 2D and 3D files (which might require importing
+> additional packages).
 
 `SpaceVaryingInput`s uses the same building blocks as `TimeVaryingInput`
 (chiefly the [`DataHandling`](@ref datahandling_module) datahandling_module) to construct a `Field` from
