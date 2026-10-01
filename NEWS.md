@@ -3,6 +3,17 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+### Features
+
+- Add `FileReaders.DataSource`, a description of a variable in one or more
+  NetCDF files, and `TimeVaryingInput` and `SpaceVaryingInput` constructors that
+  give every column of a column, multi-column or point space the data of its own
+  site from `DataSource`s. Each site has its own time axis, its vertical levels
+  are interpolated onto the levels of the space, and the data is kept in memory,
+  on the GPU when the space is. A `TimeVaryingInput` can also be built from
+  arrays, with one time series per column, each on its own time axis.
+  `TimeVaryingInputs.segment_times` returns the times of each time series.
+
 ### Minor additions
 
 - Binary operations with `ITime`s do not promote unless needed
