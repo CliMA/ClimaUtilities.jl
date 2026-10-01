@@ -89,10 +89,37 @@ u_var = FileReaders.NCFileReader(["era5_2000.nc", "era5_2001.nc", "era5_2002.nc"
 While the order is not strictly required, it is still good practice to pass the
 files in the correct order.
 
+## [`DataSource`](@id datasource)
+
+> The constructor is loaded when loading `NCDatasets`
+
+A `DataSource` describes a variable in one or more NetCDF files without reading
+its data: the paths of the files, the name of the variable, the dates of its
+time axis and the names of its coordinate dimensions. The coordinate dimensions
+are detected from their names, or given with `coord_names`, which must then list
+all of them. Several files are joined along the time dimension. `DataSource`s
+are used to construct [inputs for multiple sites](@ref multisite_inputs).
+
+```julia
+import ClimaUtilities.FileReaders: DataSource
+import NCDatasets
+import Dates
+
+ta = DataSource("site_a.nc", "ta")
+# Data split across files, with dates shifted from local time to UTC
+ta_utc = DataSource(
+    ["site_a_2010.nc", "site_a_2011.nc"],
+    "ta";
+    time_transform = date -> date + Dates.Hour(5),
+)
+```
+
 ## API
 
 ```@docs
 ClimaUtilities.FileReaders.NCFileReader
+ClimaUtilities.FileReaders.DataSource
+ClimaUtilities.FileReaders.DataSource(::Any, ::AbstractString)
 ClimaUtilities.FileReaders.read
 ClimaUtilities.FileReaders.read!
 ClimaUtilities.FileReaders.available_dates
