@@ -70,7 +70,9 @@ function __init__()
             MethodError,
         ) do io, exc, _argtypes, _kwargs
             for (pkg, fns) in extension_fns
-                if Symbol(exc.f) in fns && !is_pkg_loaded(pkg)
+                if exc.f isa Union{Function, DataType, UnionAll} &&
+                   nameof(exc.f) in fns &&
+                   !is_pkg_loaded(pkg)
                     print(io, "\nImport $pkg to enable `$(exc.f)`.";)
                 end
             end

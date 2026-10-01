@@ -32,6 +32,7 @@ module TimeVaryingInputs
 
 import Dates: Year
 import Dates: DateTime, DatePeriod, Date
+import ClimaUtilities.Utils: is_pkg_loaded
 
 """
     AbstractTimeVaryingInput
