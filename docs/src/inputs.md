@@ -30,6 +30,8 @@ regridding onto the computational domains (using [`Regridders`](@ref regridder_m
 - analytic functions of time;
 - pairs of 1D arrays (e.g., for `PointSpaces` or constant fields);
 - matrices for ensemble of points with one time series per point of a space;
+- one time series per site read from NetCDF files, each on its own time axis
+  (see [Inputs for multiple sites](@ref multisite_inputs));
 - 2/3D NetCDF files (including composing multiple variables from one or more files into one variable);
 - linear interpolation in time (default), nearest neighbors, and "period filling";
 - boundary conditions and repeating periodic data.
@@ -112,6 +114,59 @@ timevaryinginput = TimeVaryingInputs.TimeVaryingInput(["era5_1980.nc", "era5_198
 This capability is only available for the `InterpolationsRegridder`.
 
 Read more about this feature in the page about [`DataHandler`](@ref datahandling_module).
+
+### [Inputs for multiple sites](@id multisite_inputs)
+
+Spaces made of independent columns or points, such as the multi-column spaces,
+can read one time series per column from single-site NetCDF files, each with its
+own time axis. A [`DataSource`](@ref datasource) describes a variable in one or
+more files, and a vector of `DataSource`s, one per column in the order of
+`ClimaCore.Fields.field2array`, gives every column the data of its own site.
+Sources are paired with columns by position, and columns whose sources are
+equal share one time series in memory.
+
+The vertical levels of the files are interpolated onto the levels of the space
+when the input is constructed, and the values are held constant above and below
+the levels of the files. All the data is then kept in memory (on the GPU when
+the space is on the GPU), so evaluating the input does not read any file.
+
+```julia
+import ClimaUtilities: TimeVaryingInputs
+import ClimaUtilities.FileReaders: DataSource
+import ClimaCore: CommonSpaces, Geometry
+import NCDatasets
+import Dates
+
+# One column per site, in the order of the points
+points = [
+    Geometry.LatLongPoint(34.1, -118.1),
+    Geometry.LatLongPoint(40.0, -105.2),
+]
+space = CommonSpaces.MultiColumnSpace(;
+    points,
+    z_elem = 10,
+    z_min = 0,
+    z_max = 6000,
+    staggering = CommonSpaces.CellCenter(),
+)
+sources = [DataSource("site_a.nc", "ta"), DataSource("site_b.nc", "ta")]
+ta = TimeVaryingInputs.TimeVaryingInput(
+    sources,
+    space;
+    start_date = Dates.DateTime(2010, 7, 1),
+)
+```
+
+As for 2D and 3D files, variables can be composed by passing one vector of
+sources per variable together with a `compose_function`, and `preprocess_func`
+is applied to every value read. `compose_function` receives arrays with one row
+per level and one column per time, so it should use broadcasting (e.g. `.*`).
+`LinearPeriodFillingInterpolation` and `PeriodicCalendar(period, date)` are not
+supported.
+
+Static profiles per site are read with `SpaceVaryingInput`, from one
+`DataSource` per column (or one for every column) and with `preprocess_func`.
+Variables cannot be composed there.
 
 ### Extrapolation boundary conditions
 
@@ -257,6 +312,8 @@ different sources.
 `SpaceVaryingInputs` support:
 - analytic functions of coordinates;
 - pairs of 1D arrays (for columns);
+- one profile per site read from NetCDF files (see
+  [Inputs for multiple sites](@ref multisite_inputs));
 - 2/3D NetCDF files (including composing multiple variables from one or more files into one variable).
 
 In some ways, a `SpaceVaryingInput` can be thought as an alternative constructor
@@ -303,7 +360,10 @@ ClimaUtilities.TimeVaryingInputs.LinearInterpolation
 ClimaUtilities.TimeVaryingInputs.Throw
 ClimaUtilities.TimeVaryingInputs.PeriodicCalendar
 ClimaUtilities.TimeVaryingInputs.Flat
+ClimaUtilities.TimeVaryingInputs.TimeVaryingInput(::AbstractVector{<:AbstractVector{<:ClimaUtilities.FileReaders.DataSource}}, ::ClimaCore.Spaces.MultiColumnFiniteDifferenceSpace)
+ClimaUtilities.TimeVaryingInputs.TimeVaryingInput(::AbstractVector{<:AbstractVector}, ::AbstractVector{<:AbstractMatrix}, ::ClimaCore.Spaces.MultiColumnFiniteDifferenceSpace)
 ClimaUtilities.TimeVaryingInputs.evaluate!
+ClimaUtilities.TimeVaryingInputs.segment_times
 ClimaUtilities.TimeVaryingInputs.extrapolation_bc
 Base.in
 Base.close(::ClimaUtilities.TimeVaryingInputs.AbstractTimeVaryingInput)
