@@ -32,6 +32,9 @@ main
 - `sort_by_creation_time` now errors if any of the files do not exist.
 - Fix bug where `NCFileReader` can read the dates from a time dimension other
   than the one the variable is defined on.
+- Fix bug where evaluating a 0D `TimeVaryingInput` defined at `ITime`s at a
+  float time errored unless the time was a whole number of nanoseconds. Float
+  times are now rounded to milliseconds, as for 2D/3D `TimeVaryingInput`s.
 - Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` errored at the
   last available date.
 - Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` with
