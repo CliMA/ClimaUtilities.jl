@@ -28,6 +28,9 @@ main
   instead of the nearest one in the gap between the last and the first time for
   `ITime`s due to rounding
 - Fix bug where `promote` returned `ITime`s with different counter types.
+- Fix bug where evaluating a 0D `TimeVaryingInput` defined at `ITime`s at a
+  float time errored unless the time was a whole number of nanoseconds. Float
+  times are now rounded to milliseconds, as for 2D/3D `TimeVaryingInput`s.
 
 ### Bug fixes
 
