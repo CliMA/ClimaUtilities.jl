@@ -30,6 +30,9 @@ main
 - Fix bug where `promote` returned `ITime`s with different counter types.
 - Fix bug where `promote` for `ITime`s was not inferred on Julia 1.10 and 1.11.
 - `sort_by_creation_time` now errors if any of the files do not exist.
+- Fix bug where evaluating a 0D `TimeVaryingInput` defined at `ITime`s at a
+  float time errored unless the time was a whole number of nanoseconds. Float
+  times are now rounded to milliseconds, as for 2D/3D `TimeVaryingInput`s.
 
 ### Bug fixes
 
