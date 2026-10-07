@@ -1,0 +1,1109 @@
+using Test
+using Dates
+
+import ClimaUtilities
+import ClimaUtilities: TimeVaryingInputs
+import ClimaUtilities.FileReaders: DataSource
+import ClimaUtilities.TimeManager: ITime, date, period, epoch
+import ClimaUtilities.Utils: interpolate_columns!
+
+import ClimaCore: Domains, Fields, Geometry, Grids, Meshes, Spaces, Topologies
+import ClimaComms
+@static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
+import Interpolations
+import NCDatasets
+
+const context = ClimaComms.context()
+ClimaComms.init(context)
+
+include("TestTools.jl")
+
+# Interpolate each row of vals at time with a scalar 0D input
+# Since we know the 0D TVI is correct, we can compare against this
+function evaluate_0d(times, vals::AbstractMatrix, time; method)
+    return map(axes(vals, 1)) do k
+        input = TimeVaryingInputs.TimeVaryingInput(times, vals[k, :]; method)
+        dest = zeros(eltype(vals), 1)
+        TimeVaryingInputs.evaluate!(dest, input, time)
+        dest[1]
+    end
+end
+
+# Evaluate itp into dest and compare every column with the 0D input of its
+# segment, built from ref_times
+function check_columns(dest, itp, ref_times, vals, column_segment, time; method)
+    TimeVaryingInputs.evaluate!(dest, itp, time)
+    arr = Array(Fields.field2array(dest))
+    arr = ndims(arr) == 1 ? reshape(arr, 1, :) : arr
+    for (c, s) in enumerate(column_segment)
+        @test arr[:, c] ≈ evaluate_0d(ref_times[s], vals[s], time; method)
+    end
+end
+
+# Values on nlevels levels at the nodes of each segment, given in hours
+segment_values(FT, nlevels, hours) = [
+    [FT(s) * sin(FT(h)) + FT(k) for k in 1:nlevels, h in hours[s]] for
+    s in eachindex(hours)
+]
+
+@testset "RaggedInterpolatingTimeVaryingInput" begin
+    start_date = DateTime(2014)
+    # Nodes of four segments with different spacing and range, in hours, and
+    # the same nodes as ITime counters with a different period per segment
+    hours = (0.0:1.0:10.0, 0.5:0.5:9.0, 2.0:2.0:12.0, -1.0:1.0:7.0)
+    counters = (0:2:20, 2:2:36, 2:2:12, -2:2:14)
+    periods = (Minute(30), Minute(15), Hour(1), Minute(30))
+    floats(FT) = [collect(FT, 3600 .* h) for h in hours]
+    itimes(ep) = [
+        [ITime(c; period = p, epoch = ep) for c in cs] for
+        (cs, p) in zip(counters, periods)
+    ]
+    dates = [start_date .+ Minute.(round.(Int, 60 .* h)) for h in hours]
+    ms_itimes = [
+        [
+            ITime(
+                Dates.value(d - start_date);
+                period = Millisecond(1),
+                epoch = start_date,
+            ) for d in ds
+        ] for ds in dates
+    ]
+    # Hours inside and outside the range common to all segments, and the
+    # first segment not covering each of the latter
+    inside_times = (2.0, 3.25, 6.75, 7.0)
+    outside_times = (8.5, 0.25, 13.0, -3.0)
+    uncovered = (4, 2, 1, 1)
+
+    for FT in (Float32, Float64)
+        (;
+            center_space,
+            level_space,
+            horizontal_space,
+            column_space,
+            point_space,
+        ) = make_column_spaces(FT; nlevels = 5, z_max = FT(5))
+
+        vals = segment_values(FT, 5, hours)
+        surface_vals = segment_values(FT, 1, hours)
+        AT = ClimaComms.array_type(ClimaComms.device(center_space))
+
+        @testset "Construction, FT = $FT" begin
+            times = floats(FT)
+            itp = TimeVaryingInputs.TimeVaryingInput(times, vals, center_space)
+            @test itp.times isa AT && itp.vals isa AT
+            @test Array(itp.times) == reduce(vcat, times)
+            @test Array(itp.offsets) == [1, 12, 30, 36, 45]
+            @test Array(itp.vals) == reduce(hcat, vals)
+            @test Array(itp.column_segment) == 1:4
+            @test itp.range == (FT(2 * 3600), FT(7 * 3600))
+            @test all(
+                s -> TimeVaryingInputs.segment_times(itp, s) == times[s],
+                1:4,
+            )
+            @test FT(3 * 3600) in itp
+            @test !(FT(3600) in itp) && !(FT(8 * 3600) in itp)
+            @test_throws "Segment 5 does not exist; there are 4 segments" TimeVaryingInputs.segment_times(
+                itp,
+                5,
+            )
+
+            # Number times of different types are promoted to one type
+            itp = TimeVaryingInputs.TimeVaryingInput(
+                [Float32.(times[1]), Float64.(times[2])],
+                vals[1:2],
+                center_space;
+                column_segment = [1, 2, 1, 2],
+            )
+            @test eltype(itp.times) == Float64
+            @test TimeVaryingInputs.segment_times(itp, 1) == times[1]
+
+            # ITimes are promoted to a common period across segments
+            for ep in (nothing, start_date)
+                itp = TimeVaryingInputs.TimeVaryingInput(
+                    itimes(ep),
+                    vals,
+                    center_space,
+                )
+                for s in 1:4
+                    st = TimeVaryingInputs.segment_times(itp, s)
+                    @test st == itimes(ep)[s]
+                    @test all(
+                        t -> period(t) == Minute(15) && epoch(t) == ep,
+                        st,
+                    )
+                end
+                @test itp.range == (
+                    ITime(2; period = Hour(1), epoch = ep),
+                    ITime(7; period = Hour(1), epoch = ep),
+                )
+                @test ITime(3; period = Hour(1), epoch = ep) in itp
+            end
+            # ITimes without an epoch are counted from start_date
+            itp = TimeVaryingInputs.TimeVaryingInput(
+                itimes(nothing),
+                vals,
+                center_space;
+                epoch = start_date,
+            )
+            @test start_date + Hour(3) in itp
+
+            # Number times have no epoch
+            @test_logs (:warn, r"epoch is not used") TimeVaryingInputs.TimeVaryingInput(
+                times,
+                vals,
+                center_space;
+                epoch = start_date,
+            )
+
+            # Dates become ITimes counted from epoch
+            @test_throws "epoch is required" TimeVaryingInputs.TimeVaryingInput(
+                dates,
+                vals,
+                center_space,
+            )
+            itp = TimeVaryingInputs.TimeVaryingInput(
+                dates,
+                vals,
+                center_space;
+                epoch = start_date,
+            )
+            @test all(
+                s -> date.(TimeVaryingInputs.segment_times(itp, s)) == dates[s],
+                1:4,
+            )
+            @test start_date + Hour(3) in itp
+
+            # Warn only when the segments repeat with different periods
+            periodic = TimeVaryingInputs.LinearInterpolation(
+                TimeVaryingInputs.PeriodicCalendar(),
+            )
+            @test_logs (:warn, r"different periods") TimeVaryingInputs.TimeVaryingInput(
+                times,
+                vals,
+                center_space;
+                method = periodic,
+            )
+            equal_hours = (0.0:1.0:10.0, 0.0:0.5:10.5)
+            @test_logs TimeVaryingInputs.TimeVaryingInput(
+                [collect(FT, 3600 .* h) for h in equal_hours],
+                segment_values(FT, 5, equal_hours),
+                center_space;
+                column_segment = [1, 2, 1, 2],
+                method = periodic,
+            )
+            # Segments that no column reads are not compared
+            @test_logs TimeVaryingInputs.TimeVaryingInput(
+                times,
+                vals,
+                center_space;
+                column_segment = [1, 1, 1, 1],
+                method = periodic,
+            )
+        end
+
+        @testset "Evaluation, FT = $FT" begin
+            to_itime(t; kwargs...) =
+                ITime(round(Int, 60t); period = Minute(1), kwargs...)
+            to_date(t) = start_date + Minute(round(Int, 60t))
+            # Tuple of the times of the segments, the times for the 0D
+            # reference, and the conversions of hours to the time passed to
+            # evaluate!
+            # We test a combination of
+            # 1. Floats for ragged TVI, floats for 0D reference, and pass floats
+            #    and ITime for both TVIs
+            # 2. ITimes for ragged TVI, ITimes for 0D reference, and pass floats
+            #    and ITime for both TVIs
+            # 3. ITimes for ragged TVI, ITimes for 0D reference, and pass ITime,
+            #    floats, and dates for both TVIs
+            # 4. Dates for ragged TVI, ITimes for 0D reference, and pass ITime,
+            #    floats, and dates for both TVIs
+            kinds = (
+                (floats(FT), floats(FT), (t -> FT(3600t), t -> ITime(3600t))),
+                (itimes(nothing), itimes(nothing), (to_itime, t -> 3600t)),
+                (
+                    itimes(start_date),
+                    itimes(start_date),
+                    (t -> to_itime(t; epoch = start_date), t -> 3600t, to_date),
+                ),
+                (
+                    dates,
+                    ms_itimes,
+                    (t -> to_itime(t; epoch = start_date), t -> 3600t, to_date),
+                ),
+            )
+            # In addition to kinds, we also test all interpolation methods too
+            methods = (
+                TimeVaryingInputs.LinearInterpolation(),
+                TimeVaryingInputs.LinearInterpolation(TimeVaryingInputs.Flat()),
+                TimeVaryingInputs.LinearInterpolation(
+                    TimeVaryingInputs.PeriodicCalendar(),
+                ),
+                TimeVaryingInputs.NearestNeighbor(),
+                TimeVaryingInputs.NearestNeighbor(TimeVaryingInputs.Flat()),
+                TimeVaryingInputs.NearestNeighbor(
+                    TimeVaryingInputs.PeriodicCalendar(),
+                ),
+            )
+            dest = Fields.zeros(center_space)
+            for (times, ref_times, converters) in kinds, method in methods
+                bc = TimeVaryingInputs.extrapolation_bc(method)
+                ep = eltype(first(times)) <: Number ? nothing : start_date
+                make_tvi() = TimeVaryingInputs.TimeVaryingInput(
+                    times,
+                    vals,
+                    center_space;
+                    method,
+                    epoch = ep,
+                )
+                itp = if bc isa TimeVaryingInputs.PeriodicCalendar
+                    @test_logs (:warn, r"different periods") make_tvi()
+                else
+                    make_tvi()
+                end
+                for convert in converters
+                    for t in inside_times
+                        check_columns(
+                            dest,
+                            itp,
+                            ref_times,
+                            vals,
+                            1:4,
+                            convert(t);
+                            method,
+                        )
+                    end
+                    for (t, s) in zip(outside_times, uncovered)
+                        if bc isa TimeVaryingInputs.Throw
+                            @test_throws "Column $s of TimeVaryingInput reads segment $s, which does not cover time" TimeVaryingInputs.evaluate!(
+                                dest,
+                                itp,
+                                convert(t),
+                            )
+                        else
+                            check_columns(
+                                dest,
+                                itp,
+                                ref_times,
+                                vals,
+                                1:4,
+                                convert(t);
+                                method,
+                            )
+                        end
+                    end
+                end
+            end
+
+            # Several columns reading one segment
+            times = floats(FT)
+            linear = TimeVaryingInputs.LinearInterpolation()
+            column_segment = [1, 1, 3, 2]
+            itp = TimeVaryingInputs.TimeVaryingInput(
+                times,
+                vals,
+                center_space;
+                column_segment,
+            )
+            @test Array(itp.column_segment) == column_segment
+            for t in inside_times
+                check_columns(
+                    dest,
+                    itp,
+                    times,
+                    vals,
+                    column_segment,
+                    FT(3600t);
+                    method = linear,
+                )
+            end
+            @test_throws "Column 4 of TimeVaryingInput reads segment 2, which does not cover time" TimeVaryingInputs.evaluate!(
+                dest,
+                itp,
+                FT(9.5 * 3600),
+            )
+
+            # A segment that no column reads does not restrict the range
+            itp = TimeVaryingInputs.TimeVaryingInput(
+                times[[1, 3]],
+                vals[[1, 3]],
+                center_space;
+                column_segment = [1, 1, 1, 1],
+            )
+            @test FT(3600) in itp
+            check_columns(
+                dest,
+                itp,
+                times,
+                vals,
+                [1, 1, 1, 1],
+                FT(3600);
+                method = linear,
+            )
+
+            # A node returns the stored values exactly
+            itp = TimeVaryingInputs.TimeVaryingInput(times, vals, center_space)
+            TimeVaryingInputs.evaluate!(dest, itp, FT(2 * 3600))
+            arr = Array(Fields.field2array(dest))
+            for s in 1:4
+                @test arr[:, s] == vals[s][:, findfirst(==(2.0), hours[s])]
+            end
+
+            # Single-level segments into a level and a horizontal space
+            itp = TimeVaryingInputs.TimeVaryingInput(
+                times,
+                surface_vals,
+                level_space,
+            )
+            for dest in
+                (Fields.zeros(level_space), Fields.zeros(horizontal_space)),
+                t in inside_times
+
+                check_columns(
+                    dest,
+                    itp,
+                    times,
+                    surface_vals,
+                    1:4,
+                    FT(3600t);
+                    method = linear,
+                )
+            end
+
+            # The same times everywhere reproduce the multi-point input
+            matrix = [FT(c) * sin(FT(h)) for c in 1:4, h in hours[1]]
+            multipoint = TimeVaryingInputs.TimeVaryingInput(
+                times[1],
+                matrix,
+                level_space,
+            )
+            ragged = TimeVaryingInputs.TimeVaryingInput(
+                [times[1] for _ in 1:4],
+                [matrix[c:c, :] for c in 1:4],
+                level_space,
+            )
+            dest_multipoint, dest_ragged =
+                Fields.zeros(level_space), Fields.zeros(level_space)
+            for t in (inside_times..., 9.5)
+                TimeVaryingInputs.evaluate!(
+                    dest_multipoint,
+                    multipoint,
+                    FT(3600t),
+                )
+                TimeVaryingInputs.evaluate!(dest_ragged, ragged, FT(3600t))
+                @test Array(Fields.field2array(dest_ragged)) ==
+                      Array(Fields.field2array(dest_multipoint))
+            end
+
+            # One segment on a column and on a point
+            itp = TimeVaryingInputs.TimeVaryingInput(
+                times[1:1],
+                vals[1:1],
+                column_space,
+            )
+            for t in inside_times
+                check_columns(
+                    Fields.zeros(column_space),
+                    itp,
+                    times,
+                    vals,
+                    [1],
+                    FT(3600t);
+                    method = linear,
+                )
+            end
+            itp = TimeVaryingInputs.TimeVaryingInput(
+                times[1:1],
+                surface_vals[1:1],
+                point_space,
+            )
+            for t in inside_times
+                check_columns(
+                    Fields.zeros(point_space),
+                    itp,
+                    times,
+                    surface_vals,
+                    [1],
+                    FT(3600t);
+                    method = linear,
+                )
+            end
+        end
+
+        @testset "Errors, FT = $FT" begin
+            times = floats(FT)
+            @test_throws "different lengths" TimeVaryingInputs.TimeVaryingInput(
+                times[1:3],
+                vals,
+                center_space,
+            )
+            @test_throws "column_segment has 2 entries" TimeVaryingInputs.TimeVaryingInput(
+                times,
+                vals,
+                center_space;
+                column_segment = [1, 2],
+            )
+            @test_throws "does not exist" TimeVaryingInputs.TimeVaryingInput(
+                times,
+                vals,
+                center_space;
+                column_segment = [1, 2, 3, 5],
+            )
+            @test_throws "last dimension of vals" TimeVaryingInputs.TimeVaryingInput(
+                times[1:1],
+                vals[2:2],
+                column_space,
+            )
+            @test_throws "rows, but the space has 1 levels" TimeVaryingInputs.TimeVaryingInput(
+                times,
+                vals,
+                level_space,
+            )
+            @test_throws "at least two times" TimeVaryingInputs.TimeVaryingInput(
+                [times[1][1:1]],
+                [vals[1][:, 1:1]],
+                column_space,
+            )
+            @test_throws "strictly increasing" TimeVaryingInputs.TimeVaryingInput(
+                [reverse(times[1])],
+                vals[1:1],
+                column_space,
+            )
+            @test_throws "one kind" TimeVaryingInputs.TimeVaryingInput(
+                [times[1], itimes(nothing)[2]],
+                vals[1:2],
+                center_space;
+                column_segment = [1, 2, 1, 2],
+            )
+            @test_throws "non uniform" TimeVaryingInputs.TimeVaryingInput(
+                [FT[0, 1, 3]],
+                [vals[1][:, 1:3]],
+                column_space;
+                method = TimeVaryingInputs.LinearInterpolation(
+                    TimeVaryingInputs.PeriodicCalendar(),
+                ),
+            )
+            @test_throws "PeriodicCalendar(period)" TimeVaryingInputs.TimeVaryingInput(
+                times[1:1],
+                vals[1:1],
+                column_space;
+                method = TimeVaryingInputs.LinearInterpolation(
+                    TimeVaryingInputs.PeriodicCalendar(Year(1), start_date),
+                ),
+            )
+            @test_throws "LinearPeriodFillingInterpolation is not supported" TimeVaryingInputs.TimeVaryingInput(
+                times[1:1],
+                vals[1:1],
+                column_space;
+                method = TimeVaryingInputs.LinearPeriodFillingInterpolation(),
+            )
+            @test_throws MethodError TimeVaryingInputs.TimeVaryingInput(
+                times[1:1],
+                vals[1:1],
+                make_box_space(FT),
+            )
+            @test_throws "does not match the epoch" TimeVaryingInputs.TimeVaryingInput(
+                itimes(start_date),
+                vals,
+                center_space;
+                epoch = start_date + Day(1),
+            )
+            # Large integer times collide once promoted to Float32
+            @test_throws "strictly increasing" TimeVaryingInputs.TimeVaryingInput(
+                AbstractVector[[2^24, 2^24 + 1, 2^24 + 2], Float32[0, 1, 2]],
+                [vals[1][:, 1:3], vals[2][:, 1:3]],
+                center_space;
+                column_segment = [1, 2, 1, 2],
+            )
+            itp = TimeVaryingInputs.TimeVaryingInput(times, vals, center_space)
+            @test_throws "dest is not defined on the space" TimeVaryingInputs.evaluate!(
+                Fields.zeros(level_space),
+                itp,
+                FT(3 * 3600),
+            )
+            @test_throws "Cannot evaluate" TimeVaryingInputs.evaluate!(
+                Fields.zeros(center_space),
+                itp,
+                start_date,
+            )
+        end
+    end
+end
+
+@testset "TimeVaryingInput from DataSources" begin
+    data_dir = mktempdir()
+    start_date = DateTime(2010, 7, 1)
+    # Two sites with different levels and time axes; ta is a column variable
+    # and ts a surface one
+    z_a = Float64[0, 1000, 2000, 3000, 4000, 5000]
+    z_b = Float64[500, 1500, 2500, 3500, 4500, 5500]
+    dates_a = start_date .+ Hour.(0:23)
+    dates_b = start_date .+ Hour.(2:3:26)
+    # Values change with the level and the time, and differ between sites and
+    # variables
+    ta_a = [z / 1000 + t for z in z_a, t in 0:23]
+    ta_b = [2z / 1000 + 3t for z in z_b, t in 0:8]
+    ua_a, ua_b = 2 .* ta_a, 2 .* ta_b
+    hus_a, hus_b = 3 .* ta_a, 3 .* ta_b
+    ts_a = 280 .+ (0:23)
+    ts_b = 285 .+ 2 .* (0:8)
+    file_a = write_column_file(
+        joinpath(data_dir, "site_a.nc");
+        z = z_a,
+        dates = dates_a,
+        variables = ["ta" => ta_a, "ua" => ua_a, "hus" => hus_a, "ts" => ts_a],
+    )
+    file_b = write_column_file(
+        joinpath(data_dir, "site_b.nc");
+        z = z_b,
+        dates = dates_b,
+        variables = ["ta" => ta_b, "ua" => ua_b, "hus" => hus_b, "ts" => ts_b],
+        z_name = "height",
+        time_first = true,
+    )
+    sources(name) =
+        [DataSource(f, name) for f in (file_a, file_b, file_a, file_b)]
+    # The second hour is a node of both sites
+    node_date = start_date + Hour(2)
+
+    for FT in (Float32, Float64)
+        (;
+            center_space,
+            level_space,
+            horizontal_space,
+            column_space,
+            point_space,
+        ) = make_column_spaces(FT; nlevels = 10, z_max = FT(6000))
+        model_z = model_levels(center_space)
+        regrid(z, vals) = interpolate_columns!(
+            zeros(FT, length(model_z), size(vals, 2)),
+            model_z,
+            z,
+            vals,
+        )
+
+        itp = TimeVaryingInputs.TimeVaryingInput(
+            sources("ta"),
+            center_space;
+            start_date,
+        )
+        @test Array(itp.column_segment) == [1, 2, 1, 2]
+        @test length(itp.offsets) == 3
+        @test date.(TimeVaryingInputs.segment_times(itp, 1)) == dates_a
+        @test date.(TimeVaryingInputs.segment_times(itp, 2)) == dates_b
+
+        # Node values are the file values regridded onto the model levels
+        dest = Fields.zeros(center_space)
+        TimeVaryingInputs.evaluate!(dest, itp, node_date)
+        arr = Array(Fields.field2array(dest))
+        @test arr[:, 1] == arr[:, 3] == regrid(z_a, ta_a)[:, 3]
+        @test arr[:, 2] == arr[:, 4] == regrid(z_b, ta_b)[:, 1]
+
+        # Outside the dates of a column, the dates it covers are given
+        @test_throws ["2010-07-01T00:00:00", "2010-07-01T23:00:00"] TimeVaryingInputs.evaluate!(
+            dest,
+            itp,
+            start_date - Hour(1),
+        )
+
+        # Float times are rounded to milliseconds
+        for (time, ms) in
+            # Test with nextfloat(7200.3) since it can't be represented as an
+            # ITime without rounding first
+            ((7200 + 1 / 3, 7_200_333), (nextfloat(7200.3), 7_200_300))
+            TimeVaryingInputs.evaluate!(dest, itp, time)
+            arr = Array(Fields.field2array(dest))
+            TimeVaryingInputs.evaluate!(dest, itp, start_date + Millisecond(ms))
+            @test arr == Array(Fields.field2array(dest))
+        end
+
+        # preprocess_func is applied to the values read
+        doubled = TimeVaryingInputs.TimeVaryingInput(
+            sources("ta"),
+            center_space;
+            start_date = Date(start_date),
+            preprocess_func = x -> 2x,
+        )
+        TimeVaryingInputs.evaluate!(dest, doubled, node_date)
+        @test Array(Fields.field2array(dest))[:, 1] ==
+              2 .* regrid(z_a, ta_a)[:, 3]
+
+        # time_transform shifts the nodes
+        shifted = TimeVaryingInputs.TimeVaryingInput(
+            [DataSource(file_a, "ta"; time_transform = d -> d + Hour(1))],
+            column_space;
+            start_date,
+        )
+        @test date.(TimeVaryingInputs.segment_times(shifted, 1)) ==
+              dates_a .+ Hour(1)
+        dest_shift = Fields.zeros(column_space)
+        TimeVaryingInputs.evaluate!(dest_shift, shifted, node_date + Hour(1))
+        @test vec(Array(Fields.field2array(dest_shift))) ≈
+              regrid(z_a, ta_a)[:, 3]
+
+        # Surface variables into spaces with a single level
+        surface = TimeVaryingInputs.TimeVaryingInput(
+            sources("ts"),
+            level_space;
+            start_date,
+        )
+        for dest in (Fields.zeros(level_space), Fields.zeros(horizontal_space))
+            TimeVaryingInputs.evaluate!(dest, surface, node_date)
+            @test vec(Array(Fields.field2array(dest))) ==
+                  FT[ts_a[3], ts_b[1], ts_a[3], ts_b[1]]
+        end
+
+        # Composing variables equals composing single-variable inputs
+        composed = TimeVaryingInputs.TimeVaryingInput(
+            [sources("ta"), sources("ua"), sources("hus")],
+            center_space;
+            start_date,
+            compose_function = (a, b, c) -> a .+ b .+ c,
+        )
+        parts = [
+            TimeVaryingInputs.TimeVaryingInput(
+                sources(name),
+                center_space;
+                start_date,
+            ) for name in ("ta", "ua", "hus")
+        ]
+        for t in (node_date, node_date + Minute(20))
+            TimeVaryingInputs.evaluate!(dest, composed, t)
+            expected = sum(parts) do part
+                part_dest = Fields.zeros(center_space)
+                TimeVaryingInputs.evaluate!(part_dest, part, t)
+                Array(Fields.field2array(part_dest))
+            end
+            @test Array(Fields.field2array(dest)) ≈ expected
+        end
+        @test_throws "compose_function is required" TimeVaryingInputs.TimeVaryingInput(
+            [sources("ta"), sources("ua")],
+            center_space;
+            start_date,
+        )
+        @test_throws "one source per column" TimeVaryingInputs.TimeVaryingInput(
+            [sources("ta"), sources("ua")[1:2]],
+            center_space;
+            start_date,
+            compose_function = +,
+        )
+        @test_throws "share their dates" TimeVaryingInputs.TimeVaryingInput(
+            [[DataSource(file_a, "ta")], [DataSource(file_b, "ta")]],
+            column_space;
+            start_date,
+            compose_function = +,
+        )
+        # The same dates on other levels, and the same levels at other dates
+        other_z_path = write_column_file(
+            joinpath(data_dir, "other_z.nc");
+            z = z_a .+ 500,
+            dates = dates_a,
+            variables = ["ta" => ta_a],
+        )
+        other_dates_path = write_column_file(
+            joinpath(data_dir, "other_dates.nc");
+            z = z_a,
+            dates = dates_a .+ Hour(1),
+            variables = ["ta" => ta_a],
+        )
+        @test_throws "share their dates" TimeVaryingInputs.TimeVaryingInput(
+            [[DataSource(file_a, "ta")], [DataSource(other_z_path, "ta")]],
+            column_space;
+            start_date,
+            compose_function = +,
+        )
+        @test_throws "share their dates" TimeVaryingInputs.TimeVaryingInput(
+            [[DataSource(file_a, "ta")], [DataSource(other_dates_path, "ta")]],
+            column_space;
+            start_date,
+            compose_function = +,
+        )
+        @test_throws "3 sources for a space with 4 columns" TimeVaryingInputs.TimeVaryingInput(
+            sources("ta")[1:3],
+            center_space;
+            start_date,
+        )
+
+        # One source for every column
+        shared = TimeVaryingInputs.TimeVaryingInput(
+            DataSource(file_a, "ta"),
+            center_space;
+            start_date,
+        )
+        @test Array(shared.column_segment) == [1, 1, 1, 1]
+        @test length(shared.offsets) == 2
+        TimeVaryingInputs.evaluate!(dest, shared, node_date)
+        arr = Array(Fields.field2array(dest))
+        @test all(c -> arr[:, c] == regrid(z_a, ta_a)[:, 3], 1:4)
+
+        make(srcs, space; kwargs...) = TimeVaryingInputs.TimeVaryingInput(
+            srcs,
+            space;
+            start_date,
+            kwargs...,
+        )
+        @test_throws "but the space has no levels" make(
+            [DataSource(file_a, "ta")],
+            point_space,
+        )
+        @test_throws "has no vertical coordinate, but the space has levels" make(
+            [DataSource(file_a, "ts")],
+            column_space,
+        )
+        # A surface variable on a column with a single level
+        single_level_space =
+            make_column_spaces(FT; nlevels = 1, z_max = FT(6000)).column_space
+        dest_single = Fields.zeros(single_level_space)
+        TimeVaryingInputs.evaluate!(
+            dest_single,
+            make([DataSource(file_a, "ts")], single_level_space),
+            node_date,
+        )
+        @test vec(Array(Fields.field2array(dest_single))) == FT[ts_a[3]]
+        static_path = write_column_file(
+            joinpath(data_dir, "static.nc");
+            z = z_a,
+            dates = nothing,
+            variables = ["ta" => z_a],
+        )
+        @test_throws "no time dimension" make(
+            [DataSource(static_path, "ta")],
+            column_space,
+        )
+        one_time_path = write_column_file(
+            joinpath(data_dir, "one_time.nc");
+            z = z_a,
+            dates = dates_a[1:1],
+            variables = ["ta" => ta_a[:, 1:1]],
+        )
+        @test_throws "has one date, but at least two times" make(
+            [DataSource(one_time_path, "ta")],
+            column_space,
+        )
+        @test_throws MethodError make(
+            [DataSource(file_a, "ta")],
+            make_box_space(FT),
+        )
+
+        # Horizontal dimensions of length two
+        grid_path = joinpath(data_dir, "grid.nc")
+        NCDatasets.NCDataset(grid_path, "c") do nc
+            NCDatasets.defDim(nc, "z", length(z_a))
+            NCDatasets.defDim(nc, "time", length(dates_a))
+            NCDatasets.defDim(nc, "x", 2)
+            NCDatasets.defDim(nc, "y", 2)
+            NCDatasets.defVar(nc, "z", z_a, ("z",))
+            NCDatasets.defVar(nc, "time", dates_a, ("time",))
+            NCDatasets.defVar(
+                nc,
+                "ta",
+                repeat(ta_a, 1, 1, 2, 2),
+                ("z", "time", "x", "y"),
+            )
+        end
+        @test_throws "only time and the vertical coordinate" make(
+            [DataSource(grid_path, "ta")],
+            column_space,
+        )
+
+        # A vertical dimension with an unrecognized name is passed by name
+        zed_path = write_column_file(
+            joinpath(data_dir, "zed.nc");
+            z = z_a,
+            dates = dates_a,
+            variables = ["ta" => ta_a],
+            z_name = "zed",
+        )
+        @test_throws "only time and the vertical coordinate" make(
+            [DataSource(zed_path, "ta")],
+            column_space,
+        )
+        zed = make(
+            [DataSource(zed_path, "ta"; coord_names = (; z = "zed"))],
+            column_space,
+        )
+        dest_zed, dest_a =
+            Fields.zeros(column_space), Fields.zeros(column_space)
+        TimeVaryingInputs.evaluate!(dest_zed, zed, node_date)
+        TimeVaryingInputs.evaluate!(
+            dest_a,
+            make([DataSource(file_a, "ta")], column_space),
+            node_date,
+        )
+        @test Array(parent(dest_zed)) == Array(parent(dest_a))
+
+        # Data split in time across two files
+        split_paths = [
+            write_column_file(
+                joinpath(data_dir, "split_$i.nc");
+                z = z_a,
+                dates = dates_a[hours],
+                variables = ["ta" => ta_a[:, hours]],
+            ) for (i, hours) in enumerate((1:12, 13:24))
+        ]
+        split = make([DataSource(split_paths, "ta")], column_space)
+        whole = make([DataSource(file_a, "ta")], column_space)
+        # A variable from one file composed with one split across files
+        combined = make(
+            [[DataSource(file_a, "ta")], [DataSource(split_paths, "ta")]],
+            column_space;
+            compose_function = +,
+        )
+        dest_split = Fields.zeros(column_space)
+        for t in (node_date, start_date + Hour(11) + Minute(30))
+            TimeVaryingInputs.evaluate!(dest_split, split, t)
+            TimeVaryingInputs.evaluate!(dest_a, whole, t)
+            @test Array(parent(dest_split)) ≈ Array(parent(dest_a))
+            TimeVaryingInputs.evaluate!(dest_split, combined, t)
+            @test Array(parent(dest_split)) ≈ 2 .* Array(parent(dest_a))
+        end
+
+        # Heights that vary in time, stored with time first
+        heights = [z + 10t for z in z_a, t in 0:23]
+        heights_path = joinpath(data_dir, "heights.nc")
+        NCDatasets.NCDataset(heights_path, "c") do nc
+            NCDatasets.defDim(nc, "z", length(z_a))
+            NCDatasets.defDim(nc, "time", length(dates_a))
+            NCDatasets.defVar(nc, "z", permutedims(heights), ("time", "z"))
+            NCDatasets.defVar(nc, "time", dates_a, ("time",))
+            NCDatasets.defVar(nc, "ta", ta_a, ("z", "time"))
+        end
+        column_z = model_levels(column_space)
+        TimeVaryingInputs.evaluate!(
+            dest_a,
+            make([DataSource(heights_path, "ta")], column_space),
+            node_date,
+        )
+        @test vec(Array(Fields.field2array(dest_a))) ≈ vec(
+            interpolate_columns!(
+                zeros(FT, length(column_z), 1),
+                column_z,
+                heights[:, 3],
+                ta_a[:, 3:3],
+            ),
+        )
+
+        # Levels that are not finite or not strictly monotonic
+        nan_path = write_column_file(
+            joinpath(data_dir, "nan.nc");
+            z = [z_a[1]; NaN; z_a[3:end]],
+            dates = dates_a,
+            variables = ["ta" => ta_a],
+        )
+        @test_throws ["levels of ta", "not all finite"] make(
+            [DataSource(nan_path, "ta")],
+            column_space,
+        )
+        repeated_path = write_column_file(
+            joinpath(data_dir, "repeated.nc");
+            z = [z_a[1:2]; z_a[2:5]],
+            dates = dates_a,
+            variables = ["ta" => ta_a],
+        )
+        @test_throws ["levels of ta", "not strictly monotonic"] make(
+            [DataSource(repeated_path, "ta")],
+            column_space,
+        )
+
+        # A target column whose levels decrease
+        domain = Domains.IntervalDomain(
+            Geometry.ZPoint(FT(0)),
+            Geometry.ZPoint(FT(6000));
+            boundary_names = (:bottom, :top),
+        )
+        faces = Geometry.ZPoint.(range(FT(6000), FT(0); length = 11))
+        descending_space = Spaces.CenterFiniteDifferenceSpace(
+            Topologies.IntervalTopology(
+                ClimaComms.SingletonCommsContext(ClimaComms.device()),
+                Meshes.IntervalMesh(domain, faces),
+            ),
+        )
+        descending_z = model_levels(descending_space)
+        @test issorted(descending_z; rev = true)
+        dest_descending = Fields.zeros(descending_space)
+        TimeVaryingInputs.evaluate!(
+            dest_descending,
+            make([DataSource(file_a, "ta")], descending_space),
+            node_date,
+        )
+        @test vec(Array(Fields.field2array(dest_descending))) ≈ vec(
+            interpolate_columns!(
+                zeros(FT, length(descending_z), 1),
+                descending_z,
+                z_a,
+                ta_a[:, 3:3],
+            ),
+        )
+
+        # Levels stored in decreasing order
+        decreasing_path = write_column_file(
+            joinpath(data_dir, "decreasing.nc");
+            z = reverse(z_a),
+            dates = dates_a,
+            variables = ["ta" => reverse(ta_a, dims = 1)],
+        )
+        dest_decreasing, dest_increasing =
+            Fields.zeros(column_space), Fields.zeros(column_space)
+        TimeVaryingInputs.evaluate!(
+            dest_decreasing,
+            make([DataSource(decreasing_path, "ta")], column_space),
+            node_date,
+        )
+        TimeVaryingInputs.evaluate!(
+            dest_increasing,
+            make([DataSource(file_a, "ta")], column_space),
+            node_date,
+        )
+        @test Array(parent(dest_decreasing)) ≈ Array(parent(dest_increasing))
+
+        # Missing values must be handled by preprocess_func
+        gaps_path = joinpath(data_dir, "gaps.nc")
+        NCDatasets.NCDataset(gaps_path, "c") do nc
+            NCDatasets.defDim(nc, "z", length(z_a))
+            NCDatasets.defDim(nc, "time", length(dates_a))
+            NCDatasets.defVar(nc, "z", z_a, ("z",))
+            NCDatasets.defVar(nc, "time", dates_a, ("time",))
+            data = Array{Union{Missing, Float64}}(ta_a)
+            data[2, 5] = missing
+            NCDatasets.defVar(nc, "ta", data, ("z", "time"); fillvalue = -999.0)
+        end
+        @test_throws "Missing values" make(
+            [DataSource(gaps_path, "ta")],
+            column_space,
+        )
+        filled = make(
+            [DataSource(gaps_path, "ta")],
+            column_space;
+            preprocess_func = x -> coalesce(x, 0.0),
+        )
+        TimeVaryingInputs.evaluate!(dest_a, filled, dates_a[5])
+        filled_ta = ta_a[:, 5:5]
+        filled_ta[2] = 0
+        @test vec(Array(Fields.field2array(dest_a))) ≈ vec(
+            interpolate_columns!(
+                zeros(FT, length(column_z), 1),
+                column_z,
+                z_a,
+                filled_ta,
+            ),
+        )
+    end
+end
+
+@testset "Equivalence with the 23D and 0D inputs" begin
+    data_dir = mktempdir()
+    start_date = DateTime(2010, 7, 1)
+    z = collect(0.0:500.0:5000.0)
+    dates = start_date .+ Hour.(0:23)
+    ta = [280 + 0.01z * cos(t / 4) + sin(t / 3) for z in z, t in 0:23]
+    ts = [290 + 5 * sin(t / 5) for t in 0:23]
+    file = write_column_file(
+        joinpath(data_dir, "site.nc");
+        z,
+        dates,
+        variables = ["ta" => ta, "ts" => ts],
+    )
+    # Seconds from start_date of the nodes and of times between them
+    node_seconds = 3600.0 .* (0:23)
+    between_seconds = 3600.0 .* (0:22) .+ 1800.0
+    to_date(t) = start_date + Millisecond(round(Int, 1000t))
+
+    for FT in (Float32, Float64)
+        (; center_space, level_space, column_space) =
+            make_column_spaces(FT; nlevels = 10, z_max = FT(6000))
+        close_enough(a, b) = isapprox(a, b; rtol = 10eps(FT))
+
+        for method in (
+            TimeVaryingInputs.LinearInterpolation(),
+            TimeVaryingInputs.LinearInterpolation(
+                TimeVaryingInputs.PeriodicCalendar(),
+            ),
+            TimeVaryingInputs.NearestNeighbor(),
+            TimeVaryingInputs.NearestNeighbor(
+                TimeVaryingInputs.PeriodicCalendar(),
+            ),
+        )
+            itp23 = TimeVaryingInputs.TimeVaryingInput(
+                file,
+                "ta",
+                column_space;
+                start_date,
+                method,
+                regridder_type = :InterpolationsRegridder,
+                regridder_kwargs = (;
+                    extrapolation_bc = (Interpolations.Flat(),)
+                ),
+            )
+            ragged = TimeVaryingInputs.TimeVaryingInput(
+                [DataSource(file, "ta")],
+                column_space;
+                start_date,
+                method,
+            )
+            shared = TimeVaryingInputs.TimeVaryingInput(
+                DataSource(file, "ta"),
+                center_space;
+                start_date,
+                method,
+            )
+            dest23 = Fields.zeros(column_space)
+            dest_ragged = Fields.zeros(column_space)
+            dest_shared = Fields.zeros(center_space)
+            periodic =
+                TimeVaryingInputs.extrapolation_bc(method) isa
+                TimeVaryingInputs.PeriodicCalendar
+            seconds = (node_seconds..., between_seconds...)
+            if periodic
+                # After and before the data, and in the gap between the last
+                # and first nodes
+                seconds = (
+                    seconds...,
+                    30 * 3600.0,
+                    -5 * 3600.0,
+                    23 * 3600.0 + 1200.0,
+                    23 * 3600.0 + 2400.0,
+                    47 * 3600.0 + 1200.0,
+                )
+            end
+            for t in seconds, time in (t, to_date(t))
+                TimeVaryingInputs.evaluate!(dest23, itp23, time)
+                TimeVaryingInputs.evaluate!(dest_ragged, ragged, time)
+                TimeVaryingInputs.evaluate!(dest_shared, shared, time)
+                expected = vec(Array(Fields.field2array(dest23)))
+                @test close_enough(
+                    vec(Array(Fields.field2array(dest_ragged))),
+                    expected,
+                )
+                @test all(
+                    col -> close_enough(col, expected),
+                    eachcol(Array(Fields.field2array(dest_shared))),
+                )
+            end
+            close(itp23)
+        end
+
+        # A surface series against the scalar and the multi-point 0D inputs,
+        # the latter holding the same FT values
+        surface = TimeVaryingInputs.TimeVaryingInput(
+            DataSource(file, "ts"),
+            level_space;
+            start_date,
+        )
+        scalar = TimeVaryingInputs.TimeVaryingInput(node_seconds, ts)
+        multipoint = TimeVaryingInputs.TimeVaryingInput(
+            node_seconds,
+            FT.(repeat(ts', 4, 1)),
+            level_space,
+        )
+        dest_surface = Fields.zeros(level_space)
+        dest_multipoint = Fields.zeros(level_space)
+        expected = zeros(1)
+        for t in (node_seconds..., between_seconds...)
+            TimeVaryingInputs.evaluate!(dest_surface, surface, t)
+            TimeVaryingInputs.evaluate!(dest_multipoint, multipoint, t)
+            TimeVaryingInputs.evaluate!(expected, scalar, t)
+            values = vec(Array(Fields.field2array(dest_surface)))
+            @test all(v -> close_enough(v, expected[1]), values)
+            @test values == vec(Array(Fields.field2array(dest_multipoint)))
+        end
+    end
+end

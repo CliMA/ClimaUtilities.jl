@@ -10,6 +10,8 @@
 
 # The planned parameter underlying arrays are:
 # - one-dimensional (values prescribed as a function of depth at a site),
+# - one-dimensional for many sites (values prescribed as a function of height at
+#   each site, read from NetCDF files described by `DataSource`s),
 # - two-dimensional (values prescribed globally at each lat/lon),
 # - three-dimensional (values prescribed as a function of depth globally)
 # - analytic (functions of the coordinates of the space)

@@ -1,5 +1,6 @@
 import ClimaCore
 import ClimaComms
+import NCDatasets
 import ClimaCore: CommonSpaces, Grids
 
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
@@ -156,3 +157,89 @@ end
 const MultiColumnSpace =
     pkgversion(ClimaCore) >= v"0.16" ? CommonSpaces.MultiColumnSpace :
     CommonSpaces.PointColumnEnsembleSpace
+
+"""
+    write_column_file(path; z, dates, variables, z_name = "z",
+                      time_first = false, scalars = ())
+
+Write a single-site NetCDF file at `path` and return the path: the coordinate
+`z_name` holding `z` in metres, a `time` axis holding `dates` unless
+`dates` is `nothing`, the scalar variables `scalars` and the variables
+`variables`, both `name => data` pairs. A matrix is written over `(z, time)`, or
+`(time, z)` when `time_first`; a vector over `time`, or over `z` when there are
+no dates.
+"""
+function write_column_file(
+    path;
+    z,
+    dates,
+    variables,
+    z_name = "z",
+    time_first = false,
+    scalars = (),
+)
+    NCDatasets.NCDataset(path, "c") do nc
+        NCDatasets.defVar(nc, z_name, z, (z_name,); attrib = ["units" => "m"])
+        isnothing(dates) || NCDatasets.defVar(nc, "time", dates, ("time",))
+        for (name, value) in scalars
+            NCDatasets.defVar(nc, name, value, ())
+        end
+        for (name, data) in variables
+            if data isa AbstractMatrix
+                dims = time_first ? ("time", z_name) : (z_name, "time")
+                data = time_first ? permutedims(data) : data
+            else
+                dims = isnothing(dates) ? (z_name,) : ("time",)
+            end
+            NCDatasets.defVar(nc, name, data, dims)
+        end
+    end
+    return path
+end
+
+"""
+    make_column_spaces(FT; nlevels, z_max)
+
+Spaces with four columns and with one column, `nlevels` levels up to `z_max`,
+and their single-level counterparts.
+"""
+function make_column_spaces(FT; nlevels, z_max)
+    points = [
+        ClimaCore.Geometry.LatLongPoint(FT(lat), FT(long)) for
+        (lat, long) in zip((-30.0, 0.0, 30.0, 60.0), (0.0, 45.0, 90.0, 180.0))
+    ]
+    center_space = MultiColumnSpace(
+        FT;
+        points,
+        z_elem = nlevels,
+        z_min = FT(0),
+        z_max,
+        radius = FT(6.371229e6),
+        staggering = Grids.CellCenter(),
+    )
+    column_space = CommonSpaces.ColumnSpace(
+        FT;
+        z_elem = nlevels,
+        z_min = FT(0),
+        z_max,
+        context = ClimaComms.SingletonCommsContext(ClimaComms.device()),
+        staggering = Grids.CellCenter(),
+    )
+    return (;
+        center_space,
+        level_space = ClimaCore.Spaces.level(center_space, 1),
+        horizontal_space = ClimaCore.Spaces.horizontal_space(center_space),
+        column_space,
+        point_space = ClimaCore.Spaces.level(column_space, 1),
+    )
+end
+
+"""
+    model_levels(space)
+
+Heights of the levels of one column of `space`, on the host.
+"""
+function model_levels(space)
+    z = ClimaCore.Fields.coordinate_field(space).z
+    return Array(ClimaCore.Fields.field2array(z))[:, 1]
+end

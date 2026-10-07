@@ -3,22 +3,25 @@
 # This module contains structs and methods to process external data and evaluate it on the
 # model. This module only concerns with evaluations in time, not in space.
 
-# There are three possible sources of data:
+# There are four possible sources of data:
 # 1. Analytic functions that prescribe how a variable has to be set at a given time
 # 2. 0D, single-site data, which is assumed small enough to be saved to memory
-# 3. 2/3D, global data, which cannot be saved to memory in its entirety.
+# 3. Data of many sites, one time series per column, each on its own time axis, which is
+#    also saved to memory
+# 4. 2/3D, global data, which cannot be saved to memory in its entirety.
 #
-# The TimeVaryingInputs module introduces a shared interface for the three cases so that
+# The TimeVaryingInputs module introduces a shared interface for the four cases so that
 # uses and developers do not have to worry about the details of what type of data will be
 # provided. Behind the scenes, we introduce a new type AbstractTimeVaryingInput, that has
-# three concrete implementation, corresponding to the three use cases described above.
-# Constructors will automatically identify which of the three implementations to use based
-# on the input data, and the existence of three concrete structs should be considered an
+# four concrete implementations, corresponding to the four use cases described above.
+# Constructors will automatically identify which of the four implementations to use based
+# on the input data, and the existence of four concrete structs should be considered an
 # implementation detail.
 #
-# The three TimeVaryingInputs are:
+# The four TimeVaryingInputs are:
 # - AnalyticTimeVaryingInput,
 # - InterpolatingTimeVaryingInput0D,
+# - RaggedInterpolatingTimeVaryingInput,
 # - InterpolatingTimeVaryingInput23D.
 #
 # Along side these TimeVaryingInputs, we also define InterpolationMethods that implement
@@ -42,7 +45,8 @@ Note
 `TimeVaryingInput`s should be considered implementation details. The exposed public interface
 should only be considered
 - `TimeVaryingInput(input; method, context)` for construction,
-- `evaluate!(dest, input, time)` for evaluation
+- `evaluate!(dest, input, time)` for evaluation,
+- `segment_times(input, s)` for the times of inputs with one time series per column
 """
 abstract type AbstractTimeVaryingInput end
 
@@ -194,6 +198,13 @@ an analytic one. In that case, `args` and `kwargs` are passed down to the functi
 function evaluate! end
 
 """
+    segment_times(input, s)
+
+Return the times of the `s`-th segment of a multi-segment `input`.
+"""
+function segment_times end
+
+"""
     extrapolation_bc(aim::AbstractInterpolationMethod)
 
 Return the interpolation boundary conditions associated to `aim`.
@@ -318,7 +329,7 @@ struct LinearPeriodFillingInterpolation{
 end
 
 extension_fns = [
-    :ClimaCore => [:TimeVaryingInput, :evaluate!],
+    :ClimaCore => [:TimeVaryingInput, :evaluate!, :segment_times],
     :NCDatasets => [:TimeVaryingInput, :evaluate!],
     :CUDA => [:TimeVaryingInput, :evaluate!],
 ]
