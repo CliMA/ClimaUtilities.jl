@@ -210,7 +210,8 @@ _normalize_time(range::Tuple{<:ITime, <:ITime}, time::ITime) =
     first(promote(time, range[1]))
 function _normalize_time(range::Tuple{<:ITime, <:ITime}, time::Number)
     # Round to milliseconds to handle non integer times
-    time = ITime(round(Int, 1_000 * time); period = Dates.Millisecond(1))
+    time =
+        ITime(round(Int, 1_000 * Float64(time)); period = Dates.Millisecond(1))
     return first(promote(time, range[1]))
 end
 function _normalize_time(range::Tuple{<:ITime, <:ITime}, time::DateTime)

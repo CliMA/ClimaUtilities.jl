@@ -363,7 +363,6 @@ ClimaUtilities.TimeVaryingInputs.Flat
 ClimaUtilities.TimeVaryingInputs.TimeVaryingInput(::AbstractVector{<:AbstractVector{<:ClimaUtilities.FileReaders.DataSource}}, ::ClimaCore.Spaces.MultiColumnFiniteDifferenceSpace)
 ClimaUtilities.TimeVaryingInputs.TimeVaryingInput(::AbstractVector{<:AbstractVector}, ::AbstractVector{<:AbstractMatrix}, ::ClimaCore.Spaces.MultiColumnFiniteDifferenceSpace)
 ClimaUtilities.TimeVaryingInputs.evaluate!
-ClimaUtilities.TimeVaryingInputs.segment_times
 ClimaUtilities.TimeVaryingInputs.extrapolation_bc
 Base.in
 Base.close(::ClimaUtilities.TimeVaryingInputs.AbstractTimeVaryingInput)

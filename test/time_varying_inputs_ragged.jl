@@ -18,6 +18,9 @@ ClimaComms.init(context)
 
 include("TestTools.jl")
 
+const _segment_times =
+    Base.get_extension(ClimaUtilities, :ClimaUtilitiesClimaCoreExt).TimeVaryingInputsRaggedExt._segment_times
+
 # Interpolate each row of vals at time with a scalar 0D input
 # Since we know the 0D TVI is correct, we can compare against this
 function evaluate_0d(times, vals::AbstractMatrix, time; method)
@@ -96,13 +99,10 @@ segment_values(FT, nlevels, hours) = [
             @test Array(itp.vals) == reduce(hcat, vals)
             @test Array(itp.column_segment) == 1:4
             @test itp.range == (FT(2 * 3600), FT(7 * 3600))
-            @test all(
-                s -> TimeVaryingInputs.segment_times(itp, s) == times[s],
-                1:4,
-            )
+            @test all(s -> _segment_times(itp, s) == times[s], 1:4)
             @test FT(3 * 3600) in itp
             @test !(FT(3600) in itp) && !(FT(8 * 3600) in itp)
-            @test_throws "Segment 5 does not exist; there are 4 segments" TimeVaryingInputs.segment_times(
+            @test_throws "Segment 5 does not exist; there are 4 segments" _segment_times(
                 itp,
                 5,
             )
@@ -115,7 +115,7 @@ segment_values(FT, nlevels, hours) = [
                 column_segment = [1, 2, 1, 2],
             )
             @test eltype(itp.times) == Float64
-            @test TimeVaryingInputs.segment_times(itp, 1) == times[1]
+            @test _segment_times(itp, 1) == times[1]
 
             # ITimes are promoted to a common period across segments
             for ep in (nothing, start_date)
@@ -125,7 +125,7 @@ segment_values(FT, nlevels, hours) = [
                     center_space,
                 )
                 for s in 1:4
-                    st = TimeVaryingInputs.segment_times(itp, s)
+                    st = _segment_times(itp, s)
                     @test st == itimes(ep)[s]
                     @test all(
                         t -> period(t) == Minute(15) && epoch(t) == ep,
@@ -167,10 +167,7 @@ segment_values(FT, nlevels, hours) = [
                 center_space;
                 epoch = start_date,
             )
-            @test all(
-                s -> date.(TimeVaryingInputs.segment_times(itp, s)) == dates[s],
-                1:4,
-            )
+            @test all(s -> date.(_segment_times(itp, s)) == dates[s], 1:4)
             @test start_date + Hour(3) in itp
 
             # Warn only when the segments repeat with different periods
@@ -588,8 +585,8 @@ end
         )
         @test Array(itp.column_segment) == [1, 2, 1, 2]
         @test length(itp.offsets) == 3
-        @test date.(TimeVaryingInputs.segment_times(itp, 1)) == dates_a
-        @test date.(TimeVaryingInputs.segment_times(itp, 2)) == dates_b
+        @test date.(_segment_times(itp, 1)) == dates_a
+        @test date.(_segment_times(itp, 2)) == dates_b
 
         # Node values are the file values regridded onto the model levels
         dest = Fields.zeros(center_space)
@@ -633,8 +630,7 @@ end
             column_space;
             start_date,
         )
-        @test date.(TimeVaryingInputs.segment_times(shifted, 1)) ==
-              dates_a .+ Hour(1)
+        @test date.(_segment_times(shifted, 1)) == dates_a .+ Hour(1)
         dest_shift = Fields.zeros(column_space)
         TimeVaryingInputs.evaluate!(dest_shift, shifted, node_date + Hour(1))
         @test vec(Array(Fields.field2array(dest_shift))) ≈
@@ -791,7 +787,7 @@ end
             NCDatasets.defDim(nc, "time", length(dates_a))
             NCDatasets.defDim(nc, "x", 2)
             NCDatasets.defDim(nc, "y", 2)
-            NCDatasets.defVar(nc, "z", z_a, ("z",))
+            NCDatasets.defVar(nc, "z", z_a, ("z",); attrib = ["units" => "m"])
             NCDatasets.defVar(nc, "time", dates_a, ("time",))
             NCDatasets.defVar(
                 nc,
@@ -817,10 +813,7 @@ end
             [DataSource(zed_path, "ta")],
             column_space,
         )
-        zed = make(
-            [DataSource(zed_path, "ta"; coord_names = (; z = "zed"))],
-            column_space,
-        )
+        zed = make([DataSource(zed_path, "ta"; z_name = "zed")], column_space)
         dest_zed, dest_a =
             Fields.zeros(column_space), Fields.zeros(column_space)
         TimeVaryingInputs.evaluate!(dest_zed, zed, node_date)
@@ -863,7 +856,13 @@ end
         NCDatasets.NCDataset(heights_path, "c") do nc
             NCDatasets.defDim(nc, "z", length(z_a))
             NCDatasets.defDim(nc, "time", length(dates_a))
-            NCDatasets.defVar(nc, "z", permutedims(heights), ("time", "z"))
+            NCDatasets.defVar(
+                nc,
+                "z",
+                permutedims(heights),
+                ("time", "z");
+                attrib = ["units" => "m"],
+            )
             NCDatasets.defVar(nc, "time", dates_a, ("time",))
             NCDatasets.defVar(nc, "ta", ta_a, ("z", "time"))
         end
@@ -960,7 +959,7 @@ end
         NCDatasets.NCDataset(gaps_path, "c") do nc
             NCDatasets.defDim(nc, "z", length(z_a))
             NCDatasets.defDim(nc, "time", length(dates_a))
-            NCDatasets.defVar(nc, "z", z_a, ("z",))
+            NCDatasets.defVar(nc, "z", z_a, ("z",); attrib = ["units" => "m"])
             NCDatasets.defVar(nc, "time", dates_a, ("time",))
             data = Array{Union{Missing, Float64}}(ta_a)
             data[2, 5] = missing
