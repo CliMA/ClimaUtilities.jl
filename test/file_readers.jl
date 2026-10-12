@@ -29,7 +29,7 @@ include("TestTools.jl")
     @test src.varname == "myvar"
     @test isempty(src.available_dates)
     @test src.time_index == -1
-    @test src.coord_names == (; z = "z")
+    @test src.z_name == "z"
     @test src.dataset_kwargs == ()
 
     # Time-varying single file
@@ -92,6 +92,23 @@ include("TestTools.jl")
     @test src.available_dates == times
     @test src.time_index == 1
 
+    # The dates and the joining dimension are those of myvar, not of another
+    # time dimension in the files
+    other_time_paths = map(eachindex(times)) do t
+        path = joinpath(data_dir, "ds_other_time_t$t.nc")
+        NCDataset(path, "c") do nc
+            defVar(nc, "time", [DateTime(1990, 1, t)], ("time",))
+            defVar(nc, "valid_time", [times[t]], ("valid_time",))
+            defVar(nc, "myvar", [1.0], ("valid_time",))
+        end
+        return path
+    end
+    src = FileReaders.DataSource(first(other_time_paths), "myvar")
+    @test src.available_dates == times[1:1]
+    src = FileReaders.DataSource(other_time_paths, "myvar")
+    @test src.available_dates == times
+    @test src.dataset_kwargs == (:aggdim => "valid_time", :deferopen => false)
+
     # Two time dimensions
     two_times_path = joinpath(data_dir, "ds_two_times.nc")
     NCDataset(two_times_path, "c") do nc
@@ -120,59 +137,77 @@ include("TestTools.jl")
     )
 end
 
-@testset "DataSource coordinate names" begin
+@testset "DataSource vertical dimension" begin
     data_dir = mktempdir()
     zs = Float64[1, 2, 3]
-    # myvar is defined over the dimensions lon, lat and z_name
-    function make_coord_file(name, lon, lat, z_name)
+    # myvar is defined over dims, each with a coordinate variable holding zs in
+    # metres except for lon
+    function make_dims_file(name, dims...)
         path = joinpath(data_dir, name)
         NCDataset(path, "c") do nc
-            defDim(nc, lon, 1)
-            defDim(nc, lat, 1)
-            defDim(nc, z_name, length(zs))
-            defVar(nc, lon, [10.0], (lon,))
-            defVar(nc, lat, [20.0], (lat,))
-            defVar(nc, z_name, zs, (z_name,))
-            defVar(nc, "myvar", reshape(zs, 1, 1, :), (lon, lat, z_name))
+            for dim in dims
+                attrib = dim == "lon" ? [] : ["units" => "m"]
+                defVar(nc, dim, zs, (dim,); attrib)
+            end
+            defVar(nc, "myvar", zeros(map(_ -> length(zs), dims)), dims)
         end
         return path
     end
 
-    # Coordinate names are detected case-insensitively from the dimensions
-    detected_path =
-        make_coord_file("cn_detected.nc", "Longitude", "lat", "level")
-    src = FileReaders.DataSource(detected_path, "myvar")
-    @test src.coord_names == (; lon = "Longitude", lat = "lat", z = "level")
+    # The vertical dimension is detected case-insensitively
+    detected_path = make_dims_file("z_detected.nc", "lon", "Level")
+    @test FileReaders.DataSource(detected_path, "myvar").z_name == "Level"
 
-    # Two candidates for one type of coordinate
-    ambiguous_path =
-        make_coord_file("cn_ambiguous.nc", "lon", "longitude", "level")
-    @test_throws "multiple lon dimensions" FileReaders.DataSource(
+    # A dimension with an unrecognized name is vertical only when given as
+    # z_name, which is checked against the file
+    custom_path = make_dims_file("z_custom.nc", "lon", "zed")
+    @test isnothing(FileReaders.DataSource(custom_path, "myvar").z_name)
+    src = FileReaders.DataSource(custom_path, "myvar"; z_name = "zed")
+    @test src.z_name == "zed"
+    @test_throws "is not available as a dimension" FileReaders.DataSource(
+        custom_path,
+        "myvar";
+        z_name = "nope",
+    )
+
+    # Two candidates for the vertical dimension
+    ambiguous_path = make_dims_file("z_ambiguous.nc", "lev", "height")
+    @test_throws "multiple vertical dimensions" FileReaders.DataSource(
         ambiguous_path,
         "myvar",
     )
+    src = FileReaders.DataSource(ambiguous_path, "myvar"; z_name = "height")
+    @test src.z_name == "height"
+end
 
-    # Explicit names are checked against the file and stored as given
-    custom_path = make_coord_file("cn_custom.nc", "x_lon", "y_lat", "zed")
-    names = (; lon = "x_lon", lat = "y_lat", z = "zed")
-    src = FileReaders.DataSource(custom_path, "myvar"; coord_names = names)
-    @test src.coord_names == names
-    @test FileReaders.DataSource(custom_path, "myvar").coord_names == (;)
+@testset "DataSource vertical units" begin
+    data_dir = mktempdir()
 
-    @test_throws "is not available" FileReaders.DataSource(
-        custom_path,
-        "myvar";
-        coord_names = (; lon = "nope"),
+    # myvar is defined over z, which has the given units or none
+    function make_units_file(name, units)
+        path = joinpath(data_dir, name)
+        NCDataset(path, "c") do nc
+            attrib = isnothing(units) ? [] : ["units" => units]
+            defVar(nc, "z", Float64[1, 2, 3], ("z",); attrib)
+            defVar(nc, "myvar", zeros(3), ("z",))
+        end
+        return path
+    end
+
+    pressure_path = make_units_file("z_pressure.nc", "hPa")
+    @test_throws "has units of pressure" FileReaders.DataSource(
+        pressure_path,
+        "myvar",
     )
-    @test_throws "Unrecognized coordinate types" FileReaders.DataSource(
-        custom_path,
-        "myvar";
-        coord_names = (; long = "x_lon"),
-    )
-    @test_throws "must be a NamedTuple" FileReaders.DataSource(
-        custom_path,
-        "myvar";
-        coord_names = ("x_lon", "y_lat"),
+
+    metres_path = make_units_file("z_metres.nc", "metres")
+    @test_logs FileReaders.DataSource(metres_path, "myvar")
+    km_path = make_units_file("z_km.nc", "km")
+    @test_logs (:warn, r"has units km") FileReaders.DataSource(km_path, "myvar")
+    no_units_path = make_units_file("z_no_units.nc", nothing)
+    @test_logs (:warn, r"has no units") FileReaders.DataSource(
+        no_units_path,
+        "myvar",
     )
 end
 

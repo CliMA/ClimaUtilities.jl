@@ -95,10 +95,11 @@ files in the correct order.
 
 A `DataSource` describes a variable in one or more NetCDF files without reading
 its data: the paths of the files, the name of the variable, the dates of its
-time axis and the names of its coordinate dimensions. The coordinate dimensions
-are detected from their names, or given with `coord_names`, which must then list
-all of them. Several files are joined along the time dimension. `DataSource`s
-are used to construct [inputs for multiple sites](@ref multisite_inputs).
+time axis and the name of its vertical dimension. The vertical dimension is
+detected from its name, or given with `z_name`, and should hold heights in
+meters. If its units are a unit of pressure, an error is thrown. Several files
+are joined along the time dimension. `DataSource`s are used to construct
+[inputs for multiple sites](@ref multisite_inputs).
 
 ```julia
 import ClimaUtilities.FileReaders: DataSource

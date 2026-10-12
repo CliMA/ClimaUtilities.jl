@@ -333,14 +333,11 @@ outside the times of the column's segment.
 end
 
 """
-    segment_times(itp::RaggedInterpolatingTimeVaryingInput, s)
+    _segment_times(itp::RaggedInterpolatingTimeVaryingInput, s)
 
 Return the times of segment `s` of `itp`.
 """
-function TimeVaryingInputs.segment_times(
-    itp::RaggedInterpolatingTimeVaryingInput,
-    s::Integer,
-)
+function _segment_times(itp::RaggedInterpolatingTimeVaryingInput, s::Integer)
     num_segments = length(itp.offsets) - 1
     1 <= s <= num_segments ||
         error("Segment $s does not exist; there are $num_segments segments")
