@@ -45,7 +45,7 @@ through `file_reader_kwargs`.
 
 Each source is a time-varying variable of one site: one value per time for a
 space with a single level, or one value per time and level otherwise, on a
-vertical coordinate in metres. Levels are interpolated linearly onto the levels
+vertical coordinate in meters. Levels are interpolated linearly onto the levels
 of `space` and held constant above and below the file's levels. The variables of
 one column must share their dates and levels. Columns whose sources compare
 equal share one time series in memory.
@@ -195,7 +195,7 @@ function _read_block(source::DataSource, preprocess_func)
     return NCDatasets.NCDataset(files; source.dataset_kwargs...) do ds
         var = ds[source.varname]
         dims = NCDatasets.dimnames(var)
-        z_name = get(source.coord_names, :z, nothing)
+        z_name = source.z_name
         z_index = findfirst(==(z_name), dims)
         others = filter(!in((z_index, source.time_index)), eachindex(dims))
         all(i -> size(var, i) == 1, others) || error(
@@ -266,7 +266,7 @@ end
 
 Return a `Field` on `space` holding in each column the static variable of the
 corresponding source, one per column, or of `source` in every column. Each
-source is given on the levels of a vertical coordinate in metres, which are
+source is given on the levels of a vertical coordinate in meters, which are
 interpolated linearly onto the levels of `space` and held constant beyond them,
 or is a single value for a space with a single level. A variable with a time
 dimension of a single date is read as static. `preprocess_func` is applied to

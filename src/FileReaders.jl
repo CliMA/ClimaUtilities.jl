@@ -20,8 +20,8 @@ abstract type AbstractFileReader end
 
 A lightweight description of a variable in one or more datasets which includes
 the path(s) to its source(s), the variable name, the dates of its time axis
-(empty without a time dimension), and the names of its coordinate dimensions by
-type of coordinate. A `DataSource` holds no data itself. It records what is
+(empty without a time dimension), and the name of its vertical dimension
+(`nothing` without one). A `DataSource` holds no data itself. It records what is
 needed to read the variable, and the sources are joined along the time dimension
 when several are given.
 """
@@ -30,7 +30,7 @@ struct DataSource
     varname::String
     available_dates::Vector{Dates.DateTime}
     time_index::Int
-    coord_names::NamedTuple
+    z_name::Union{Nothing, String}
     dataset_kwargs::Tuple
 end
 
