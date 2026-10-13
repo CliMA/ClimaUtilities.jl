@@ -165,6 +165,32 @@ end
     end
 end
 
+@testset "NCFileReader with another time dimension" begin
+    FileReaders.close_all_ncfiles()
+    data_dir = mktempdir()
+    times = [DateTime(2000, 1, 1), DateTime(2000, 1, 2)]
+    # myvar is over valid_time, but the files also have a time dimension
+    paths = map(eachindex(times)) do t
+        path = joinpath(data_dir, "other_time_$t.nc")
+        NCDataset(path, "c") do nc
+            defVar(nc, "lon", [0.0, 1.0], ("lon",))
+            defVar(nc, "time", [DateTime(1990, 1, t)], ("time",))
+            defVar(nc, "valid_time", [times[t]], ("valid_time",))
+            defVar(nc, "myvar", t * ones(2, 1), ("lon", "valid_time"))
+        end
+        return path
+    end
+
+    reader = FileReaders.NCFileReader(first(paths), "myvar")
+    @test FileReaders.available_dates(reader) == times[1:1]
+    close(reader)
+
+    reader = FileReaders.NCFileReader(paths, "myvar")
+    @test FileReaders.available_dates(reader) == times
+    @test FileReaders.read(reader, times[2]) == [2.0, 2.0]
+    close(reader)
+end
+
 @testset "read_available_dates" begin
     read_dates_func =
         Base.get_extension(ClimaUtilities, :ClimaUtilitiesNCDatasetsExt).NCFileReaderExt.read_available_dates

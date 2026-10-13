@@ -114,7 +114,8 @@ function FileReaders.NCFileReader(
         NCDatasets.NCDataset(first(file_paths)) do first_dataset
             is_time =
                 x -> x == "time" || x == "date" || x == "t" || x == "valid_time"
-            time_dims = filter(is_time, NCDatasets.dimnames(first_dataset))
+            time_dims =
+                filter(is_time, NCDatasets.dimnames(first_dataset[varname]))
             if !isempty(time_dims)
                 # When loading multifile dataset using NCDatasets.jl, the NetCDF files are
                 # not kept open due to the common limitation of 1024 open files per user on
@@ -150,20 +151,22 @@ function FileReaders.NCFileReader(
     # validations below error, so a failed construction does not leak the open
     # file (there is no reader to close yet)
     try
-        available_dates = read_available_dates(dataset)
+        available_dates = Dates.DateTime[]
 
         time_index = -1
 
         dim_names = NCDatasets.dimnames(dataset[varname])
 
-        if !isempty(available_dates)
-            is_time =
-                x -> x == "time" || x == "date" || x == "t" || x == "valid_time"
+        is_time =
+            x -> x == "time" || x == "date" || x == "t" || x == "valid_time"
+        time_index_vec = findall(is_time, dim_names)
 
-            time_index_vec = findall(is_time, dim_names)
+        if !isempty(time_index_vec)
             length(time_index_vec) == 1 ||
                 error("Could not find (unique) time dimension")
             time_index = time_index_vec[]
+            available_dates =
+                read_available_dates(dataset, dim_names[time_index])
 
             issorted(available_dates) || error(
                 "Cannot process files that are not sorted in time in ($file_paths)",
