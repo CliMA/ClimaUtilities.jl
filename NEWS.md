@@ -19,9 +19,8 @@ main
 - Fix bug where `promote` returned `ITime`s with different counter types.
 - Fix bug where `promote` for `ITime`s was not inferred on Julia 1.10 and 1.11.
 - `sort_by_creation_time` now errors if any of the files do not exist.
-
-### Bug fixes
-
+- Fix bug where `NCFileReader` can read the dates from a time dimension other
+  than the one the variable is defined on.
 - Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` errored at the
   last available date.
 - Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` with
