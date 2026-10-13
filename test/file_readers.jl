@@ -6,6 +6,211 @@ import ClimaUtilities
 import ClimaUtilities.FileReaders
 using NCDatasets
 
+include("TestTools.jl")
+
+@testset "DataSource" begin
+    data_dir = mktempdir()
+    zs = Float64[1, 2, 3]
+    times = [DateTime(2000, 1, 1), DateTime(2000, 1, 2)]
+    # myvar holds zs .* t at the t-th time, or zs without times
+    make_source_file(name, times) = write_column_file(
+        joinpath(data_dir, name);
+        z = zs,
+        dates = times,
+        variables = [
+            "myvar" => isnothing(times) ? zs : zs .* (1:length(times))',
+        ],
+    )
+
+    # Static single file: no time dimension
+    static_path = make_source_file("ds_static.nc", nothing)
+    src = FileReaders.DataSource(static_path, "myvar")
+    @test src.file_paths == [static_path]
+    @test src.varname == "myvar"
+    @test isempty(src.available_dates)
+    @test src.time_index == -1
+    @test src.z_name == "z"
+    @test src.dataset_kwargs == ()
+
+    # Time-varying single file
+    tv_path = make_source_file("ds_tv.nc", times)
+    src = FileReaders.DataSource(tv_path, "myvar")
+    @test src.available_dates == times
+    @test src.time_index == 2
+
+    # Sources built independently compare equal; time_transform changes the
+    # dates
+    @test src == FileReaders.DataSource(tv_path, "myvar")
+    @test hash(src) == hash(FileReaders.DataSource(tv_path, "myvar"))
+    shifted = FileReaders.DataSource(
+        tv_path,
+        "myvar";
+        time_transform = d -> d + Day(1),
+    )
+    @test shifted.available_dates == times .+ Day(1)
+    @test shifted != src
+
+    # Multiple files joined along the time dimension
+    split_paths = [
+        make_source_file("ds_split_t$t.nc", [times[t]]) for
+        t in eachindex(times)
+    ]
+    src = FileReaders.DataSource(split_paths, "myvar")
+    @test src.available_dates == times
+    @test src.time_index == 2
+    @test src.dataset_kwargs == (:aggdim => "time", :deferopen => false)
+
+    # Coordinates must be consistent across files
+    mismatch_path = write_column_file(
+        joinpath(data_dir, "ds_mismatch.nc");
+        z = zs .+ 0.5,
+        dates = [times[2]],
+        variables = ["myvar" => reshape(zs, :, 1)],
+    )
+    @test_throws "does not match" FileReaders.DataSource(
+        [first(split_paths), mismatch_path],
+        "myvar",
+    )
+
+    # A "date" dimension holding yyyymmdd integers
+    date_path = joinpath(data_dir, "ds_yyyymmdd.nc")
+    NCDataset(date_path, "c") do nc
+        defVar(nc, "date", [20000101, 20000102], ("date",))
+        defVar(nc, "myvar", [1.0, 2.0], ("date",))
+    end
+    src = FileReaders.DataSource(date_path, "myvar")
+    @test src.available_dates == times
+    @test src.time_index == 1
+
+    # A "valid_time" dimension
+    valid_time_path = joinpath(data_dir, "ds_valid_time.nc")
+    NCDataset(valid_time_path, "c") do nc
+        defVar(nc, "valid_time", times, ("valid_time",))
+        defVar(nc, "myvar", [1.0, 2.0], ("valid_time",))
+    end
+    src = FileReaders.DataSource(valid_time_path, "myvar")
+    @test src.available_dates == times
+    @test src.time_index == 1
+
+    # The dates and the joining dimension are those of myvar, not of another
+    # time dimension in the files
+    other_time_paths = map(eachindex(times)) do t
+        path = joinpath(data_dir, "ds_other_time_t$t.nc")
+        NCDataset(path, "c") do nc
+            defVar(nc, "time", [DateTime(1990, 1, t)], ("time",))
+            defVar(nc, "valid_time", [times[t]], ("valid_time",))
+            defVar(nc, "myvar", [1.0], ("valid_time",))
+        end
+        return path
+    end
+    src = FileReaders.DataSource(first(other_time_paths), "myvar")
+    @test src.available_dates == times[1:1]
+    src = FileReaders.DataSource(other_time_paths, "myvar")
+    @test src.available_dates == times
+    @test src.dataset_kwargs == (:aggdim => "valid_time", :deferopen => false)
+
+    # Two time dimensions
+    two_times_path = joinpath(data_dir, "ds_two_times.nc")
+    NCDataset(two_times_path, "c") do nc
+        defVar(nc, "time", times, ("time",))
+        defVar(nc, "t", times, ("t",))
+        defVar(nc, "myvar", zeros(2, 2), ("time", "t"))
+    end
+    @test_throws "Could not find (unique) time dimension" FileReaders.DataSource(
+        two_times_path,
+        "myvar",
+    )
+
+    @test_throws "at least one path" FileReaders.DataSource(String[], "myvar")
+    @test_throws "is not available" FileReaders.DataSource(static_path, "nope")
+    @test_throws "not sorted" FileReaders.DataSource(
+        make_source_file("ds_unsorted.nc", reverse(times)),
+        "myvar",
+    )
+    @test_throws "not unique" FileReaders.DataSource(
+        make_source_file("ds_duplicate.nc", [times[1], times[1]]),
+        "myvar",
+    )
+    @test_throws "no temporal dimension" FileReaders.DataSource(
+        [static_path, static_path],
+        "myvar",
+    )
+end
+
+@testset "DataSource vertical dimension" begin
+    data_dir = mktempdir()
+    zs = Float64[1, 2, 3]
+    # myvar is defined over dims, each with a coordinate variable holding zs in
+    # metres except for lon
+    function make_dims_file(name, dims...)
+        path = joinpath(data_dir, name)
+        NCDataset(path, "c") do nc
+            for dim in dims
+                attrib = dim == "lon" ? [] : ["units" => "m"]
+                defVar(nc, dim, zs, (dim,); attrib)
+            end
+            defVar(nc, "myvar", zeros(map(_ -> length(zs), dims)), dims)
+        end
+        return path
+    end
+
+    # The vertical dimension is detected case-insensitively
+    detected_path = make_dims_file("z_detected.nc", "lon", "Level")
+    @test FileReaders.DataSource(detected_path, "myvar").z_name == "Level"
+
+    # A dimension with an unrecognized name is vertical only when given as
+    # z_name, which is checked against the file
+    custom_path = make_dims_file("z_custom.nc", "lon", "zed")
+    @test isnothing(FileReaders.DataSource(custom_path, "myvar").z_name)
+    src = FileReaders.DataSource(custom_path, "myvar"; z_name = "zed")
+    @test src.z_name == "zed"
+    @test_throws "is not available as a dimension" FileReaders.DataSource(
+        custom_path,
+        "myvar";
+        z_name = "nope",
+    )
+
+    # Two candidates for the vertical dimension
+    ambiguous_path = make_dims_file("z_ambiguous.nc", "lev", "height")
+    @test_throws "multiple vertical dimensions" FileReaders.DataSource(
+        ambiguous_path,
+        "myvar",
+    )
+    src = FileReaders.DataSource(ambiguous_path, "myvar"; z_name = "height")
+    @test src.z_name == "height"
+end
+
+@testset "DataSource vertical units" begin
+    data_dir = mktempdir()
+
+    # myvar is defined over z, which has the given units or none
+    function make_units_file(name, units)
+        path = joinpath(data_dir, name)
+        NCDataset(path, "c") do nc
+            attrib = isnothing(units) ? [] : ["units" => units]
+            defVar(nc, "z", Float64[1, 2, 3], ("z",); attrib)
+            defVar(nc, "myvar", zeros(3), ("z",))
+        end
+        return path
+    end
+
+    pressure_path = make_units_file("z_pressure.nc", "hPa")
+    @test_throws "has units of pressure" FileReaders.DataSource(
+        pressure_path,
+        "myvar",
+    )
+
+    metres_path = make_units_file("z_metres.nc", "metres")
+    @test_logs FileReaders.DataSource(metres_path, "myvar")
+    km_path = make_units_file("z_km.nc", "km")
+    @test_logs (:warn, r"has units km") FileReaders.DataSource(km_path, "myvar")
+    no_units_path = make_units_file("z_no_units.nc", nothing)
+    @test_logs (:warn, r"has no units") FileReaders.DataSource(
+        no_units_path,
+        "myvar",
+    )
+end
+
 @testset "NCFileReader with time" begin
     # Start from a clean OPEN_NCFILES state
     FileReaders.close_all_ncfiles()
@@ -181,6 +386,12 @@ end
         times = [20220101, 20230101]
         defVar(nc, "date", times, ("date",))
         @test read_dates_func(nc) == DateTime.(string.(times), "yyyymmdd")
+    end
+    NCDataset(joinpath(data_dir, "test_valid_time_1.nc"), "c") do nc
+        defDim(nc, "valid_time", 2)
+        times = [DateTime(2022), DateTime(2023)]
+        defVar(nc, "valid_time", times, ("valid_time",))
+        @test read_dates_func(nc) == times
     end
 
     NCDataset(joinpath(@__DIR__, "test_data", "reinterpret_time_dim.nc")) do nc
