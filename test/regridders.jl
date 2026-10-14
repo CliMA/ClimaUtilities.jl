@@ -609,6 +609,8 @@ end
 end
 
 @testset "TempestRegridder" begin
+    # TempestRemap is broken on Windows: https://github.com/ClimateGlobalChange/tempestremap/issues/121
+    Sys.iswindows() && return
     for FT in (Float32, Float64)
         data_path = joinpath(@__DIR__, "test_data", "era5_1979_1.0x1.0_lai.nc")
         ds = NCDatasets.NCDataset(data_path, "r")
