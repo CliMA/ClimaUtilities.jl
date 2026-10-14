@@ -107,6 +107,15 @@ using Test, Dates
         # Promotion unifies the type of the counter
         t5, t6 = promote(ITime(Int32(1)), ITime(1))
         @test typeof(t5.counter) == typeof(t6.counter) == Int64
+
+        # Promotion is inferred, so binary operations compile in GPU kernels
+        @inferred promote(t1, t2)
+        @inferred promote(t3, ITime(20, epoch = Dates.DateTime(2024, 1, 1)))
+        @inferred promote(
+            ITime(Int32(1), period = Dates.Hour(1)),
+            ITime(2, period = Dates.Millisecond(100)),
+            t3,
+        )
     end
 
     @testset "Arithmetic Operations" begin

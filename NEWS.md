@@ -17,6 +17,7 @@ main
   instead of the nearest one in the gap between the last and the first time for
   `ITime`s due to rounding
 - Fix bug where `promote` returned `ITime`s with different counter types.
+- Fix bug where `promote` for `ITime`s was not inferred on Julia 1.10 and 1.11.
 
 ### Bug fixes
 
