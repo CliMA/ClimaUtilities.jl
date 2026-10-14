@@ -240,18 +240,19 @@ function Base.promote(ts::ITime...)
     # Determine the common period
     common_period = reduce(gcd, (period(t) for t in ts))
 
-    # Determine the common counter type
-    common_counter_type = promote_type(map(t -> typeof(counter(t)), ts)...)
+    # Promote the counters as values, since a type captured by the closure
+    # below is not inferred on Julia 1.10 and 1.11
+    counters = promote(map(counter, ts)...)
 
     # Promote each ITime instance by computing the scaling factor needed
     return map(
-        t -> ITime(
-            common_counter_type(counter(t)) *
-            common_counter_type(div(period(t), common_period)),
+        (t, counter) -> ITime(
+            counter * oftype(counter, div(period(t), common_period)),
             common_period,
             common_epoch,
         ),
         ts,
+        counters,
     )
 end
 
