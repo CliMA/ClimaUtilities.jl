@@ -318,8 +318,8 @@ simulation time stored within the HDF5 file.
 - `base_output_dir`: The base directory where the output directory structure is located.
 - `restart_file_rx`: A regular expression used to identify restart files within output
   directories. Defaults to `r"day\\d+\\.\\w+\\.hdf5"`.
-- `sort_func`: A function used to sort restart files and select the most recent one.
-  Defaults to `sort_by_creation_time`.
+- `sort_func`: A function used to sort the full paths of the restart files and select the
+  most recent one. Defaults to `sort_by_creation_time`.
 """
 function detect_restart_file(
     base_output_dir;
@@ -346,12 +346,13 @@ function detect_restart_file(
     # Walk directories backwards looking for restart files
     for output_folder in sort(existing_outputs, rev = true)
         previous_folder = joinpath(base_output_dir, output_folder)
-        possible_restart_files =
-            filter(f -> occursin(restart_file_rx, f), readdir(previous_folder))
+        possible_restart_files = filter(
+            f -> occursin(restart_file_rx, basename(f)),
+            readdir(previous_folder, join = true),
+        )
 
         if !isempty(possible_restart_files)
-            restart_file_name = last(sort_func(possible_restart_files))
-            restart_file = joinpath(previous_folder, restart_file_name)
+            restart_file = last(sort_func(possible_restart_files))
             return restart_file
         end
     end
