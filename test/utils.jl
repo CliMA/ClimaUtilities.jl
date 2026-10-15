@@ -168,5 +168,10 @@ end
 
         sorted_files = sort_by_creation_time(files)
         @test sorted_files == [files[2], files[3], files[1]]
+
+        @test_throws ErrorException sort_by_creation_time([
+            files[1],
+            joinpath(basedir, "file4.txt"),
+        ],)
     end
 end
