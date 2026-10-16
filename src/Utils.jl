@@ -394,6 +394,8 @@ end
 
 Sorts a list of `files` by their creation time, from oldest to newest.
 
+An error is thrown if any of the `files` do not exist.
+
 # Example
 ```julia
 julia> basedir = mktempdir();
@@ -409,6 +411,10 @@ julia> sort_by_creation_time(files);
 ```
 """
 function sort_by_creation_time(files)
+    nonexistent_files = filter(!ispath, files)
+    isempty(nonexistent_files) || error(
+        "Cannot sort by creation time because these files do not exist: $nonexistent_files",
+    )
     return sort(files, by = x -> stat(x).ctime)
 end
 

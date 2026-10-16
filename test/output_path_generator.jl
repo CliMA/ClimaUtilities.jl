@@ -213,6 +213,17 @@ end
         @test restart_file == joinpath(output_dir1, "day0001.1234.hdf5")
     end
 
+    # Test with multiple restart files in the same output directory
+    mktempdir(pwd()) do base_output_dir
+        output_dir = joinpath(base_output_dir, "output_0001")
+        mkdir(output_dir)
+        touch(joinpath(output_dir, "day0002.5678.hdf5"))
+        sleep(0.1)
+        touch(joinpath(output_dir, "day0001.1234.hdf5"))
+        restart_file = detect_restart_file(base_output_dir)
+        @test restart_file == joinpath(output_dir, "day0001.1234.hdf5")
+    end
+
     # Test with a custom restart file regular expression
     mktempdir(pwd()) do base_output_dir
         output_dir = joinpath(base_output_dir, "output_0001")
