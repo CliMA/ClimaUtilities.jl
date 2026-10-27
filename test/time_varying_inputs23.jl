@@ -495,6 +495,30 @@ include("TestTools.jl")
                     )
                 end
 
+                # Halfway into the gap, the first snapshot is used
+                target_time = available_times[end] + 0.5dt
+                target_date = available_dates[end] + 0.5d_date
+                for t in
+                    (target_time, target_date, ITime(0, epoch = target_date))
+                    TimeVaryingInputs.evaluate!(
+                        dest,
+                        input_nearest_periodic_calendar,
+                        t,
+                    )
+
+                    @test isequal(
+                        Array(parent(dest)),
+                        Array(
+                            parent(
+                                DataHandling.regridded_snapshot(
+                                    data_handler,
+                                    available_times[begin],
+                                ),
+                            ),
+                        ),
+                    )
+                end
+
                 # Nearest periodic calendar, in range
                 target_date = available_dates[10] + Second(1)
                 expected = DataHandling.regridded_snapshot(
