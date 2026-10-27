@@ -354,7 +354,7 @@ function TimeVaryingInputs.evaluate!(
         # interpolation here, and when time >= t_end + dt_e we need to use t_init instead of
         # t_end as neighbor.
         if time > t_end
-            time = (time - t_end) <= dt_e ? t_end : t_init
+            time = (time - t_end) < dt_e ? t_end : t_init
         end
     end
     date0 = previous_date(itp.data_handler, time)
