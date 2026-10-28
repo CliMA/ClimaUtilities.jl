@@ -3,6 +3,16 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+### Features
+
+- Add `FileReaders.DataSource`, a description of a variable in one or more
+  NetCDF files, and `TimeVaryingInput` and `SpaceVaryingInput` constructors that
+  give every column of a column, multi-column or point space the data of its own
+  site from `DataSource`s. Each site has its own time axis, its vertical levels
+  are interpolated onto the levels of the space, and the data is kept in memory,
+  on the GPU when the space is. A `TimeVaryingInput` can also be built from
+  arrays, with one time series per column, each on its own time axis.
+
 ### Minor additions
 
 - Binary operations with `ITime`s do not promote unless needed
@@ -21,6 +31,9 @@ main
 - `sort_by_creation_time` now errors if any of the files do not exist.
 - Fix bug where `NCFileReader` can read the dates from a time dimension other
   than the one the variable is defined on.
+- Fix bug where evaluating a 0D `TimeVaryingInput` defined at `ITime`s at a
+  float time errored unless the time was a whole number of nanoseconds. Float
+  times are now rounded to milliseconds, as for 2D/3D `TimeVaryingInput`s.
 - Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` errored at the
   last available date.
 - Fix bug where 2D/3D `TimeVaryingInput`s using `NearestNeighbor` with
