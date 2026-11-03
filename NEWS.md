@@ -3,6 +3,16 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+### Exact division of an `ITime` by an integer
+
+`ITime` now supports exact division by an integer, `t / num` where `t` is an
+`ITime` and `num` is an integer. The result keeps the period of `t` when `num`
+divides the counter. Otherwise, the result has a period of one unit: the unit of
+the period of `t` when the division is exact there, and otherwise the coarsest
+finer unit, down to the nanosecond, at which it is exact. An error is raised
+when no such unit exists. `isdivisible(t, num)` returns whether `t / num` is
+exact. `convert` changes the period and the counter type of an `ITime` without
+rounding, and raises an error when that is not possible.
 
 v0.1.34
 ------

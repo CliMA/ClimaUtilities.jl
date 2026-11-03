@@ -122,6 +122,57 @@ As we can see, the return value of 5 hours - 25 minutes is 275 minutes and it is
 represented as 55 clock cycles of a period of 5 minutes. `Minute(5)` was picked
 because it the greatest common divisor between `Hour(1)` and `Minute(25)`.
 
+Dividing an `ITime` by an integer returns an `ITime`, and the division is exact.
+When the integer divides the counter, the result keeps the period. Otherwise,
+the result has a period of one unit: the unit of the period when the division
+is exact there, and otherwise the coarsest finer unit, down to the nanosecond,
+at which it is exact.
+```@example example1
+time1 = ITime(1; period = Hour(1))
+time1 / 2
+```
+```@example example1
+ITime(1; period = Minute(120)) / 2
+```
+When no unit down to the nanosecond makes the division exact, an error is
+thrown.
+```@example example1
+try #hide
+ITime(1; period = Second(1)) / 3
+catch err; showerror(stderr, err); end #hide
+```
+The counter type is preserved, so the refined counter must be representable by
+it. For example, `ITime(Int32(2_000_000_001); period = Second(1)) / 2` needs a
+millisecond counter larger than `typemax(Int32)`, so an error is thrown. For a
+division that truncates the counter and keeps the period, use `div`.
+`isdivisible` returns whether a division by a given integer is exact.
+```@example example1
+filter(n -> isdivisible(ITime(1), n), 1:12)
+```
+
+A division that refines the period returns an `ITime` with a different period,
+and often of a different type than its input. The type depends on the values,
+not only on the types, of the arguments. `convert` changes the period of an
+`ITime` exactly, so that a result that is a whole number of the original period
+can be stored where an `ITime` of the original type is expected.
+```@example example1
+dt = ITime(2)
+fast_dt = dt / 8
+convert(typeof(dt), 8 * fast_dt)
+```
+Converting to a finer period succeeds when the new counter fits the target
+counter type. Converting to a coarser period succeeds only when the instant is a
+whole number of that period.
+```@example example1
+convert(ITime{Int64, Millisecond, Nothing}, ITime(3))
+```
+```@example example1
+try #hide
+convert(ITime{Int64, Second, Nothing}, ITime(1500; period = Millisecond(1)))
+catch err; showerror(stderr, err); end #hide
+```
+A conversion raises an error when the epoch types differ.
+
 At any point, we can obtain a date or a number of seconds from an `ITime`:
 ```@example example1
 time1 = ITime(5; period = Day(10), epoch = DateTime(2012, 12, 21))
@@ -172,6 +223,11 @@ In cases where you compute an expression of the form `t + a * dt` where `a` is a
 float or something similar, then rounding occurs. For packages like
 ClimaTimeSteppers, this means that any time stepping stages will incur a slight
 inaccuracy in the time if the period is not divisible by `dt`.
+
+To divide a timestep into a whole number `n` of equal sub-steps, use `dt / n`
+instead. Division by an integer is exact, because it refines the period instead
+of rounding (see
+[`ClimaUtilities.TimeManager.isdivisible`](@ref)).
 
 ### How to use `ITime`s in packages
 
@@ -308,4 +364,7 @@ Base.one(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
 Base.oneunit(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
 Base.zero(t::T) where {T <: ClimaUtilities.TimeManager.ITime}
 Base.:*(t::ClimaUtilities.TimeManager.ITime, a::AbstractFloat)
+Base.:/(t::ClimaUtilities.TimeManager.ITime, num::Integer)
+ClimaUtilities.TimeManager.isdivisible
+Base.convert(::Type{ClimaUtilities.TimeManager.ITime{INT, DT, EPOCH}}, t::ClimaUtilities.TimeManager.ITime) where {INT <: Integer, DT <: ClimaUtilities.TimeManager.Dates.FixedPeriod, EPOCH <: Union{Nothing, ClimaUtilities.TimeManager.Dates.DateTime}}
 ```
