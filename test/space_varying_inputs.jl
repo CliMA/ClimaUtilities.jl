@@ -5,7 +5,6 @@ using Dates
 
 using ClimaUtilities.SpaceVaryingInputs: SpaceVaryingInput
 import ClimaUtilities.FileReaders: DataSource
-import ClimaUtilities.Utils: interpolate_columns!
 
 import ClimaComms
 @static pkgversion(ClimaComms) >= v"0.6" && ClimaComms.@import_required_backends
@@ -98,19 +97,27 @@ end
         (; center_space, level_space, column_space, point_space) =
             make_column_spaces(FT; nlevels = 10, z_max = FT(6000))
         model_z = model_levels(center_space)
-        regrid(z, vals) = vec(
-            interpolate_columns!(
-                zeros(FT, length(model_z), 1),
-                model_z,
-                z,
-                reshape(vals, :, 1),
-            ),
-        )
+        # Flat extrapolation holds the values at the closest level of each file
+        ta_a_flat = 300 .- 0.006 .* clamp.(model_z, 0, 5000)
+        ta_b_flat = 290 .- 0.005 .* clamp.(model_z, 500, 5500)
+        # The profiles are linear in z, so linear extrapolation is exact above
+        # and below the levels of the files
+        ta_a_linear = 300 .- 0.006 .* model_z
+        ta_b_linear = 290 .- 0.005 .* model_z
 
         field = SpaceVaryingInput(sources("ta"), center_space)
         arr = Array(ClimaCore.Fields.field2array(field))
-        @test arr[:, 1] == arr[:, 3] == regrid(z_a, ta_a)
-        @test arr[:, 2] == arr[:, 4] == regrid(z_b, ta_b)
+        @test arr[:, 1] ≈ arr[:, 3] ≈ ta_a_flat
+        @test arr[:, 2] ≈ arr[:, 4] ≈ ta_b_flat
+
+        field = SpaceVaryingInput(
+            sources("ta"),
+            center_space;
+            vertical_extrapolation_bc = ClimaUtilities.TimeVaryingInputs.Linear(),
+        )
+        arr = Array(ClimaCore.Fields.field2array(field))
+        @test arr[:, 1] ≈ arr[:, 3] ≈ ta_a_linear
+        @test arr[:, 2] ≈ arr[:, 4] ≈ ta_b_linear
 
         # The same profile in every column, with preprocess_func applied
         field = SpaceVaryingInput(
@@ -119,7 +126,7 @@ end
             preprocess_func = x -> 2x,
         )
         arr = Array(ClimaCore.Fields.field2array(field))
-        @test all(c -> arr[:, c] == 2 .* regrid(z_a, ta_a), 1:4)
+        @test all(c -> arr[:, c] ≈ 2 .* ta_a_flat, 1:4)
 
         # A single column matches the array method
         field = SpaceVaryingInput([DataSource(file_a, "ta")], column_space)
@@ -132,11 +139,33 @@ end
             SpaceVaryingInput([DataSource(one_date_file, "ta")], column_space)
         @test Array(parent(one_date)) == Array(parent(field))
 
+        # A single level at 6000 m, above the levels of file_a
+        single_level_space =
+            make_column_spaces(FT; nlevels = 1, z_max = FT(12_000)).column_space
+        for (bc, expected) in (
+            (ClimaUtilities.TimeVaryingInputs.Flat(), 270),
+            (ClimaUtilities.TimeVaryingInputs.Linear(), 264),
+        )
+            field = SpaceVaryingInput(
+                [DataSource(file_a, "ta")],
+                single_level_space;
+                vertical_extrapolation_bc = bc,
+            )
+            @test only(Array(parent(field))) ≈ expected
+        end
+
         # Static points into spaces with a single level
         field = SpaceVaryingInput(sources("ts"), level_space)
         @test vec(Array(ClimaCore.Fields.field2array(field))) ==
               FT[280, 285, 280, 285]
         field = SpaceVaryingInput([DataSource(file_a, "ts")], point_space)
+        @test vec(Array(ClimaCore.Fields.field2array(field))) == FT[280]
+        # The vertical extrapolation is not used without a vertical coordinate
+        field = SpaceVaryingInput(
+            [DataSource(file_a, "ts")],
+            point_space;
+            vertical_extrapolation_bc = ClimaUtilities.TimeVaryingInputs.Linear(),
+        )
         @test vec(Array(ClimaCore.Fields.field2array(field))) == FT[280]
 
         @test_throws "sources for a space" SpaceVaryingInput(

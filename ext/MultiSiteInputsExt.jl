@@ -5,12 +5,11 @@ import NCDatasets
 
 import ClimaCore
 
-import ClimaUtilities.Utils: interpolate_columns!
 import ClimaUtilities.FileReaders: DataSource
 import ClimaUtilities.SpaceVaryingInputs
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs:
-    AbstractInterpolationMethod, LinearInterpolation
+    AbstractInterpolationMethod, LinearInterpolation, Throw, Flat, Linear
 
 include("column_spaces.jl")
 
@@ -19,9 +18,10 @@ include("column_spaces.jl")
         sources::AbstractVector{<:AbstractVector{<:DataSource}},
         space;
         start_date,
-        compose_function,
-        method,
-        preprocess_func
+        compose_function = identity,
+        method = LinearInterpolation(),
+        preprocess_func = identity,
+        vertical_extrapolation_bc = TimeVaryingInputs.Flat()
     )
     TimeVaryingInput(sources::AbstractVector{<:DataSource}, space; kwargs...)
     TimeVaryingInput(source::DataSource, space; kwargs...)
@@ -46,9 +46,12 @@ through `file_reader_kwargs`.
 Each source is a time-varying variable of one site: one value per time for a
 space with a single level, or one value per time and level otherwise, on a
 vertical coordinate in meters. Levels are interpolated linearly onto the levels
-of `space` and held constant above and below the file's levels. The variables of
-one column must share their dates and levels. Columns whose sources compare
-equal share one time series in memory.
+of `space`. Above and below the file's levels, `vertical_extrapolation_bc`
+holds the values of the closest level with `TimeVaryingInputs.Flat()`, the
+default, extends the line through the two closest levels with
+`TimeVaryingInputs.Linear()`, or errors with `TimeVaryingInputs.Throw()`. The
+variables of one column must share their dates and levels. Columns whose sources
+compare equal share one time series in memory.
 
 `start_date` is required: it is the date at which the simulation time is zero.
 `method` sets the interpolation in time. The default, `LinearInterpolation()`,
@@ -97,6 +100,7 @@ function TimeVaryingInputs.TimeVaryingInput(
     compose_function = identity,
     method::AbstractInterpolationMethod = LinearInterpolation(),
     preprocess_func = identity,
+    vertical_extrapolation_bc::Union{Throw, Flat, Linear} = Flat(),
 )
     num_columns =
         space isa ClimaCore.Spaces.PointSpace ? 1 :
@@ -135,7 +139,14 @@ function TimeVaryingInputs.TimeVaryingInput(
         block = compose_function((r.block for r in reads)...)
 
         # Preprocess the data by regridding to the dest z
-        (dates, _regrid_block(block, z_src, model_z, first(col)))
+        block = _regrid_block(
+            block,
+            z_src,
+            model_z,
+            first(col),
+            vertical_extrapolation_bc,
+        )
+        (dates, block)
     end
     # This calls the constructor for RaggedInterpolatingTimeVaryingInput
     return TimeVaryingInputs.TimeVaryingInput(
@@ -227,12 +238,13 @@ function _read_block(source::DataSource, preprocess_func)
 end
 
 """
-    _regrid_block(block, z_src, model_z, source)
+    _regrid_block(block, z_src, model_z, source, extrapolation_bc)
 
-Interpolate `block`, given on the levels `z_src`, onto the levels `model_z`, or
-return it as is when there is no `z_src` and the space has a single level.
+Interpolate `block`, given on the levels `z_src`, onto the levels `model_z`,
+using `extrapolation_bc` outside of `z_src`, or return it as is when there is no
+`z_src` and the space has a single level.
 """
-function _regrid_block(block, z_src, model_z, source)
+function _regrid_block(block, z_src, model_z, source, extrapolation_bc)
     if isnothing(z_src)
         isnothing(model_z) ||
             length(model_z) == 1 ||
@@ -247,35 +259,138 @@ function _regrid_block(block, z_src, model_z, source)
     all(isfinite, z_src) || error(
         "The levels of $(source.varname) in $(source.file_paths) are not all finite",
     )
-    is_monotonic(zs) =
-        issorted(zs; lt = <=) || issorted(zs; rev = true, lt = <=)
+    is_monotonic(zs) = issorted(zs; lt = <=) || issorted(zs; lt = >=)
     all(is_monotonic, eachcol(z_src)) || error(
         "The levels of $(source.varname) in $(source.file_paths) are not strictly monotonic",
     )
     out = Matrix{eltype(model_z)}(undef, length(model_z), size(block, 2))
-    return interpolate_columns!(out, model_z, z_src, block)
+    return interpolate_columns!(out, model_z, z_src, block, extrapolation_bc)
+end
+
+"""
+    interpolate_columns!(dest, z_target, z_src, data, extrapolation_bc = Flat())
+
+Interpolate each column of `data`, given at the levels `z_src`, onto the levels
+`z_target` and write the result to `dest`. `z_src` is a vector shared by every
+column or a matrix with one column per column of `data`, each finite and
+strictly increasing or strictly decreasing.
+
+Outside the source levels, `extrapolation_bc` is `Flat()` to use the closest
+value in the column, `Linear()` to extend the line through the two closest
+values in the column, or `Throw()` to error.
+"""
+function interpolate_columns!(
+    dest,
+    z_target,
+    z_src,
+    data,
+    extrapolation_bc = Flat(),
+)
+    size(z_src, 1) >= 2 || error("At least two source levels are needed")
+    size(z_src, 1) == size(data, 1) ||
+        error("z_src and data have different numbers of levels")
+    z_src isa AbstractVector ||
+        size(z_src, 2) == size(data, 2) ||
+        error("z_src and data have different numbers of columns")
+    size(dest) == (length(z_target), size(data, 2)) ||
+        error("dest must have size (length(z_target), size(data, 2))")
+    for c in axes(data, 2)
+        zs = z_src isa AbstractVector ? z_src : view(z_src, :, c)
+        ys = view(data, :, c)
+        all(isfinite, zs) ||
+            error("The source levels of column $c are not all finite")
+        if !issorted(zs; lt = <=)
+            issorted(zs; lt = >=) || error(
+                "The source levels of column $c are not strictly monotonic",
+            )
+            zs, ys = reverse(zs), reverse(ys)
+        end
+        for (k, z) in enumerate(z_target)
+            i1, i2, w = _level_stencil(z, zs, extrapolation_bc)
+            dest[k, c] = ys[i1] + (ys[i2] - ys[i1]) * w
+        end
+    end
+    return dest
+end
+
+"""
+    _level_stencil(z, zs, extrapolation_bc)
+
+Return the stencil `(i1, i2, w)` for the level `z` on the increasing levels
+`zs`, using `extrapolation_bc` outside the range of `zs`. The value at `z` is
+`ys[i1] + (ys[i2] - ys[i1]) * w`, where `ys` are the values at `zs`.
+"""
+@inline function _level_stencil(z, zs, extrapolation_bc)
+    FT = float(promote_type(typeof(z), eltype(zs)))
+    i1, i2, w =
+        zs[begin] <= z <= zs[end] ? _interior_level_stencil(z, zs) :
+        _boundary_level_stencil(z, zs, extrapolation_bc)
+    return (i1, i2, FT(w))
+end
+
+"""
+    _interior_level_stencil(z, zs)
+
+Return the stencil for the level `z` within the range of `zs`.
+
+A `z` that falls exactly on a level of `zs` returns that level with zero weight.
+"""
+function _interior_level_stencil(z, zs)
+    i = searchsortedfirst(zs, z)
+    # Also avoids indexing before the first level when z == zs[begin]
+    zs[i] == z && return (i, i, 0)
+    return (i - 1, i, (z - zs[i - 1]) / (zs[i] - zs[i - 1]))
+end
+
+"""
+    _boundary_level_stencil(z, zs, extrapolation_bc)
+
+Return the stencil for the level `z` outside the range of `zs` given the
+`extrapolation_bc`.
+"""
+function _boundary_level_stencil(z, zs, ::Throw)
+    return error(
+        "The source levels from $(zs[begin]) to $(zs[end]) do not cover the level $z",
+    )
+end
+
+function _boundary_level_stencil(z, zs, ::Flat)
+    i = z < zs[begin] ? firstindex(zs) : lastindex(zs)
+    return (i, i, 0)
+end
+
+function _boundary_level_stencil(z, zs, ::Linear)
+    i = z < zs[begin] ? firstindex(zs) : lastindex(zs) - 1
+    return (i, i + 1, (z - zs[i]) / (zs[i + 1] - zs[i]))
 end
 
 """
     SpaceVaryingInput(
         sources::AbstractVector{<:DataSource},
         space;
-        preprocess_func = identity
+        preprocess_func = identity,
+        vertical_extrapolation_bc = TimeVaryingInputs.Flat()
     )
     SpaceVaryingInput(source::DataSource, space; kwargs...)
 
 Return a `Field` on `space` holding in each column the static variable of the
-corresponding source, one per column, or of `source` in every column. Each
-source is given on the levels of a vertical coordinate in meters, which are
-interpolated linearly onto the levels of `space` and held constant beyond them,
-or is a single value for a space with a single level. A variable with a time
-dimension of a single date is read as static. `preprocess_func` is applied to
-every value read.
+corresponding source, one per column, or of `source` in every column.
+
+Each source is given on the levels of a vertical coordinate in meters, which are
+interpolated linearly onto the levels of `space`, or is a single value for a
+space with a single level. A variable with a time dimension of a single date is
+read as static. `preprocess_func` is applied to every value read.
+
+Above and below the levels of a source, `vertical_extrapolation_bc` holds the
+values of the closest level with `TimeVaryingInputs.Flat()`, the default,
+extends the line through the two closest levels with
+`TimeVaryingInputs.Linear()`, or errors with `TimeVaryingInputs.Throw()`.
 """
 function SpaceVaryingInputs.SpaceVaryingInput(
     sources::AbstractVector{<:DataSource},
     space::ColumnSpace;
     preprocess_func = identity,
+    vertical_extrapolation_bc::Union{Throw, Flat, Linear} = Flat(),
 )
     field = ClimaCore.Fields.zeros(space)
     arr = ClimaCore.Fields.field2array(field)
@@ -290,7 +405,13 @@ function SpaceVaryingInputs.SpaceVaryingInput(
             "$(source.varname) in $(source.file_paths) has a time dimension with $(length(source.available_dates)) dates; use TimeVaryingInput for time-varying data",
         )
         (; block, z_src) = _read_block(source, preprocess_func)
-        block = _regrid_block(block, z_src, model_z, source)
+        block = _regrid_block(
+            block,
+            z_src,
+            model_z,
+            source,
+            vertical_extrapolation_bc,
+        )
         vec(block)
     end
     copyto!(arr, stack(columns[indexin(sources, unique_sources)]))

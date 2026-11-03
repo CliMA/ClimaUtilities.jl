@@ -10,8 +10,11 @@ main
   give every column of a column, multi-column or point space the data of its own
   site from `DataSource`s. Each site has its own time axis, its vertical levels
   are interpolated onto the levels of the space, and the data is kept in memory,
-  on the GPU when the space is. A `TimeVaryingInput` can also be built from
-  arrays, with one time series per column, each on its own time axis.
+  on the GPU when the space is. Above and below the levels of a site, values are
+  held constant (`Flat()`), extended linearly (`Linear()`), or an error is
+  thrown (`Throw()`), as set by `vertical_extrapolation_bc`. A
+  `TimeVaryingInput` can also be built from arrays, with one time series per
+  column, each on its own time axis.
 
 ### Minor additions
 

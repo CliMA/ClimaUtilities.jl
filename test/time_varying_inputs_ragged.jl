@@ -5,7 +5,6 @@ import ClimaUtilities
 import ClimaUtilities: TimeVaryingInputs
 import ClimaUtilities.FileReaders: DataSource
 import ClimaUtilities.TimeManager: ITime, date, period, epoch
-import ClimaUtilities.Utils: interpolate_columns!
 
 import ClimaCore: Domains, Fields, Geometry, Grids, Meshes, Spaces, Topologies
 import ClimaComms
@@ -20,6 +19,8 @@ include("TestTools.jl")
 
 const _segment_times =
     Base.get_extension(ClimaUtilities, :ClimaUtilitiesClimaCoreExt).TimeVaryingInputsRaggedExt._segment_times
+const interpolate_columns! =
+    Base.get_extension(ClimaUtilities, :ClimaUtilitiesClimaCoreNCDatasetsExt).MultiSiteInputsExt.interpolate_columns!
 
 # Interpolate each row of vals at time with a scalar 0D input
 # Since we know the 0D TVI is correct, we can compare against this
@@ -526,6 +527,136 @@ segment_values(FT, nlevels, hours) = [
     end
 end
 
+@testset "interpolate_columns!" begin
+    for FT in (Float32, Float64)
+        z_src = FT[0, 2500, 5000, 7500, 10_000]
+        data = stack([FT(c) .* z_src for c in 1:3])
+        for z_target in
+            (collect(FT, 0:1000:10_000), collect(FT, 10_000:-1000:0))
+            dest = similar(data, length(z_target), 3)
+            # Increasing and decreasing source levels
+            for (zs, ys) in
+                ((z_src, data), (reverse(z_src), reverse(data, dims = 1)))
+                interpolate_columns!(dest, z_target, zs, ys)
+                @test dest ≈ stack([FT(c) .* z_target for c in 1:3])
+            end
+            # Levels per column, in different directions
+            zs = stack([z_src, reverse(z_src), z_src .+ 1000])
+            interpolate_columns!(dest, z_target, zs, zs)
+            @test dest[:, 1] ≈ z_target
+            @test dest[:, 2] ≈ z_target
+            @test dest[:, 3] ≈ clamp.(z_target, FT(1000), FT(11_000))
+        end
+
+        # Nodes are exact and values are clamped outside the source levels
+        z_target = FT[-1, 0, 2500, 10_000, 20_000]
+        dest = similar(data, length(z_target), 3)
+        interpolate_columns!(dest, z_target, z_src, data)
+        @test dest[2:4, :] == data[[1, 2, 5], :]
+        @test dest[1, :] == data[1, :]
+        @test dest[5, :] == data[end, :]
+
+        # Linear extrapolation keeps data that is linear in z exact outside the
+        # source levels
+        linear = TimeVaryingInputs.Linear()
+        for (zs, ys) in
+            ((z_src, data), (reverse(z_src), reverse(data, dims = 1)))
+            interpolate_columns!(dest, z_target, zs, ys, linear)
+            @test dest ≈ stack([FT(c) .* z_target for c in 1:3])
+        end
+        zs = stack([z_src, reverse(z_src), z_src .+ 1000])
+        interpolate_columns!(dest, z_target, zs, zs, linear)
+        @test dest ≈ stack(fill(z_target, 3))
+
+        # Values worked out by hand for z^2 at the source levels, which is not
+        # linear in z
+        z_target_sq = FT[0.5, 2, 2.5, 4]
+        dest_sq = zeros(FT, length(z_target_sq), 1)
+        for (zs, ys) in ((FT[0, 1, 3], FT[0, 1, 9]), (FT[3, 1, 0], FT[9, 1, 0]))
+            interpolate_columns!(dest_sq, z_target_sq, zs, reshape(ys, :, 1))
+            @test dest_sq[:, 1] ≈ FT[0.5, 5, 7, 9]
+            # Only the two closest levels set the slope beyond the levels
+            interpolate_columns!(
+                dest_sq,
+                FT[-1, 0.5, 2, 4],
+                zs,
+                reshape(ys, :, 1),
+                linear,
+            )
+            @test dest_sq[:, 1] ≈ FT[-1, 0.5, 5, 13]
+        end
+
+        # Two source levels are enough for both boundary conditions
+        dest_two = zeros(FT, 3, 1)
+        for (bc, expected) in
+            ((TimeVaryingInputs.Flat(), FT[0, 1, 2]), (linear, FT[-2, 1, 4]))
+            interpolate_columns!(
+                dest_two,
+                FT[-1, 0.5, 2],
+                FT[0, 1],
+                reshape(FT[0, 2], :, 1),
+                bc,
+            )
+            @test dest_two[:, 1] ≈ expected
+        end
+
+        # Throw only errors outside the source levels
+        interpolate_columns!(
+            dest,
+            z_src,
+            z_src,
+            data,
+            TimeVaryingInputs.Throw(),
+        )
+        @test dest == data
+        @test_throws "do not cover the level" interpolate_columns!(
+            dest,
+            z_target,
+            z_src,
+            data,
+            TimeVaryingInputs.Throw(),
+        )
+
+        @test_throws "not strictly monotonic" interpolate_columns!(
+            dest,
+            z_target,
+            FT[0, 1, 1, 2, 3],
+            data,
+        )
+        @test_throws "At least two" interpolate_columns!(
+            dest,
+            z_target,
+            FT[0],
+            data[1:1, :],
+        )
+        @test_throws "At least two" interpolate_columns!(
+            dest,
+            z_target,
+            FT[0],
+            data[1:1, :],
+            linear,
+        )
+        @test_throws "different numbers of levels" interpolate_columns!(
+            dest,
+            z_target,
+            z_src[1:4],
+            data,
+        )
+        @test_throws "different numbers of columns" interpolate_columns!(
+            dest,
+            z_target,
+            stack([z_src, z_src]),
+            data,
+        )
+        @test_throws "dest must have size" interpolate_columns!(
+            similar(data, 2, 3),
+            z_target,
+            z_src,
+            data,
+        )
+    end
+end
+
 @testset "TimeVaryingInput from DataSources" begin
     data_dir = mktempdir()
     start_date = DateTime(2010, 7, 1)
@@ -594,6 +725,27 @@ end
         arr = Array(Fields.field2array(dest))
         @test arr[:, 1] == arr[:, 3] == regrid(z_a, ta_a)[:, 3]
         @test arr[:, 2] == arr[:, 4] == regrid(z_b, ta_b)[:, 1]
+
+        # The data is linear in z, so linear extrapolation is exact above and
+        # below the levels of the files
+        itp_linear = TimeVaryingInputs.TimeVaryingInput(
+            sources("ta"),
+            center_space;
+            start_date,
+            vertical_extrapolation_bc = TimeVaryingInputs.Linear(),
+        )
+        TimeVaryingInputs.evaluate!(dest, itp_linear, node_date)
+        arr = Array(Fields.field2array(dest))
+        @test arr[:, 1] ≈ arr[:, 3] ≈ model_z ./ 1000 .+ 2
+        @test arr[:, 2] ≈ arr[:, 4] ≈ 2 .* model_z ./ 1000
+
+        # The levels of the space go beyond the levels of both files
+        @test_throws "do not cover the level" TimeVaryingInputs.TimeVaryingInput(
+            sources("ta"),
+            center_space;
+            start_date,
+            vertical_extrapolation_bc = TimeVaryingInputs.Throw(),
+        )
 
         # Outside the dates of a column, the dates it covers are given
         @test_throws ["2010-07-01T00:00:00", "2010-07-01T23:00:00"] TimeVaryingInputs.evaluate!(
@@ -752,6 +904,18 @@ end
         TimeVaryingInputs.evaluate!(
             dest_single,
             make([DataSource(file_a, "ts")], single_level_space),
+            node_date,
+        )
+        @test vec(Array(Fields.field2array(dest_single))) == FT[ts_a[3]]
+        # The vertical extrapolation is not used without a vertical coordinate
+        dest_single = Fields.zeros(single_level_space)
+        TimeVaryingInputs.evaluate!(
+            dest_single,
+            make(
+                [DataSource(file_a, "ts")],
+                single_level_space;
+                vertical_extrapolation_bc = TimeVaryingInputs.Linear(),
+            ),
             node_date,
         )
         @test vec(Array(Fields.field2array(dest_single))) == FT[ts_a[3]]
@@ -1011,7 +1175,7 @@ end
             make_column_spaces(FT; nlevels = 10, z_max = FT(6000))
         close_enough(a, b) = isapprox(a, b; rtol = 10eps(FT))
 
-        for method in (
+        methods = (
             TimeVaryingInputs.LinearInterpolation(),
             TimeVaryingInputs.LinearInterpolation(
                 TimeVaryingInputs.PeriodicCalendar(),
@@ -1021,6 +1185,14 @@ end
                 TimeVaryingInputs.PeriodicCalendar(),
             ),
         )
+        # The top two model levels (5100 and 5700 m) are above the file's top
+        # (5000 m), so each vertical extrapolation is compared with the same
+        # one in the 23D input
+        extrapolations = (
+            (Interpolations.Flat(), TimeVaryingInputs.Flat()),
+            (Interpolations.Line(), TimeVaryingInputs.Linear()),
+        )
+        for method in methods, (bc, vertical_extrapolation_bc) in extrapolations
             itp23 = TimeVaryingInputs.TimeVaryingInput(
                 file,
                 "ta",
@@ -1028,21 +1200,21 @@ end
                 start_date,
                 method,
                 regridder_type = :InterpolationsRegridder,
-                regridder_kwargs = (;
-                    extrapolation_bc = (Interpolations.Flat(),)
-                ),
+                regridder_kwargs = (; extrapolation_bc = (bc,)),
             )
             ragged = TimeVaryingInputs.TimeVaryingInput(
                 [DataSource(file, "ta")],
                 column_space;
                 start_date,
                 method,
+                vertical_extrapolation_bc,
             )
             shared = TimeVaryingInputs.TimeVaryingInput(
                 DataSource(file, "ta"),
                 center_space;
                 start_date,
                 method,
+                vertical_extrapolation_bc,
             )
             dest23 = Fields.zeros(column_space)
             dest_ragged = Fields.zeros(column_space)

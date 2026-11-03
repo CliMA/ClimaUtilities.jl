@@ -150,6 +150,16 @@ the value at t1 = 10. When interpolating at t=-3, use t0 = 0.
 struct Flat <: AbstractInterpolationBoundaryMethod end
 
 """
+    Linear
+
+When interpolating outside of range, extend the line through the two closest points.
+
+For example, if the data is defined at z = 0, 1, and 2, extrapolating at z = 3 continues
+the line through the values at z = 1 and z = 2.
+"""
+struct Linear <: AbstractInterpolationBoundaryMethod end
+
+"""
     TimeVaryingInput(func)
     TimeVaryingInput(times, vals; method, context)
 

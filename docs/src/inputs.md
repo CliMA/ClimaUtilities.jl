@@ -125,10 +125,13 @@ more files, and a vector of `DataSource`s, one per column in the order of
 Sources are paired with columns by position, and columns whose sources are
 equal share one time series in memory.
 
-The vertical levels of the files are interpolated onto the levels of the space
-when the input is constructed, and the values are held constant above and below
-the levels of the files. All the data is then kept in memory (on the GPU when
-the space is on the GPU), so evaluating the input does not read any file.
+The vertical levels of the files are interpolated linearly onto the levels of
+the space when the input is constructed. Above and below the levels of the
+data, the values are held constant by default, extended linearly with
+`vertical_extrapolation_bc = TimeVaryingInputs.Linear()`, or an error is thrown
+with `vertical_extrapolation_bc = TimeVaryingInputs.Throw()`. All the data is
+then kept in memory (on the GPU when the space is on the GPU), so evaluating the
+input does not read any file.
 
 ```julia
 import ClimaUtilities: TimeVaryingInputs
@@ -154,6 +157,7 @@ ta = TimeVaryingInputs.TimeVaryingInput(
     sources,
     space;
     start_date = Dates.DateTime(2010, 7, 1),
+    vertical_extrapolation_bc = TimeVaryingInputs.Linear(),
 )
 ```
 
@@ -165,17 +169,21 @@ per level and one column per time, so it should use broadcasting (e.g. `.*`).
 supported.
 
 Static profiles per site are read with `SpaceVaryingInput`, from one
-`DataSource` per column (or one for every column) and with `preprocess_func`.
-Variables cannot be composed there.
+`DataSource` per column (or one for every column) and with `preprocess_func`
+and `vertical_extrapolation_bc`. Variables cannot be composed there.
 
 ### Extrapolation boundary conditions
 
 `TimeVaryingInput`s can have multiple boundary conditions for extrapolation. By
-default, the `Throw` condition is used, meaning that interpolating onto a point
-that is outside the range of definition of the data is not allowed. Other
-boundary conditions are allowed. With the `Flat` boundary condition, when
-interpolating outside of the range of definition, the value of the closest
-boundary is used instead.
+default, the `Throw` condition is used for time extrapolation, meaning that
+interpolating onto a point that is outside the range of definition of the data
+is not allowed. Other boundary conditions are allowed. With the `Flat` boundary
+condition, when interpolating outside of the range of definition, the value of
+the closest boundary is used instead. For
+[inputs for multiple sites](@ref multisite_inputs), the vertical extrapolation,
+above and below the levels of the files, is set separately with
+`vertical_extrapolation_bc`, which is `Flat` (the default), `Linear`, or
+`Throw`.
 
 To set these boundary conditions, construct the relevant method passing the
 argument. For example, to combine `NearestNeighbor` with `Flat`:
@@ -360,6 +368,7 @@ ClimaUtilities.TimeVaryingInputs.LinearInterpolation
 ClimaUtilities.TimeVaryingInputs.Throw
 ClimaUtilities.TimeVaryingInputs.PeriodicCalendar
 ClimaUtilities.TimeVaryingInputs.Flat
+ClimaUtilities.TimeVaryingInputs.Linear
 ClimaUtilities.TimeVaryingInputs.TimeVaryingInput(::AbstractVector{<:AbstractVector{<:ClimaUtilities.FileReaders.DataSource}}, ::ClimaCore.Spaces.MultiColumnFiniteDifferenceSpace)
 ClimaUtilities.TimeVaryingInputs.TimeVaryingInput(::AbstractVector{<:AbstractVector}, ::AbstractVector{<:AbstractMatrix}, ::ClimaCore.Spaces.MultiColumnFiniteDifferenceSpace)
 ClimaUtilities.TimeVaryingInputs.evaluate!
