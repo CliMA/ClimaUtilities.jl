@@ -3,6 +3,9 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+
+v0.1.34
+------
 ### Features
 
 - Add `FileReaders.DataSource`, a description of a variable in one or more
