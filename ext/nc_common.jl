@@ -1,3 +1,9 @@
+# Names a temporal dimension might have in a NetCDF file
+const TIME_NAMES = ("time", "date", "t", "valid_time")
+
+# Names a vertical dimension might have in a NetCDF file
+const Z_NAMES = ("z", "lev", "level", "plev", "height", "altitude")
+
 # For a single and multi-file dataset
 const NetCDFDataset =
     Union{NCDatasets.NCDataset, NCDatasets.CommonDataModel.MFDataset}
@@ -30,4 +36,19 @@ function read_available_dates(ds::NetCDFDataset, time_dim)
     # an attosecond, whereas Dates.DateTime only supports a time
     # resolution of a millisecond.
     return reinterpret.(Ref(Dates.DateTime), ds[time_dim][:])
+end
+
+"""
+    detect_z_name(ds::NetCDFDataset, varname, file_paths)
+
+Return the dimension of `varname` in `ds` whose name matches one of `Z_NAMES`
+case-insensitively, or `nothing` when there is none.
+"""
+function detect_z_name(ds::NetCDFDataset, varname, file_paths)
+    dims = NCDatasets.dimnames(ds[varname])
+    matches = filter(name -> lowercase(name) in Z_NAMES, dims)
+    length(matches) > 1 && error(
+        "Found multiple vertical dimensions ($(join(matches, ", "))) of $varname in $file_paths. Pass `z_name` to disambiguate",
+    )
+    return isempty(matches) ? nothing : only(matches)
 end

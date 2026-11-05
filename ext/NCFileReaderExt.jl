@@ -112,8 +112,7 @@ function FileReaders.NCFileReader(
         # first dataset. We need this to aggregate multiple datasets, if data is split across
         # multiple files
         NCDatasets.NCDataset(first(file_paths)) do first_dataset
-            is_time =
-                x -> x == "time" || x == "date" || x == "t" || x == "valid_time"
+            is_time = in(TIME_NAMES)
             time_dims =
                 filter(is_time, NCDatasets.dimnames(first_dataset[varname]))
             if !isempty(time_dims)
@@ -157,8 +156,7 @@ function FileReaders.NCFileReader(
 
         dim_names = NCDatasets.dimnames(dataset[varname])
 
-        is_time =
-            x -> x == "time" || x == "date" || x == "t" || x == "valid_time"
+        is_time = in(TIME_NAMES)
         time_index_vec = findall(is_time, dim_names)
 
         if !isempty(time_index_vec)
