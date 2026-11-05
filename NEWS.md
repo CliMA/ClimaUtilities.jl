@@ -3,6 +3,9 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+
+v0.1.35
+------
 ### Exact division of an `ITime` by an integer
 
 `ITime` now supports exact division by an integer, `t / num` where `t` is an
