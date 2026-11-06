@@ -1,4 +1,4 @@
-export ITime, counter, period, epoch, date, seconds
+export ITime, counter, period, epoch, date, seconds, isdivisible
 
 """
     ITime ("Integer Time")
@@ -257,6 +257,86 @@ function Base.promote(ts::ITime...)
 end
 
 """
+    Base.convert(::Type{ITime{INT, DT, EPOCH}}, t::ITime)
+
+Express `t` with the period `DT(1)` and the counter type `INT`, without changing
+the instant.
+
+An `ErrorException` is raised when the conversion would round, that is, when
+`t` is not a whole number of `DT(1)`, or when the epoch type of `t` is not
+`EPOCH`. An `OverflowError` is raised when the new counter does not fit in
+`INT`. When `t` already has the target type, it is
+returned unchanged, including a period of several units.
+
+Julia calls `convert` when an `ITime` is stored in a field or array of another
+`ITime` type. For example, `8 * (dt / 8)` can be stored where the type of `dt`
+is expected, because it is a whole number of the period of `dt`.
+
+# Examples
+```julia
+using ClimaUtilities.TimeManager, Dates
+convert(ITime{Int64, Millisecond, Nothing}, ITime(3))  # 3000 milliseconds
+t = ITime(1500; period = Millisecond(1))
+convert(ITime{Int64, Second, Nothing}, t)  # error
+```
+"""
+function Base.convert(
+    ::Type{ITime{INT, DT, EPOCH}},
+    t::ITime,
+) where {
+    INT <: Integer,
+    DT <: Dates.FixedPeriod,
+    EPOCH <: Union{Nothing, Dates.DateTime},
+}
+    EPOCH === typeof(epoch(t)) || error(
+        "Cannot convert $t to an ITime with epoch type $EPOCH: the epoch types differ",
+    )
+    target_period = DT(1)
+    # Solve counter_new * ns(target unit) == counter * k * ns(source unit),
+    # where k is the multiplier of the source period. The nanoseconds in one
+    # unit fit an Int64, and the units are nested, so one of the two ratios is
+    # one.
+    source_ns = Dates.tons(typeof(period(t))(1))
+    target_ns = Dates.tons(target_period)
+    common = gcd(source_ns, target_ns)
+    up, down = div(source_ns, common), div(target_ns, common)
+    k = Dates.value(period(t))
+    shared = gcd(k, down)
+    k, down = div(k, shared), div(down, shared)
+    shared = gcd(counter(t), down)
+    reduced_counter, down = div(counter(t), shared), div(down, shared)
+    isone(down) || error(
+        "Cannot convert $t to a period of $target_period: the instant is not a whole number of $target_period",
+    )
+    negative = signbit(reduced_counter) != signbit(k)
+    U = promote_type(
+        typeof(Base.uabs(counter(t))),
+        typeof(Base.uabs(zero(INT))),
+        UInt64,
+    )
+    not_representable() =
+        throw(OverflowError("The counter of $t is not representable as $INT"))
+    m, overflowed = Base.Checked.mul_with_overflow(
+        U(Base.uabs(reduced_counter)),
+        U(Base.uabs(k)),
+    )
+    overflowed && not_representable()
+    m, overflowed = Base.Checked.mul_with_overflow(m, U(up))
+    overflowed && not_representable()
+    new_counter = counter_from_magnitude(INT, m, negative)
+    isnothing(new_counter) && not_representable()
+    return ITime(new_counter, target_period, epoch(t))
+end
+Base.convert(
+    ::Type{ITime{INT, DT, EPOCH}},
+    t::ITime{INT, DT, EPOCH},
+) where {
+    INT <: Integer,
+    DT <: Dates.FixedPeriod,
+    EPOCH <: Union{Nothing, Dates.DateTime},
+} = t
+
+"""
     find_common_epoch(ts::ITime...)
 
 Find a common epoch of `ts` if one exists.
@@ -496,6 +576,178 @@ Base.:*(num::Integer, t::T) where {T <: ITime} =
     ITime(num * t.counter, t.period, t.epoch)
 Base.:*(t::T, num::Integer) where {T <: ITime} =
     ITime(num * t.counter, t.period, t.epoch)
+
+"""
+    counter_from_magnitude(::Type{INT}, m::Integer, negative::Bool)
+
+Return the counter of type `INT` with magnitude `m`, negated when `negative` is
+true, or `nothing` when that counter does not fit in `INT`.
+
+The magnitude of `typemin(INT)` is accepted for a negative counter. Called from
+`convert` and `Base.:/(t::ITime, num::Integer)`.
+"""
+function counter_from_magnitude(
+    ::Type{INT},
+    m::Integer,
+    negative::Bool,
+) where {INT <: Integer}
+    INT === BigInt && return negative ? -BigInt(m) : BigInt(m)
+    m > Base.uabs(negative ? typemin(INT) : typemax(INT)) && return nothing
+    c = m % INT
+    return negative ? -c : c
+end
+
+"""
+    finer_unit_period(period::Dates.FixedPeriod)
+
+Return the next finer unit after the unit of `period`, and how many of it make
+one unit.
+
+For example, `finer_unit_period(Hour(2))` is `(Minute(1), 60)`. Return `nothing`
+for nanoseconds. Called from `refine_period`.
+"""
+finer_unit_period(::Dates.Week) = (Dates.Day(1), 7)
+finer_unit_period(::Dates.Day) = (Dates.Hour(1), 24)
+finer_unit_period(::Dates.Hour) = (Dates.Minute(1), 60)
+finer_unit_period(::Dates.Minute) = (Dates.Second(1), 60)
+finer_unit_period(::Dates.Second) = (Dates.Millisecond(1), 1000)
+finer_unit_period(::Dates.Millisecond) = (Dates.Microsecond(1), 1000)
+finer_unit_period(::Dates.Microsecond) = (Dates.Nanosecond(1), 1000)
+finer_unit_period(::Dates.Nanosecond) = nothing
+
+"""
+    refine_period(period::Dates.FixedPeriod)
+
+Return the next finer period of `period`, and how many of it make `period`.
+
+For example, `Hour(2)` refines to `(Hour(1), 2)`, and `Hour(1)` to
+`(Minute(1), 60)`. Return `nothing` for `Nanosecond(1)`. Called from
+`Base.:/(t::ITime, num::Integer)`.
+"""
+function refine_period(period::Dates.FixedPeriod)
+    n = Dates.value(period)
+    n == 1 || return (typeof(period)(1), n)
+    return finer_unit_period(period)
+end
+
+"""
+    isdivisible(t::ITime, num::Integer)
+
+Return whether `t / num` is exact.
+
+A division is exact when `num` divides the number of nanoseconds in `t`. Use
+`isdivisible` to choose a count before dividing. An exact division still raises
+an `OverflowError` when its counter does not fit the counter type of `t`.
+
+# Examples
+```julia
+using ClimaUtilities.TimeManager
+isdivisible(ITime(1), 4)  # true, 1 second / 4 is 250 milliseconds
+isdivisible(ITime(1), 3)  # false
+filter(n -> isdivisible(ITime(10), n), 6:12)  # [8, 10]
+```
+
+See also [`Base.:/(t::ITime, num::Integer)`](@ref).
+"""
+function isdivisible(t::ITime, num::Integer)
+    iszero(num) && return false
+    # With t = counter * k units, num divides counter * k * ns(unit) exactly
+    # when the divisor, reduced by its common factors with counter and with k,
+    # divides ns(unit), which fits an Int64.
+    n = Base.uabs(num)
+    n = div(n, gcd(n, Base.uabs(counter(t))))
+    n = div(n, gcd(n, Base.uabs(Dates.value(period(t)))))
+    return iszero(rem(Dates.tons(typeof(period(t))(1)), n))
+end
+
+"""
+    exact_division_period(t::ITime, num::Integer)
+
+Return the period of `t / num`, or `nothing` when no unit down to the
+nanosecond makes the division exact.
+
+The divisor is reduced by its common factors with the counter, and then with
+each step of `refine_period`, until it is one. Only the divisor shrinks, so no
+product is formed that could overflow. Called from
+`Base.:/(t::ITime, num::Integer)`.
+"""
+function exact_division_period(t::ITime, num::Integer)
+    n = Base.uabs(num)
+    n = div(n, gcd(n, Base.uabs(counter(t))))
+    result_period = period(t)
+    while !isone(n)
+        step = refine_period(result_period)
+        isnothing(step) && return nothing
+        result_period, ratio = step
+        n = div(n, gcd(n, Base.uabs(ratio)))
+    end
+    return result_period
+end
+
+"""
+    Base.:/(t::ITime, num::Integer)
+
+Divide `t` by `num` exactly, so that `num * (t / num) == t`.
+
+The result keeps the period of `t` when `num` divides the counter. Otherwise,
+the result has a period of one unit: the unit of `period(t)` when the division
+is exact there, for example `Minute(1)` for `Minute(120)`, and otherwise the
+coarsest finer unit, down to the nanosecond, at which it is exact. An
+`ErrorException` is raised when no such unit exists, an `OverflowError` when
+the new counter does not fit the counter type of `t`, and a `DivideError` when
+`num` is zero. For a division that truncates and keeps the period, use `div`.
+
+The period type of the result depends on the values of `t` and `num`, so the
+compiler cannot infer the return type from the argument types. Divide outside
+of loops in which performance matters. For a type-stable alternative, choose an
+`ITime` type `T` and use `div(convert(T, t), num)`, which is exact when `num`
+divides the counter of `convert(T, t)`.
+
+# Examples
+```julia
+using ClimaUtilities.TimeManager, Dates
+ITime(10; period = Second(1)) / 2   # 5 seconds
+ITime(1; period = Hour(1)) / 2      # 30 minutes
+ITime(1; period = Second(1)) / 4    # 250 milliseconds
+ITime(1; period = Minute(120)) / 2  # 60 minutes, with period Minute(1)
+ITime(1; period = Second(1)) / 3    # error
+```
+
+See also [`isdivisible`](@ref).
+"""
+function Base.:/(t::ITime, num::Integer)
+    iszero(num) && throw(DivideError())
+    result_period = exact_division_period(t, num)
+    isnothing(result_period) && error(
+        "Cannot represent $t / $num as a whole number of a nanosecond or coarser unit",
+    )
+    INT = typeof(counter(t))
+    not_representable() = throw(
+        OverflowError("The counter of $t / $num is not representable as $INT"),
+    )
+    m, d = Base.uabs(counter(t)), Base.uabs(num)
+    U = promote_type(typeof(m), typeof(d), UInt64)
+    m, d = U(m), U(d)
+    common = gcd(m, d)
+    m, d = div(m, common), div(d, common)
+    # A negative period moves its sign into the counter when it is refined.
+    negative = signbit(counter(t)) != signbit(num)
+    current_period = period(t)
+    while current_period !== result_period
+        current_period, ratio = refine_period(current_period)
+        negative = negative != signbit(ratio)
+        common = gcd(U(Base.uabs(ratio)), d)
+        d = div(d, common)
+        # Each step multiplies the magnitude by a whole number, so an overflow
+        # means that the result does not fit.
+        m, overflowed =
+            Base.Checked.mul_with_overflow(m, div(U(Base.uabs(ratio)), common))
+        overflowed && not_representable()
+    end
+    new_counter = counter_from_magnitude(INT, m, negative)
+    isnothing(new_counter) && not_representable()
+    return ITime(new_counter, result_period, epoch(t))
+end
 
 # Behave as a scalar when broadcasted
 Base.Broadcast.broadcastable(t::ITime) = Ref(t)
