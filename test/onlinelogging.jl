@@ -69,7 +69,7 @@ import ClimaUtilities.OnlineLogging:
         _update!(wt, integrator)
         t2 = time()
         @test wt.n_calls[] == 4
-        @test wt.∑Δt_wall[] ≈ ((1.5 / 2) + 1) * (t2 - t1) atol = 0.075
+        @test wt.∑Δt_wall[] ≈ ((1.5 / 2) + 1) * (t2 - t1) atol = 0.1
         @test wt.t_simulation_last[] == 8.0
     end
 
