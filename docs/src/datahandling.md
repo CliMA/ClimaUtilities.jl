@@ -68,6 +68,13 @@ are composed.
 Composing multiple input variables is currently only supported with the
 [`InterpolationsRegridder`](@ref interp_regridder), not with [`TempestRegridder`](@ref tempest_regridder).
 
+The dates of the data can be changed by providing a `time_transform` function as
+part of `file_reader_kwargs`. For instance, to shift dates back by three hours,
+you can use `file_reader_kwargs = (; time_transform = date -> date -
+Dates.Hour(3))`. The function is applied to each date in the files, and the
+transformed dates must be strictly increasing. This is also only supported with
+the [`InterpolationsRegridder`](@ref interp_regridder).
+
 Sometimes, the time development of a variable is split across multiple NetCDF
 files. `DataHandler` knows how to combine them and treat multiple files as if
 they were a single one. To use this feature, just pass the list of NetCDF files

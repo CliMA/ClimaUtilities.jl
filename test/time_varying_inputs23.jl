@@ -646,3 +646,74 @@ include("TestTools.jl")
         end
     end
 end
+
+@testset "InterpolatingTimeVaryingInput23D with time_transform" begin
+    PATH = joinpath(artifact"era5_example", "era5_t2m_sp_u10n_20210101.nc")
+    start_date = Dates.DateTime(2021, 1, 1)
+    time_transform = date -> date + Hour(5)
+    for FT in (Float32, Float64)
+        target_space = make_spherical_space(FT; context).horizontal
+        input = TimeVaryingInputs.TimeVaryingInput(
+            PATH,
+            "u10n",
+            target_space;
+            start_date,
+            regridder_type = :InterpolationsRegridder,
+        )
+        input_shifted = TimeVaryingInputs.TimeVaryingInput(
+            PATH,
+            "u10n",
+            target_space;
+            start_date,
+            regridder_type = :InterpolationsRegridder,
+            file_reader_kwargs = (; time_transform),
+        )
+
+        # The file has data from 00:00 to 23:00 on 2021/1/1, so the shifted
+        # data is from 05:00 on 2021/1/1 to 04:00 on 2021/1/2
+        for (tvi, shift) in ((input, 0), (input_shifted, 5))
+            @test !(start_date + Hour(shift - 1) in tvi)
+            @test start_date + Hour(shift) in tvi
+            @test start_date + Hour(shift + 23) in tvi
+            @test !(start_date + Hour(shift + 24) in tvi)
+            @test !(FT((shift - 1) * 3600) in tvi)
+            @test FT(shift * 3600) in tvi
+            @test FT((shift + 23) * 3600) in tvi
+            @test !(FT((shift + 24) * 3600) in tvi)
+        end
+
+        available_dates = DataHandling.available_dates(input.data_handler)
+        available_times = DataHandling.available_times(input.data_handler)
+        dest = Fields.zeros(target_space)
+        expected = Fields.zeros(target_space)
+
+        # The first date of the file, a date in the middle, between two dates,
+        # and the last date
+        for (target_date, target_time) in (
+            (available_dates[begin], available_times[begin]),
+            (available_dates[10], available_times[10]),
+            (available_dates[10] + Minute(20), available_times[10] + 20 * 60),
+            (available_dates[end], available_times[end]),
+        )
+            TimeVaryingInputs.evaluate!(expected, input, target_date)
+            for t in (
+                target_date + Hour(5),
+                target_time + 5 * 3600,
+                ITime(0, epoch = target_date + Hour(5)),
+            )
+                TimeVaryingInputs.evaluate!(dest, input_shifted, t)
+                @test parent(dest) ≈ parent(expected)
+            end
+        end
+
+        # The first date of the file is before the transformed dates
+        @test_throws "does not cover time" TimeVaryingInputs.evaluate!(
+            dest,
+            input_shifted,
+            start_date,
+        )
+
+        close(input)
+        close(input_shifted)
+    end
+end
