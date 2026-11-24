@@ -3,6 +3,14 @@ ClimaUtilities.jl Release Notes
 
 main
 ------
+### Features
+
+- Add the `time_transform` keyword argument to `NCFileReader`. This can be used
+  to apply an element-wise transformation, such as a time shift, to the dates of
+  NetCDF files. It can be passed to `DataHandler` and `TimeVaryingInput` through
+  `file_reader_kwargs`. The keyword argument `time_transform` is not supported
+  with `TempestRegridder`. `NCFileReader` now throws an error when the dates are
+  repeated.
 
 v0.1.35
 ------

@@ -115,6 +115,29 @@ This capability is only available for the `InterpolationsRegridder`.
 
 Read more about this feature in the page about [`DataHandler`](@ref datahandling_module).
 
+#### Example: Changing the dates of the data
+
+Sometimes, the dates in a file are not the ones the simulation needs. For
+example, you might have hourly-averaged data whose times mark the end of the
+period over which the data is averaged, but you want them at the start of the
+period. A `time_transform` function passed in `file_reader_kwargs` is applied
+to each date in the file and has to return a `Dates.DateTime`. The transformed
+dates must be strictly increasing. When composing multiple input variables, the
+same `time_transform` is applied to the dates of each of them.
+
+In this example, the dates are shifted back by one hour:
+```julia
+timevaryinginput = TimeVaryingInputs.TimeVaryingInput("era5_1980.nc",
+                                                       "u",
+                                                       target_space,
+                                                       start_date = Dates.DateTime(1980, 1, 1),
+                                                       regridder_type = :InterpolationsRegridder,
+                                                       file_reader_kwargs = (; time_transform = date -> date - Dates.Hour(1))
+                                                       )
+```
+
+This capability is only available for the `InterpolationsRegridder`.
+
 ### [Inputs for multiple sites](@id multisite_inputs)
 
 Spaces made of independent columns or points, such as the multi-column spaces,

@@ -80,7 +80,8 @@ end
         file_paths,
         varname::AbstractString;
         preprocess_func = identity,
-        cache_max_size:Int = 128,
+        time_transform = identity,
+        cache_max_size::Int = 128,
     )
 
 A struct to efficiently read and process NetCDF files.
@@ -88,16 +89,26 @@ A struct to efficiently read and process NetCDF files.
 When more than one file is passed, the files should contain the time development of one or
 multiple variables. Files are joined along the time dimension.
 
-## Argument
+## Positional arguments
 
-`file_paths` can be a string, or a collection of paths to files that contain the
-same variables but at different times.
+- `file_paths`: Path of a NetCDF file, or a collection of paths to files that
+  contain the same variables but at different times.
+- `varname`: Name of the variable to read from the files.
+
+## Keyword arguments
+
+- `preprocess_func`: Function applied to each value that is read, for instance,
+  to convert units or to remove NaNs. It should be a lightweight function.
+- `time_transform`: Function applied to each date of the time axis, which must
+  return a `Dates.DateTime`. The transformed dates must be strictly increasing.
+- `cache_max_size`: Maximum number of reads stored in the cache.
 
 """
 function FileReaders.NCFileReader(
     file_paths,
     varname::AbstractString;
     preprocess_func = identity,
+    time_transform = identity,
     cache_max_size::Int = 128,
 )
     # file_paths could be a vector/tuple or a string. Let's start by standardizing to a
@@ -163,11 +174,15 @@ function FileReaders.NCFileReader(
             length(time_index_vec) == 1 ||
                 error("Could not find (unique) time dimension")
             time_index = time_index_vec[]
-            available_dates =
-                read_available_dates(dataset, dim_names[time_index])
+            available_dates = time_transform.(
+                read_available_dates(dataset, dim_names[time_index]),
+            )
 
             issorted(available_dates) || error(
-                "Cannot process files that are not sorted in time in ($file_paths)",
+                "Cannot process files that are not sorted in time in ($file_paths). Check the dates or the time_transform",
+            )
+            allunique(available_dates) || error(
+                "Cannot process files with repeated dates in ($file_paths). Check the dates or the time_transform",
             )
 
             # Remove time from the dim names

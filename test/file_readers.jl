@@ -396,6 +396,84 @@ end
     close(reader)
 end
 
+@testset "NCFileReader with time_transform" begin
+    FileReaders.close_all_ncfiles()
+    data_dir = mktempdir()
+    dates = [DateTime(2000, 1, 1), DateTime(2000, 1, 2), DateTime(2000, 1, 3)]
+    function make_file(name, dates, data)
+        path = joinpath(data_dir, name)
+        NCDataset(path, "c") do nc
+            defVar(nc, "lon", [0.0, 1.0], ("lon",))
+            defVar(nc, "time", dates, ("time",))
+            defVar(nc, "myvar", data, ("lon", "time"))
+        end
+        return path
+    end
+    # myvar is 1 at the first date, 2 at the second, and 3 at the third
+    single_path =
+        make_file("time_transform.nc", dates, [1.0 2.0 3.0; 1.0 2.0 3.0])
+    time_transform = date -> date + Hour(5)
+
+    reader = FileReaders.NCFileReader(single_path, "myvar")
+    shifted = FileReaders.NCFileReader(single_path, "myvar"; time_transform)
+    @test FileReaders.available_dates(shifted) == dates .+ Hour(5)
+    for t in eachindex(dates)
+        @test FileReaders.read(shifted, dates[t] + Hour(5)) == [t, t]
+    end
+
+    # A reader of the same variable without time_transform keeps the dates of
+    # the file
+    @test reader.dataset === shifted.dataset
+    @test FileReaders.available_dates(reader) == dates
+    for t in eachindex(dates)
+        @test FileReaders.read(reader, dates[t]) == [t, t]
+    end
+
+    # The dates of the file are no longer available
+    @test_throws "Problem with date" FileReaders.read(shifted, dates[2])
+    close(reader)
+    close(shifted)
+
+    # Multiple files joined along the time dimension
+    split_paths = [
+        make_file("time_transform_$t.nc", dates[t:t], t * ones(2, 1)) for
+        t in eachindex(dates)
+    ]
+    shifted = FileReaders.NCFileReader(split_paths, "myvar"; time_transform)
+    @test FileReaders.available_dates(shifted) == dates .+ Hour(5)
+    for t in eachindex(dates)
+        @test FileReaders.read(shifted, dates[t] + Hour(5)) == [t, t]
+    end
+    close(shifted)
+
+    # Without a time dimension, time_transform is not used
+    static_path = joinpath(data_dir, "time_transform_static.nc")
+    NCDataset(static_path, "c") do nc
+        defVar(nc, "lon", [0.0, 1.0], ("lon",))
+        defVar(nc, "myvar", [1.0, 2.0], ("lon",))
+    end
+    reader = FileReaders.NCFileReader(static_path, "myvar"; time_transform)
+    @test isempty(FileReaders.available_dates(reader))
+    @test FileReaders.read(reader) == [1.0, 2.0]
+    close(reader)
+
+    # The transformed dates have to be sorted. Here, the last date becomes the
+    # first one
+    @test_throws "not sorted in time" FileReaders.NCFileReader(
+        single_path,
+        "myvar";
+        time_transform = date -> date == dates[3] ? dates[1] : date,
+    )
+    @test_throws "repeated dates" FileReaders.NCFileReader(
+        single_path,
+        "myvar";
+        time_transform = date -> min(date, dates[2]),
+    )
+    open_ncfiles =
+        Base.get_extension(ClimaUtilities, :ClimaUtilitiesNCDatasetsExt).NCFileReaderExt.OPEN_NCFILES
+    @test isempty(open_ncfiles)
+end
+
 @testset "read_available_dates" begin
     read_dates_func =
         Base.get_extension(ClimaUtilities, :ClimaUtilitiesNCDatasetsExt).NCFileReaderExt.read_available_dates

@@ -250,6 +250,12 @@ function DataHandling.DataHandler(
         compose_function,
     )
 
+    # TempestRegridder saves the regridded data under the dates in the file
+    time_transform = get((; file_reader_kwargs...), :time_transform, identity)
+    regridder_type == :TempestRegridder &&
+        time_transform !== identity &&
+        error("TempestRegridder does not support `time_transform`")
+
     # We have to deal with the case with have 1 FileReader (with possibly multiple files),
     # or with N FileReaders (for when variables are split across files, and with possibly
     # multiple files). To accommodate all these cases, we cast everything into the format

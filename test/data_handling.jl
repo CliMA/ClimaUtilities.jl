@@ -540,3 +540,128 @@ end
 
     end
 end
+
+@testset "DataHandler, time_transform" begin
+    PATH = joinpath(artifact"era5_example", "era5_t2m_sp_u10n_20210101.nc")
+    varname = "sp"
+    target_space = make_spherical_space(Float64; context).horizontal
+    start_date = Dates.DateTime(2021, 1, 1)
+    time_transform = date -> date + Hour(5)
+
+    data_handler = DataHandling.DataHandler(
+        PATH,
+        varname,
+        target_space;
+        start_date,
+        regridder_type = :InterpolationsRegridder,
+    )
+    data_handler_shifted = DataHandling.DataHandler(
+        PATH,
+        varname,
+        target_space;
+        start_date,
+        regridder_type = :InterpolationsRegridder,
+        file_reader_kwargs = (; time_transform),
+    )
+
+    available_dates = DataHandling.available_dates(data_handler)
+    available_times = DataHandling.available_times(data_handler)
+    @test DataHandling.available_dates(data_handler_shifted) ==
+          available_dates .+ Hour(5)
+    @test DataHandling.available_times(data_handler_shifted) ==
+          available_times .+ 5 * 3600
+
+    # The data of a date in the file is found at the transformed date. Check
+    # the first date, one in the middle, and the last one
+    for i in (1, 12, length(available_dates))
+        @test DataHandling.regridded_snapshot(
+            data_handler_shifted,
+            available_dates[i] + Hour(5),
+        ) == DataHandling.regridded_snapshot(data_handler, available_dates[i])
+        @test DataHandling.regridded_snapshot(
+            data_handler_shifted,
+            available_times[i] + 5 * 3600,
+        ) == DataHandling.regridded_snapshot(data_handler, available_times[i])
+    end
+
+    # Between two dates, the neighbors are the transformed dates
+    date_between = available_dates[10] + Hour(5) + Minute(20)
+    time_between = available_times[10] + 5 * 3600 + 20 * 60
+    @test DataHandling.previous_date(data_handler_shifted, date_between) ==
+          available_dates[10] + Hour(5)
+    @test DataHandling.next_date(data_handler_shifted, date_between) ==
+          available_dates[11] + Hour(5)
+    @test DataHandling.previous_time(data_handler_shifted, time_between) ==
+          available_times[10] + 5 * 3600
+    @test DataHandling.next_time(data_handler_shifted, time_between) ==
+          available_times[11] + 5 * 3600
+
+    # The first date of the file is before the transformed dates
+    @test_throws "not available in files" DataHandling.regridded_snapshot(
+        data_handler_shifted,
+        available_dates[1],
+    )
+
+    close(data_handler)
+    close(data_handler_shifted)
+
+    # The same time_transform is applied to the dates of each variable
+    compose_function = (x, y) -> x + y
+    data_handler = DataHandling.DataHandler(
+        PATH,
+        ["sp", "t2m"],
+        target_space;
+        start_date,
+        regridder_type = :InterpolationsRegridder,
+        compose_function,
+    )
+    data_handler_shifted = DataHandling.DataHandler(
+        PATH,
+        ["sp", "t2m"],
+        target_space;
+        start_date,
+        regridder_type = :InterpolationsRegridder,
+        compose_function,
+        file_reader_kwargs = (; time_transform),
+    )
+    @test DataHandling.available_dates(data_handler_shifted) ==
+          available_dates .+ Hour(5)
+    for i in (1, 12, length(available_dates))
+        @test DataHandling.regridded_snapshot(
+            data_handler_shifted,
+            available_dates[i] + Hour(5),
+        ) == DataHandling.regridded_snapshot(data_handler, available_dates[i])
+    end
+    close(data_handler)
+    close(data_handler_shifted)
+
+    # TempestRegridder regrids the data at the dates in the file
+    @test_throws "does not support `time_transform`" DataHandling.DataHandler(
+        PATH,
+        varname,
+        target_space;
+        start_date,
+        regridder_type = :TempestRegridder,
+        file_reader_kwargs = (; time_transform),
+    )
+    @test_throws "does not support `time_transform`" DataHandling.DataHandler(
+        PATH,
+        varname,
+        target_space;
+        start_date,
+        regridder_type = :TempestRegridder,
+        file_reader_kwargs = [:time_transform => time_transform],
+    )
+    if !Sys.iswindows()
+        data_handler = DataHandling.DataHandler(
+            PATH,
+            varname,
+            target_space;
+            start_date,
+            regridder_type = :TempestRegridder,
+            file_reader_kwargs = (; time_transform = identity),
+        )
+        @test DataHandling.available_dates(data_handler) == available_dates
+        close(data_handler)
+    end
+end

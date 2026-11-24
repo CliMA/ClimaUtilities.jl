@@ -41,6 +41,11 @@ cache implemented in `DataStructures`, which removes the least-recently-used
 data stored in the cache when its maximum size is reached (the default max size
 is 128).
 
+The dates of the data can be changed with the `time_transform` keyword argument,
+a function that is applied to each date of the NetCDF file and returns a
+`Dates.DateTime`. The transformed dates must be strictly increasing. They are
+the ones returned by `available_dates` and accepted by `read`.
+
 It is good practice to always close the `NCFileReader`s when they are no longer
 needed. The function `close_all_ncfiles` closes all the ones that are currently
 open.
@@ -88,6 +93,16 @@ u_var = FileReaders.NCFileReader(["era5_2000.nc", "era5_2001.nc", "era5_2002.nc"
 ```
 While the order is not strictly required, it is still good practice to pass the
 files in the correct order.
+
+Suppose that the data in `era5_2000.nc` represent hourly averages and the dates
+represent the end of the averaging period. If we want them to be at the start of
+the averaging period, we can shift them with `time_transform`:
+```julia
+import Dates
+
+u_var = FileReaders.NCFileReader("era5_2000.nc", "u", time_transform = date -> date - Dates.Hour(1))
+# FileReaders.available_dates(u_var) are the dates in the file minus one hour
+```
 
 ## [`DataSource`](@id datasource)
 
